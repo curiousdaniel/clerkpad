@@ -1,6 +1,8 @@
 import { withAuth } from "next-auth/middleware";
+import { resolveAuthSecret } from "@/lib/auth/secret";
 
 export default withAuth({
+  secret: resolveAuthSecret(),
   pages: {
     signIn: "/login/",
   },
