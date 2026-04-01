@@ -10,7 +10,10 @@ import {
   FileText,
   BarChart3,
   Settings,
+  LogOut,
 } from "lucide-react";
+import { signOut } from "next-auth/react";
+import { OFFLINE_SESSION_STORAGE_KEY } from "@/lib/auth/offlineSession";
 import { EventSwitcher } from "./EventSwitcher";
 
 const nav = [
@@ -63,6 +66,23 @@ export function Sidebar() {
           );
         })}
       </nav>
+      <div className="border-t border-navy/10 p-3">
+        <button
+          type="button"
+          className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-muted transition hover:bg-white/60 hover:text-ink"
+          onClick={() => {
+            try {
+              sessionStorage.removeItem(OFFLINE_SESSION_STORAGE_KEY);
+            } catch {
+              /* ignore */
+            }
+            void signOut({ callbackUrl: "/login/" });
+          }}
+        >
+          <LogOut className="h-4 w-4 shrink-0" aria-hidden />
+          Sign out
+        </button>
+      </div>
     </aside>
   );
 }

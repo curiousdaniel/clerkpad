@@ -1,8 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
-import { EventProvider } from "@/components/providers/EventProvider";
-import { ToastProvider } from "@/components/providers/ToastProvider";
-import { AppShell } from "@/components/layout/AppShell";
+import { AppProviders } from "./providers";
 
 export const metadata: Metadata = {
   title: "ClerkBid",
@@ -28,11 +26,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body>
-        <EventProvider>
-          <ToastProvider>
-            <AppShell>{children}</AppShell>
-          </ToastProvider>
-        </EventProvider>
+        <AppProviders>{children}</AppProviders>
       </body>
     </html>
   );
