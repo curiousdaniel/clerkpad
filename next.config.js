@@ -5,21 +5,26 @@ const withPWA = require("next-pwa")({
   disable: process.env.NODE_ENV === "development",
   register: true,
   skipWaiting: true,
-  // Avoid precaching `/` as a single revision; auth and HTML must stay fresh when online.
-  cacheStartUrl: false,
-  dynamicStartUrl: false,
-  // First match wins: short-lived HTML cache so deploys/auth apply; then default next-pwa rules.
+  // Cache `/` on first install (register.js + Workbox) so the installed app can open offline.
+  cacheStartUrl: true,
+  dynamicStartUrl: true,
+  // Cache same-origin navigations from next/link while online for offline clerking.
+  cacheOnFrontEndNav: true,
+  // When a page was never cached, serve branded HTML instead of the browser error UI.
+  fallbacks: {
+    document: "/offline.html",
+  },
+  // Stale-while-revalidate: offline uses last cached shell; online refreshes in background.
   runtimeCaching: [
     {
       urlPattern: ({ request, url }) =>
         request.mode === "navigate" && url.origin === self.origin,
-      handler: "NetworkFirst",
+      handler: "StaleWhileRevalidate",
       options: {
         cacheName: "clerkbid-documents",
-        networkTimeoutSeconds: 5,
         expiration: {
-          maxEntries: 32,
-          maxAgeSeconds: 120,
+          maxEntries: 64,
+          maxAgeSeconds: 60 * 60 * 24 * 30,
         },
       },
     },
