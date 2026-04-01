@@ -3,6 +3,10 @@ import autoTable from "jspdf-autotable";
 import { formatCurrency } from "@/lib/utils/formatCurrency";
 import { formatDateOnly } from "@/lib/utils/formatDate";
 import { PAYMENT_METHODS } from "@/lib/utils/constants";
+import {
+  AUCTION_METHOD_BRAND,
+  AUCTION_METHOD_URL,
+} from "@/lib/utils/attribution";
 
 export type InvoicePdfLine = {
   displayLotNumber: string;
@@ -34,6 +38,36 @@ export type InvoicePdfInput = {
 function paymentLabel(value: string | undefined): string {
   if (!value) return "—";
   return PAYMENT_METHODS.find((p) => p.value === value)?.label ?? value;
+}
+
+/** Centered footer on the current (last) page with clickable brand link. */
+function drawPdfAttributionFooter(doc: jsPDF): void {
+  const pageW = doc.internal.pageSize.getWidth();
+  const pageH = doc.internal.pageSize.getHeight();
+  const footerY = pageH - 8;
+
+  const prefix = "Powered by ";
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(8);
+  doc.setTextColor(110, 110, 110);
+
+  const wPrefix = doc.getTextWidth(prefix);
+  const wBrand = doc.getTextWidth(AUCTION_METHOD_BRAND);
+  const startX = (pageW - (wPrefix + wBrand)) / 2;
+
+  doc.text(prefix, startX, footerY);
+  const docWithLink = doc as jsPDF & {
+    textWithLink: (
+      text: string,
+      x: number,
+      y: number,
+      opts: { url: string }
+    ) => number;
+  };
+  docWithLink.textWithLink(AUCTION_METHOD_BRAND, startX + wPrefix, footerY, {
+    url: AUCTION_METHOD_URL,
+  });
+  doc.setTextColor(0, 0, 0);
 }
 
 /** Draw one invoice on the current page of `doc` (caller sets page). */
@@ -152,6 +186,10 @@ export function renderInvoiceOnDoc(doc: jsPDF, input: InvoicePdfInput): void {
     ty
   );
   doc.setTextColor(0, 0, 0);
+
+  const lastPage = doc.getNumberOfPages();
+  doc.setPage(lastPage);
+  drawPdfAttributionFooter(doc);
 }
 
 export function buildInvoicePdf(input: InvoicePdfInput): jsPDF {
