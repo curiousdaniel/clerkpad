@@ -87,6 +87,23 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: true });
   } catch (e) {
     console.error(e);
+    const code =
+      typeof e === "object" && e !== null && "code" in e
+        ? String((e as { code?: string }).code)
+        : "";
+    const msg = e instanceof Error ? e.message : String(e);
+    if (
+      code === "42P01" ||
+      /relation "vendors" does not exist/i.test(msg)
+    ) {
+      return NextResponse.json(
+        {
+          error:
+            "Database is not initialized. In Neon: open SQL Editor, run the SQL in db/schema.sql from this project (creates vendors and users tables), then try again.",
+        },
+        { status: 503 }
+      );
+    }
     return NextResponse.json(
       { error: "Registration failed. Check database configuration." },
       { status: 500 }

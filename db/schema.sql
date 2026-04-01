@@ -1,4 +1,7 @@
--- Run on Neon (SQL Editor, or e.g. `psql "$DATABASE_URL" -f db/schema.sql`)
+-- ClerkBid / ClerkPad — required before registration works.
+--
+-- Neon (Vercel Storage): Dashboard → your project → SQL Editor → paste this file → Run.
+-- CLI: psql "$DATABASE_URL" -f db/schema.sql   (use pooled or direct URL from Neon)
 
 CREATE TABLE IF NOT EXISTS vendors (
   id SERIAL PRIMARY KEY,
