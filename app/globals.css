@@ -1,0 +1,12 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --color-navy: #1e3a5f;
+  --color-gold: #d4a843;
+}
+
+body {
+  @apply bg-white font-sans text-ink antialiased;
+}
