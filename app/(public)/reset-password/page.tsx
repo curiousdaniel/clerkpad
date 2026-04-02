@@ -3,6 +3,7 @@
 import { useState, Suspense } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
+import { AuthPageFrame } from "@/components/layout/AuthPageFrame";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
@@ -131,14 +132,16 @@ function ResetPasswordForm() {
 
 export default function ResetPasswordPage() {
   return (
-    <Suspense
-      fallback={
-        <Card className="w-full max-w-md">
-          <p className="text-sm text-muted">Loading…</p>
-        </Card>
-      }
-    >
-      <ResetPasswordForm />
-    </Suspense>
+    <AuthPageFrame>
+      <Suspense
+        fallback={
+          <Card className="w-full max-w-md">
+            <p className="text-sm text-muted">Loading…</p>
+          </Card>
+        }
+      >
+        <ResetPasswordForm />
+      </Suspense>
+    </AuthPageFrame>
   );
 }

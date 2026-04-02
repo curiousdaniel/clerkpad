@@ -7,7 +7,11 @@ export default withAuth({
     signIn: "/login/",
   },
   callbacks: {
-    authorized: ({ token }) => !!token,
+    authorized({ req, token }) {
+      const path = req.nextUrl.pathname.replace(/\/$/, "") || "/";
+      if (path === "/") return true;
+      return !!token;
+    },
   },
 });
 

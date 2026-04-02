@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { AuthPageFrame } from "@/components/layout/AuthPageFrame";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
@@ -38,42 +39,44 @@ export default function ForgotPasswordPage() {
   }
 
   return (
-    <Card className="w-full max-w-md">
-      <h1 className="text-xl font-bold text-navy">Forgot password</h1>
-      <p className="mt-1 text-sm text-muted">
-        Enter the email you use for ClerkBid. We will send a link to set a new
-        password (expires in one hour).
-      </p>
-      {message ? (
-        <p className="mt-6 text-sm text-ink" role="status">
-          {message}
+    <AuthPageFrame>
+      <Card className="w-full max-w-md">
+        <h1 className="text-xl font-bold text-navy">Forgot password</h1>
+        <p className="mt-1 text-sm text-muted">
+          Enter the email you use for ClerkBid. We will send a link to set a new
+          password (expires in one hour).
         </p>
-      ) : (
-        <form className="mt-6 space-y-4" onSubmit={handleSubmit}>
-          {error ? (
-            <p className="text-sm text-danger" role="alert">
-              {error}
-            </p>
-          ) : null}
-          <Input
-            id="forgot-email"
-            label="Email"
-            type="email"
-            autoComplete="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            required
-          />
-          <Button type="submit" className="w-full" disabled={pending}>
-            {pending ? "Sending…" : "Send reset link"}
-          </Button>
-        </form>
-      )}
-      <p className="mt-6 text-center text-sm text-muted">
-        <Link href="/login/" className="font-medium text-navy underline">
-          Back to sign in
-        </Link>
-      </p>
-    </Card>
+        {message ? (
+          <p className="mt-6 text-sm text-ink" role="status">
+            {message}
+          </p>
+        ) : (
+          <form className="mt-6 space-y-4" onSubmit={handleSubmit}>
+            {error ? (
+              <p className="text-sm text-danger" role="alert">
+                {error}
+              </p>
+            ) : null}
+            <Input
+              id="forgot-email"
+              label="Email"
+              type="email"
+              autoComplete="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+            />
+            <Button type="submit" className="w-full" disabled={pending}>
+              {pending ? "Sending…" : "Send reset link"}
+            </Button>
+          </form>
+        )}
+        <p className="mt-6 text-center text-sm text-muted">
+          <Link href="/login/" className="font-medium text-navy underline">
+            Back to sign in
+          </Link>
+        </p>
+      </Card>
+    </AuthPageFrame>
   );
 }

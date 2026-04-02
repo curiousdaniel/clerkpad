@@ -18,7 +18,7 @@ import { closeAndClearAuctionDbCache } from "@/lib/db";
 import { EventSwitcher } from "./EventSwitcher";
 
 const nav = [
-  { href: "/", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/dashboard/", label: "Dashboard", icon: LayoutDashboard },
   { href: "/events/", label: "Events", icon: CalendarDays },
   { href: "/bidders/", label: "Bidders", icon: Users },
   { href: "/clerking/", label: "Clerking", icon: Gavel },
@@ -33,7 +33,7 @@ export function Sidebar() {
   return (
     <aside className="flex h-full w-60 shrink-0 flex-col border-r border-navy/10 bg-surface">
       <div className="border-b border-navy/10 p-4">
-        <Link href="/" className="block">
+        <Link href="/dashboard/" className="block">
           <span className="text-lg font-bold tracking-tight text-navy">
             Clerk<span className="text-gold">Bid</span>
           </span>
@@ -49,8 +49,7 @@ export function Sidebar() {
         {nav.map(({ href, label, icon: Icon }) => {
           const p = (pathname ?? "/").replace(/\/$/, "") || "/";
           const h = href.replace(/\/$/, "") || "/";
-          const active =
-            h === "/" ? p === "/" : p === h || p.startsWith(`${h}/`);
+          const active = p === h || p.startsWith(`${h}/`);
           return (
             <Link
               key={href}
