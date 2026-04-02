@@ -55,15 +55,27 @@ export function normalizeSaleFieldOrder(raw: unknown): SaleFieldId[] {
   return [...raw];
 }
 
+/**
+ * Cached snapshot for useSyncExternalStore: getSnapshot must return the same
+ * array reference until localStorage (or our digest) actually changes.
+ */
+let clientSnapshot: SaleFieldId[] = DEFAULT_SALE_FIELD_ORDER;
+let clientStorageDigest: string | null = null;
+
 export function readSaleFieldOrder(): SaleFieldId[] {
-  if (typeof window === "undefined") return [...DEFAULT_SALE_FIELD_ORDER];
+  if (typeof window === "undefined") return DEFAULT_SALE_FIELD_ORDER;
   try {
-    const raw = JSON.parse(
-      localStorage.getItem(STORAGE_KEY) ?? "null"
-    ) as unknown;
-    return normalizeSaleFieldOrder(raw);
+    const raw = localStorage.getItem(STORAGE_KEY);
+    const digest = raw === null ? "__null__" : raw;
+    if (digest === clientStorageDigest) return clientSnapshot;
+    clientStorageDigest = digest;
+    const parsed = JSON.parse(raw ?? "null") as unknown;
+    clientSnapshot = normalizeSaleFieldOrder(parsed);
+    return clientSnapshot;
   } catch {
-    return [...DEFAULT_SALE_FIELD_ORDER];
+    clientStorageDigest = "__error__";
+    clientSnapshot = DEFAULT_SALE_FIELD_ORDER;
+    return clientSnapshot;
   }
 }
 

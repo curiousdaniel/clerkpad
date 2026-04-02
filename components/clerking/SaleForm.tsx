@@ -70,7 +70,7 @@ export function SaleForm({
   const fieldOrder = useSyncExternalStore(
     subscribeSaleFieldOrder,
     readSaleFieldOrder,
-    () => [...DEFAULT_SALE_FIELD_ORDER]
+    () => DEFAULT_SALE_FIELD_ORDER
   );
 
   const focusField = useCallback((id: SaleFieldId) => {
