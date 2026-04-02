@@ -7,6 +7,7 @@ import type {
   Sale,
 } from "@/lib/db";
 import { APP_VERSION } from "@/lib/utils/constants";
+import { toDate } from "@/lib/utils/coerceDate";
 import { newEventSyncId } from "@/lib/utils/syncId";
 
 export const EXPORT_VERSION = 2;
@@ -63,12 +64,27 @@ export type EventExportPayload = {
   >;
 };
 
-function iso(d: Date) {
-  return d.toISOString();
+/** IndexedDB may return Date or ISO string depending on engine / migration path. */
+function isoFromStored(
+  d: Date | string | number | undefined | null,
+  fieldName: string
+): string {
+  if (d == null) {
+    throw new Error(`Missing date for export: ${fieldName}`);
+  }
+  const parsed = toDate(d);
+  if (!parsed) {
+    throw new Error(`Invalid date for export (${fieldName})`);
+  }
+  return parsed.toISOString();
 }
 
-function isoOpt(d: Date | undefined) {
-  return d ? iso(d) : undefined;
+function isoOptFromStored(
+  d: Date | string | number | undefined | null
+): string | undefined {
+  if (d == null) return undefined;
+  const parsed = toDate(d);
+  return parsed ? parsed.toISOString() : undefined;
 }
 
 export async function buildEventExport(
@@ -95,31 +111,31 @@ export async function buildEventExport(
 
   return {
     exportVersion: EXPORT_VERSION,
-    exportDate: iso(new Date()),
+    exportDate: new Date().toISOString(),
     appVersion,
     event: {
       ...eventFields,
-      createdAt: iso(event.createdAt),
-      lastCloudPushAt: isoOpt(event.lastCloudPushAt),
-      lastCloudPullAt: isoOpt(event.lastCloudPullAt),
+      createdAt: isoFromStored(event.createdAt, "event.createdAt"),
+      lastCloudPushAt: isoOptFromStored(event.lastCloudPushAt),
+      lastCloudPullAt: isoOptFromStored(event.lastCloudPullAt),
     },
     bidders: bidders.map(({ id, eventId: _ev, ...b }) => ({
       ...b,
       legacyId: id,
-      createdAt: iso(b.createdAt),
-      updatedAt: iso(b.updatedAt),
+      createdAt: isoFromStored(b.createdAt, "bidder.createdAt"),
+      updatedAt: isoFromStored(b.updatedAt, "bidder.updatedAt"),
     })),
     lots: lots.map(({ id, eventId: _ev, ...l }) => ({
       ...l,
       legacyId: id,
-      createdAt: iso(l.createdAt),
-      updatedAt: iso(l.updatedAt),
+      createdAt: isoFromStored(l.createdAt, "lot.createdAt"),
+      updatedAt: isoFromStored(l.updatedAt, "lot.updatedAt"),
     })),
     sales: sales.map((s) => {
       const { id: _id, eventId: _ev, lotId, bidderId, ...rest } = s;
       return {
         ...rest,
-        createdAt: iso(s.createdAt),
+        createdAt: isoFromStored(s.createdAt, "sale.createdAt"),
         legacyLotId: lotId,
         legacyBidderId: bidderId,
       };
@@ -128,8 +144,10 @@ export async function buildEventExport(
       const { id: _id, eventId: _ev, bidderId, ...rest } = inv;
       return {
         ...rest,
-        generatedAt: iso(inv.generatedAt),
-        paymentDate: inv.paymentDate ? iso(inv.paymentDate) : undefined,
+        generatedAt: isoFromStored(inv.generatedAt, "invoice.generatedAt"),
+        paymentDate: inv.paymentDate
+          ? isoOptFromStored(inv.paymentDate)
+          : undefined,
         legacyBidderId: bidderId,
       };
     }),
@@ -207,7 +225,7 @@ export async function buildFullDatabaseExport(
   }
   return {
     fullExportVersion: 1,
-    exportDate: iso(new Date()),
+    exportDate: new Date().toISOString(),
     appVersion,
     events,
   };

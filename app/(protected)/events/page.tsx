@@ -20,6 +20,7 @@ import {
 import { deleteEventCascade } from "@/lib/services/eventService";
 import { downloadCsv } from "@/lib/services/csvExporter";
 import { parseLotCsv } from "@/lib/services/csvImportLots";
+import { liveQueryGuard } from "@/lib/dexie/liveQueryGuard";
 
 export default function EventsPage() {
   const { db, ready: dbReady } = useUserDb();
@@ -32,10 +33,11 @@ export default function EventsPage() {
   const [deleteTarget, setDeleteTarget] = useState<AuctionEvent | null>(null);
 
   const events = useLiveQuery(
-    async () => {
-      if (!ready || !dbReady || !db) return [];
-      return db.events.orderBy("createdAt").reverse().toArray();
-    },
+    async () =>
+      liveQueryGuard("events.page.list", async () => {
+        if (!ready || !dbReady || !db) return [];
+        return db.events.orderBy("createdAt").reverse().toArray();
+      }, []),
     [ready, dbReady, db]
   );
 

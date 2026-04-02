@@ -28,6 +28,7 @@ import { clearEventDataKeepShell } from "@/lib/services/eventService";
 import { APP_VERSION } from "@/lib/utils/constants";
 import { formatBytes } from "@/lib/utils/formatBytes";
 import { formatDateTime } from "@/lib/utils/formatDate";
+import { liveQueryGuard } from "@/lib/dexie/liveQueryGuard";
 
 const linkSecondary =
   "inline-flex items-center justify-center gap-2 rounded-lg border border-navy/15 bg-surface px-4 py-2 text-sm font-medium text-ink transition hover:border-navy/30 focus:outline-none focus-visible:ring-2 focus-visible:ring-navy focus-visible:ring-offset-2";
@@ -54,11 +55,15 @@ export default function SettingsPage() {
   const fileEventRef = useRef<HTMLInputElement>(null);
   const fileFullRef = useRef<HTMLInputElement>(null);
 
-  const settingsRow = useLiveQuery(async () => {
-    if (!dbReady || !db) return undefined;
-    await ensureSettingsRow(db);
-    return db.settings.get(1);
-  }, [dbReady, db]);
+  const settingsRow = useLiveQuery(
+    async () =>
+      liveQueryGuard("settings.page.settings", async () => {
+        if (!dbReady || !db) return undefined;
+        await ensureSettingsRow(db);
+        return db.settings.get(1);
+      }, undefined),
+    [dbReady, db]
+  );
 
   useEffect(() => {
     if (typeof navigator === "undefined" || !navigator.storage?.estimate) {

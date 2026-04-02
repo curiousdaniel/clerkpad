@@ -4,21 +4,23 @@ import { useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { useUserDb } from "@/components/providers/UserDbProvider";
 import { Input } from "@/components/ui/Input";
+import { liveQueryGuard } from "@/lib/dexie/liveQueryGuard";
 
 export function BidderQuickLookup({ eventId }: { eventId: number }) {
   const { db } = useUserDb();
   const [paddle, setPaddle] = useState("");
 
   const match = useLiveQuery(
-    async () => {
-      if (!db) return undefined;
-      const n = parseInt(paddle.trim(), 10);
-      if (!Number.isFinite(n) || n < 1) return undefined;
-      return db.bidders
-        .where("[eventId+paddleNumber]")
-        .equals([eventId, n])
-        .first();
-    },
+    async () =>
+      liveQueryGuard("bidderQuickLookup", async () => {
+        if (!db) return undefined;
+        const n = parseInt(paddle.trim(), 10);
+        if (!Number.isFinite(n) || n < 1) return undefined;
+        return db.bidders
+          .where("[eventId+paddleNumber]")
+          .equals([eventId, n])
+          .first();
+      }, undefined),
     [db, eventId, paddle]
   );
 

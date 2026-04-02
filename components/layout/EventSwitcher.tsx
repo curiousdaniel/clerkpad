@@ -3,15 +3,17 @@
 import { useLiveQuery } from "dexie-react-hooks";
 import { useUserDb } from "@/components/providers/UserDbProvider";
 import { useCurrentEvent } from "@/lib/hooks/useCurrentEvent";
+import { liveQueryGuard } from "@/lib/dexie/liveQueryGuard";
 
 export function EventSwitcher() {
   const { db, ready: dbReady } = useUserDb();
   const { ready, currentEventId, switchEvent } = useCurrentEvent();
   const events = useLiveQuery(
-    async () => {
-      if (!ready || !dbReady || !db) return [];
-      return db.events.orderBy("createdAt").reverse().toArray();
-    },
+    async () =>
+      liveQueryGuard("events.list", async () => {
+        if (!ready || !dbReady || !db) return [];
+        return db.events.orderBy("createdAt").reverse().toArray();
+      }, []),
     [ready, dbReady, db]
   );
 

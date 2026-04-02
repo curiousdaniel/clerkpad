@@ -7,6 +7,7 @@ import { formatDateOnly } from "@/lib/utils/formatDate";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
+import { liveQueryGuard } from "@/lib/dexie/liveQueryGuard";
 
 export function EventCard({
   event,
@@ -26,15 +27,16 @@ export function EventCard({
   const { db, ready } = useUserDb();
   const id = event.id!;
   const counts = useLiveQuery(
-    async () => {
-      if (!ready || !db) return { bidders: 0, lots: 0, sales: 0 };
-      const [bidders, lots, sales] = await Promise.all([
-        db.bidders.where("eventId").equals(id).count(),
-        db.lots.where("eventId").equals(id).count(),
-        db.sales.where("eventId").equals(id).count(),
-      ]);
-      return { bidders, lots, sales };
-    },
+    async () =>
+      liveQueryGuard(`eventCard.counts(${id})`, async () => {
+        if (!ready || !db) return { bidders: 0, lots: 0, sales: 0 };
+        const [bidders, lots, sales] = await Promise.all([
+          db.bidders.where("eventId").equals(id).count(),
+          db.lots.where("eventId").equals(id).count(),
+          db.sales.where("eventId").equals(id).count(),
+        ]);
+        return { bidders, lots, sales };
+      }, { bidders: 0, lots: 0, sales: 0 }),
     [ready, db, id]
   );
 

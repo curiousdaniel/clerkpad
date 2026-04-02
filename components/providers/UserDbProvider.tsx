@@ -59,7 +59,11 @@ export function UserDbProvider({ children }: { children: ReactNode }) {
     if (session?.user?.id) setOfflineUid(readOfflineUserId());
   }, [session?.user?.id]);
 
-  const userId = session?.user?.id ?? offlineUid ?? null;
+  const rawUserId = session?.user?.id ?? offlineUid ?? null;
+  const userId =
+    rawUserId != null && String(rawUserId).length > 0
+      ? String(rawUserId)
+      : null;
 
   const db = useMemo(() => {
     if (!userId) return null;

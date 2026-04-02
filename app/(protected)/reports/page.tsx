@@ -28,6 +28,7 @@ import {
   buildPaymentMethodBreakdown,
   computeEventSummary,
 } from "@/lib/services/reportCalculator";
+import { liveQueryGuard } from "@/lib/dexie/liveQueryGuard";
 
 const linkSecondary =
   "inline-flex items-center justify-center gap-2 rounded-lg border border-navy/15 bg-surface px-4 py-2 text-sm font-medium text-ink transition hover:border-navy/30 focus:outline-none focus-visible:ring-2 focus-visible:ring-navy focus-visible:ring-offset-2";
@@ -42,16 +43,17 @@ export default function ReportsPage() {
   const { showToast } = useToast();
 
   const bundle = useLiveQuery(
-    async () => {
-      if (currentEventId == null || !dbReady || !db) return null;
-      const [sales, lots, bidders, invoices] = await Promise.all([
-        db.sales.where("eventId").equals(currentEventId).toArray(),
-        db.lots.where("eventId").equals(currentEventId).toArray(),
-        db.bidders.where("eventId").equals(currentEventId).toArray(),
-        db.invoices.where("eventId").equals(currentEventId).toArray(),
-      ]);
-      return { sales, lots, bidders, invoices };
-    },
+    async () =>
+      liveQueryGuard("reports.bundle", async () => {
+        if (currentEventId == null || !dbReady || !db) return null;
+        const [sales, lots, bidders, invoices] = await Promise.all([
+          db.sales.where("eventId").equals(currentEventId).toArray(),
+          db.lots.where("eventId").equals(currentEventId).toArray(),
+          db.bidders.where("eventId").equals(currentEventId).toArray(),
+          db.invoices.where("eventId").equals(currentEventId).toArray(),
+        ]);
+        return { sales, lots, bidders, invoices };
+      }, null),
     [currentEventId, dbReady, db]
   );
 

@@ -52,7 +52,7 @@ export default function ClerkingPage() {
             <SaleForm
               eventId={currentEventId}
               currencySymbol={sym}
-              buyersPremiumRate={currentEvent.buyersPremiumRate}
+              buyersPremiumRate={currentEvent.buyersPremiumRate ?? 0}
             />
           </Card>
           <div className="mt-6">

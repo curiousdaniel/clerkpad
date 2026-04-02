@@ -10,6 +10,7 @@ import { formatCurrency } from "@/lib/utils/formatCurrency";
 import { formatDateTime } from "@/lib/utils/formatDate";
 import { Button } from "@/components/ui/Button";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { liveQueryGuard } from "@/lib/dexie/liveQueryGuard";
 
 type Row = Sale & { baseLot: number };
 
@@ -24,21 +25,22 @@ export function RecentSales({
 }) {
   const { db, ready } = useUserDb();
   const sales = useLiveQuery(
-    async () => {
-      if (!ready || !db) return [];
-      const rows = await db.sales.where("eventId").equals(eventId).toArray();
-      rows.sort(
-        (a, b) =>
-          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-      );
-      return rows.slice(0, 20).map((s) => {
-        const p = parseLotDisplay(s.displayLotNumber);
-        return {
-          ...s,
-          baseLot: p?.base ?? 0,
-        } satisfies Row;
-      });
-    },
+    async () =>
+      liveQueryGuard("recentSales", async () => {
+        if (!ready || !db) return [];
+        const rows = await db.sales.where("eventId").equals(eventId).toArray();
+        rows.sort(
+          (a, b) =>
+            new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+        );
+        return rows.slice(0, 20).map((s) => {
+          const p = parseLotDisplay(s.displayLotNumber);
+          return {
+            ...s,
+            baseLot: p?.base ?? 0,
+          } satisfies Row;
+        });
+      }, []),
     [ready, db, eventId]
   );
 

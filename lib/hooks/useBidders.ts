@@ -3,6 +3,7 @@
 import { useLiveQuery } from "dexie-react-hooks";
 import type { AuctionDB, Bidder } from "@/lib/db";
 import { useUserDb } from "@/components/providers/UserDbProvider";
+import { liveQueryGuard } from "@/lib/dexie/liveQueryGuard";
 
 export type BidderRow = Bidder & {
   totalSpent: number;
@@ -13,29 +14,30 @@ export function useBiddersForEvent(eventId: number | null | undefined) {
   const { db, ready } = useUserDb();
 
   return useLiveQuery(
-    async () => {
-      if (!ready || !db || eventId == null) return [];
-      const bidders = await db.bidders
-        .where("eventId")
-        .equals(eventId)
-        .sortBy("paddleNumber");
-      const sales = await db.sales.where("eventId").equals(eventId).toArray();
-      const byBidder = new Map<number, { spent: number; n: number }>();
-      for (const s of sales) {
-        const cur = byBidder.get(s.bidderId) ?? { spent: 0, n: 0 };
-        cur.spent += s.amount;
-        cur.n += 1;
-        byBidder.set(s.bidderId, cur);
-      }
-      return bidders.map((b) => {
-        const agg = b.id != null ? byBidder.get(b.id) : undefined;
-        return {
-          ...b,
-          totalSpent: agg?.spent ?? 0,
-          itemsWon: agg?.n ?? 0,
-        } satisfies BidderRow;
-      });
-    },
+    async () =>
+      liveQueryGuard("useBiddersForEvent", async () => {
+        if (!ready || !db || eventId == null) return [];
+        const bidders = await db.bidders
+          .where("eventId")
+          .equals(eventId)
+          .sortBy("paddleNumber");
+        const sales = await db.sales.where("eventId").equals(eventId).toArray();
+        const byBidder = new Map<number, { spent: number; n: number }>();
+        for (const s of sales) {
+          const cur = byBidder.get(s.bidderId) ?? { spent: 0, n: 0 };
+          cur.spent += s.amount;
+          cur.n += 1;
+          byBidder.set(s.bidderId, cur);
+        }
+        return bidders.map((b) => {
+          const agg = b.id != null ? byBidder.get(b.id) : undefined;
+          return {
+            ...b,
+            totalSpent: agg?.spent ?? 0,
+            itemsWon: agg?.n ?? 0,
+          } satisfies BidderRow;
+        });
+      }, []),
     [ready, db, eventId]
   );
 }

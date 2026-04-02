@@ -23,6 +23,7 @@ import {
   buildInvoicePdf,
   openPdfInNewTab,
 } from "@/lib/services/invoicePdf";
+import { liveQueryGuard } from "@/lib/dexie/liveQueryGuard";
 
 const linkSecondary =
   "inline-flex items-center justify-center gap-2 rounded-lg border border-navy/15 bg-surface px-4 py-2 text-sm font-medium text-ink transition hover:border-navy/30 focus:outline-none focus-visible:ring-2 focus-visible:ring-navy focus-visible:ring-offset-2";
@@ -40,24 +41,26 @@ export default function InvoicesPage() {
   const sym = currentEvent?.currencySymbol ?? "$";
 
   const invoiceRows = useLiveQuery(
-    async () => {
-      if (currentEventId == null || !dbReady || !db) return [];
-      const invs = await db.invoices
-        .where("eventId")
-        .equals(currentEventId)
-        .toArray();
-      const bidders = await db.bidders
-        .where("eventId")
-        .equals(currentEventId)
-        .toArray();
-      const bMap = new Map(bidders.map((b) => [b.id!, b]));
-      return invs
-        .map((inv) => ({ ...inv, bidder: bMap.get(inv.bidderId) }))
-        .sort(
-          (a, b) =>
-            new Date(b.generatedAt).getTime() - new Date(a.generatedAt).getTime()
-        );
-    },
+    async () =>
+      liveQueryGuard("invoices.rows", async () => {
+        if (currentEventId == null || !dbReady || !db) return [];
+        const invs = await db.invoices
+          .where("eventId")
+          .equals(currentEventId)
+          .toArray();
+        const bidders = await db.bidders
+          .where("eventId")
+          .equals(currentEventId)
+          .toArray();
+        const bMap = new Map(bidders.map((b) => [b.id!, b]));
+        return invs
+          .map((inv) => ({ ...inv, bidder: bMap.get(inv.bidderId) }))
+          .sort(
+            (a, b) =>
+              new Date(b.generatedAt).getTime() -
+              new Date(a.generatedAt).getTime()
+          );
+      }, []),
     [currentEventId, dbReady, db]
   );
 
@@ -68,25 +71,27 @@ export default function InvoicesPage() {
   }, [invoiceRows, filter]);
 
   const pendingBidders = useLiveQuery(
-    async () => {
-      if (currentEventId == null || !dbReady || !db) return [];
-      const ids = await bidderIdsPendingFirstInvoice(db, currentEventId);
-      const out = [];
-      for (const id of ids) {
-        const b = await db.bidders.get(id);
-        if (b) out.push(b);
-      }
-      out.sort((a, b) => a.paddleNumber - b.paddleNumber);
-      return out;
-    },
+    async () =>
+      liveQueryGuard("invoices.pendingBidders", async () => {
+        if (currentEventId == null || !dbReady || !db) return [];
+        const ids = await bidderIdsPendingFirstInvoice(db, currentEventId);
+        const out = [];
+        for (const id of ids) {
+          const b = await db.bidders.get(id);
+          if (b) out.push(b);
+        }
+        out.sort((a, b) => a.paddleNumber - b.paddleNumber);
+        return out;
+      }, []),
     [currentEventId, dbReady, db]
   );
 
   const detailSales = useLiveQuery(
-    async () => {
-      if (!detailInv || currentEventId == null || !db) return [];
-      return getSalesForBidderInvoice(db, currentEventId, detailInv.bidderId);
-    },
+    async () =>
+      liveQueryGuard("invoices.detailSales", async () => {
+        if (!detailInv || currentEventId == null || !db) return [];
+        return getSalesForBidderInvoice(db, currentEventId, detailInv.bidderId);
+      }, []),
     [detailInv?.id, detailInv?.bidderId, currentEventId, db]
   );
 

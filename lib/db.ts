@@ -20,8 +20,8 @@ export function sanitizeUserIdForDbName(userId: string): string {
   return userId.replace(/[^a-zA-Z0-9_-]/g, "_");
 }
 
-export function userDexieDatabaseName(userId: string): string {
-  return `ClerkBid_u_${sanitizeUserIdForDbName(userId)}`;
+export function userDexieDatabaseName(userId: string | number): string {
+  return `ClerkBid_u_${sanitizeUserIdForDbName(String(userId))}`;
 }
 
 export interface AuctionEvent {
@@ -115,7 +115,7 @@ export class AuctionDB extends Dexie {
   invoices!: Table<Invoice>;
   settings!: Table<AppSettings>;
 
-  constructor(userId: string) {
+  constructor(userId: string | number) {
     super(userDexieDatabaseName(userId));
     this.version(1).stores({
       events: "++id, name, createdAt",
@@ -146,11 +146,12 @@ export class AuctionDB extends Dexie {
 
 const dbInstanceCache = new Map<string, AuctionDB>();
 
-export function getAuctionDB(userId: string): AuctionDB {
-  let d = dbInstanceCache.get(userId);
+export function getAuctionDB(userId: string | number): AuctionDB {
+  const key = String(userId);
+  let d = dbInstanceCache.get(key);
   if (!d) {
-    d = new AuctionDB(userId);
-    dbInstanceCache.set(userId, d);
+    d = new AuctionDB(key);
+    dbInstanceCache.set(key, d);
   }
   return d;
 }

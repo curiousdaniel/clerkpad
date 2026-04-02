@@ -12,6 +12,7 @@ import { ensureSettingsRow } from "@/lib/settings";
 import { formatCurrency } from "@/lib/utils/formatCurrency";
 import { formatDateTime } from "@/lib/utils/formatDate";
 import { dateGetTime } from "@/lib/utils/coerceDate";
+import { liveQueryGuard } from "@/lib/dexie/liveQueryGuard";
 
 function daysBetween(
   a: Date | string | undefined | null,
@@ -33,58 +34,64 @@ export default function DashboardPage() {
   const { ready, currentEventId, currentEvent, refresh } = useCurrentEvent();
   const { pushNow } = useCloudSync();
 
-  const settingsRow = useLiveQuery(async () => {
-    if (!dbReady || !db) return undefined;
-    await ensureSettingsRow(db);
-    return db.settings.get(1);
-  }, [dbReady, db]);
+  const settingsRow = useLiveQuery(
+    async () =>
+      liveQueryGuard("dashboard.settings", async () => {
+        if (!dbReady || !db) return undefined;
+        await ensureSettingsRow(db);
+        return db.settings.get(1);
+      }, undefined),
+    [dbReady, db]
+  );
 
   const stats = useLiveQuery(
-    async () => {
-      if (!ready || !dbReady || !db || currentEventId == null) return null;
-      const eid = currentEventId;
-      const [bidderCount, lots, sales, invoices] = await Promise.all([
-        db.bidders.where("eventId").equals(eid).count(),
-        db.lots.where("eventId").equals(eid).toArray(),
-        db.sales.where("eventId").equals(eid).toArray(),
-        db.invoices.where("eventId").equals(eid).toArray(),
-      ]);
-      const sold = lots.filter((l) => l.status === "sold").length;
-      const unsold = lots.filter((l) => l.status === "unsold").length;
-      const passed = lots.filter((l) => l.status === "passed").length;
-      const withdrawn = lots.filter((l) => l.status === "withdrawn").length;
-      const revenue = sales.reduce((a, s) => a + s.amount, 0);
-      const invPaid = invoices.filter((i) => i.status === "paid").length;
-      const invUnpaid = invoices.filter((i) => i.status === "unpaid").length;
-      return {
-        bidderCount,
-        totalLots: lots.length,
-        sold,
-        unsold,
-        passed,
-        withdrawn,
-        revenue,
-        invPaid,
-        invUnpaid,
-        invTotal: invoices.length,
-      };
-    },
+    async () =>
+      liveQueryGuard("dashboard.stats", async () => {
+        if (!ready || !dbReady || !db || currentEventId == null) return null;
+        const eid = currentEventId;
+        const [bidderCount, lots, sales, invoices] = await Promise.all([
+          db.bidders.where("eventId").equals(eid).count(),
+          db.lots.where("eventId").equals(eid).toArray(),
+          db.sales.where("eventId").equals(eid).toArray(),
+          db.invoices.where("eventId").equals(eid).toArray(),
+        ]);
+        const sold = lots.filter((l) => l.status === "sold").length;
+        const unsold = lots.filter((l) => l.status === "unsold").length;
+        const passed = lots.filter((l) => l.status === "passed").length;
+        const withdrawn = lots.filter((l) => l.status === "withdrawn").length;
+        const revenue = sales.reduce((a, s) => a + s.amount, 0);
+        const invPaid = invoices.filter((i) => i.status === "paid").length;
+        const invUnpaid = invoices.filter((i) => i.status === "unpaid").length;
+        return {
+          bidderCount,
+          totalLots: lots.length,
+          sold,
+          unsold,
+          passed,
+          withdrawn,
+          revenue,
+          invPaid,
+          invUnpaid,
+          invTotal: invoices.length,
+        };
+      }, null),
     [ready, dbReady, db, currentEventId]
   );
 
   const recentSales = useLiveQuery(
-    async () => {
-      if (!ready || !dbReady || !db || currentEventId == null) return [];
-      const rows = await db.sales
-        .where("eventId")
-        .equals(currentEventId)
-        .toArray();
-      rows.sort(
-        (a, b) =>
-          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-      );
-      return rows.slice(0, 10);
-    },
+    async () =>
+      liveQueryGuard("dashboard.recentSales", async () => {
+        if (!ready || !dbReady || !db || currentEventId == null) return [];
+        const rows = await db.sales
+          .where("eventId")
+          .equals(currentEventId)
+          .toArray();
+        rows.sort(
+          (a, b) =>
+            new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+        );
+        return rows.slice(0, 10);
+      }, []),
     [ready, dbReady, db, currentEventId]
   );
 

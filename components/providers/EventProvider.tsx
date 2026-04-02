@@ -12,6 +12,7 @@ import { useLiveQuery } from "dexie-react-hooks";
 import type { AuctionEvent } from "@/lib/db";
 import { setCurrentEventId } from "@/lib/settings";
 import { useUserDb } from "@/components/providers/UserDbProvider";
+import { liveQueryGuard } from "@/lib/dexie/liveQueryGuard";
 
 type EventContextValue = {
   ready: boolean;
@@ -28,20 +29,22 @@ export function EventProvider({ children }: { children: ReactNode }) {
   const [tick, setTick] = useState(0);
 
   const settings = useLiveQuery(
-    async () => {
-      if (!dbReady || !db) return undefined;
-      return db.settings.get(1);
-    },
+    async () =>
+      liveQueryGuard("settings.get", async () => {
+        if (!dbReady || !db) return undefined;
+        return db.settings.get(1);
+      }, undefined),
     [dbReady, db, tick]
   );
 
   const currentEventId = settings?.currentEventId ?? null;
 
   const currentEvent = useLiveQuery(
-    async () => {
-      if (!dbReady || !db || currentEventId == null) return undefined;
-      return db.events.get(currentEventId);
-    },
+    async () =>
+      liveQueryGuard("events.get(current)", async () => {
+        if (!dbReady || !db || currentEventId == null) return undefined;
+        return db.events.get(currentEventId);
+      }, undefined),
     [dbReady, db, currentEventId, tick]
   );
 
