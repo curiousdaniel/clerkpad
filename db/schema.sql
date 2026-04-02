@@ -3,8 +3,8 @@
 -- Neon (Vercel Storage): Dashboard → your project → SQL Editor → paste this file → Run.
 -- CLI: psql "$DATABASE_URL" -f db/schema.sql   (use pooled or direct URL from Neon)
 --
--- If you already created `users` with a single `name` column, run
--- db/migrate_users_first_last.sql once instead of re-running the full CREATE below.
+-- If `users` already exists with a legacy `name` column (no first_name), run
+-- db/migrate_users_first_last.sql once in Neon before deploying the latest app.
 
 CREATE TABLE IF NOT EXISTS vendors (
   id SERIAL PRIMARY KEY,

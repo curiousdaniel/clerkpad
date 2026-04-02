@@ -109,6 +109,19 @@ export async function POST(req: Request) {
         { status: 503 }
       );
     }
+    if (
+      code === "42703" ||
+      /column "first_name"/i.test(msg) ||
+      /column "last_name"/i.test(msg)
+    ) {
+      return NextResponse.json(
+        {
+          error:
+            "Database needs a one-time update. In Neon SQL Editor, run the script db/migrate_users_first_last.sql from the ClerkBid repo, then try again.",
+        },
+        { status: 503 }
+      );
+    }
     return NextResponse.json(
       { error: "Registration failed. Check database configuration." },
       { status: 500 }
