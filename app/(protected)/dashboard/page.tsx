@@ -11,9 +11,16 @@ import { useCloudSync } from "@/components/providers/CloudSyncProvider";
 import { ensureSettingsRow } from "@/lib/settings";
 import { formatCurrency } from "@/lib/utils/formatCurrency";
 import { formatDateTime } from "@/lib/utils/formatDate";
+import { dateGetTime } from "@/lib/utils/coerceDate";
 
-function daysBetween(a: Date, b: Date): number {
-  return (b.getTime() - a.getTime()) / (86400 * 1000);
+function daysBetween(
+  a: Date | string | undefined | null,
+  b: Date | string | undefined | null
+): number {
+  const ta = dateGetTime(a);
+  const tb = dateGetTime(b);
+  if (ta == null || tb == null) return 0;
+  return (tb - ta) / (86400 * 1000);
 }
 
 const linkPrimary =

@@ -23,6 +23,7 @@ import {
   restoreEventFromCloud,
 } from "@/lib/services/cloudSync";
 import { ensureSettingsRow } from "@/lib/settings";
+import { dateGetTime } from "@/lib/utils/coerceDate";
 
 type PushResult = { ok: true } | { ok: false; message: string };
 
@@ -86,7 +87,7 @@ export function CloudSyncProvider({ children }: { children: ReactNode }) {
         return;
       }
       const remoteT = new Date(mine.updatedAt).getTime();
-      const lastPush = currentEvent.lastCloudPushAt?.getTime();
+      const lastPush = dateGetTime(currentEvent.lastCloudPushAt);
       if (lastPush == null || remoteT > lastPush) {
         setRemoteBanner({ serverUpdatedAt: mine.updatedAt });
       } else {
