@@ -331,28 +331,6 @@ export function SaleForm({
         }
       }}
     >
-      <PassOutCheckbox
-        checked={passOutEnabled}
-        onChange={setPassOutEnabled}
-      />
-
-      {undoState && undoSecondsLeft > 0 ? (
-        <div className="flex flex-wrap items-center gap-2 rounded-lg border border-navy/15 bg-surface px-3 py-2 text-sm">
-          <span className="text-muted">
-            Undo last sale ({undoSecondsLeft}s)
-          </span>
-          <Button type="button" variant="secondary" onClick={() => void undoLastSale()}>
-            Undo
-          </Button>
-        </div>
-      ) : null}
-
-      {formError ? (
-        <p className="text-sm text-danger" role="alert">
-          {formError}
-        </p>
-      ) : null}
-
       <div className="grid gap-4 sm:grid-cols-2">
         <Input
           ref={lotRef}
@@ -384,6 +362,33 @@ export function SaleForm({
             </p>
           ) : null}
         </div>
+      </div>
+
+      {formError ? (
+        <p className="text-sm text-danger" role="alert">
+          {formError}
+        </p>
+      ) : null}
+
+      <div className="grid gap-4 sm:grid-cols-2">
+        <Input
+          ref={paddleRef}
+          id="sale-paddle"
+          label="Paddle number"
+          inputMode="numeric"
+          value={paddleNumber}
+          onChange={(e) => setPaddleNumber(e.target.value)}
+          className="font-mono"
+          autoComplete="off"
+        />
+        <Input
+          id="sale-qty"
+          label="Quantity"
+          inputMode="numeric"
+          value={quantity}
+          onChange={(e) => setQuantity(e.target.value)}
+          autoComplete="off"
+        />
       </div>
 
       <Input
@@ -420,27 +425,6 @@ export function SaleForm({
           autoComplete="off"
         />
         <Input
-          id="sale-qty"
-          label="Quantity"
-          inputMode="numeric"
-          value={quantity}
-          onChange={(e) => setQuantity(e.target.value)}
-          autoComplete="off"
-        />
-      </div>
-
-      <div className="grid gap-4 sm:grid-cols-2">
-        <Input
-          ref={paddleRef}
-          id="sale-paddle"
-          label="Paddle number"
-          inputMode="numeric"
-          value={paddleNumber}
-          onChange={(e) => setPaddleNumber(e.target.value)}
-          className="font-mono"
-          autoComplete="off"
-        />
-        <Input
           id="sale-initials"
           label="Clerk initials"
           value={clerkInitials}
@@ -453,10 +437,26 @@ export function SaleForm({
         />
       </div>
 
+      <PassOutCheckbox
+        checked={passOutEnabled}
+        onChange={setPassOutEnabled}
+      />
+
+      {undoState && undoSecondsLeft > 0 ? (
+        <div className="flex flex-wrap items-center gap-2 rounded-lg border border-navy/15 bg-surface px-3 py-2 text-sm">
+          <span className="text-muted">
+            Undo last sale ({undoSecondsLeft}s)
+          </span>
+          <Button type="button" variant="secondary" onClick={() => void undoLastSale()}>
+            Undo
+          </Button>
+        </div>
+      ) : null}
+
       <p className="text-xs text-muted">
         Enter records the sale (normal or pass-out per checkbox). Tab order:
-        lot → description → notes → consignor → quantity → price → paddle →
-        initials, then Enter to submit.
+        lot → price → paddle → quantity → description → notes → consignor →
+        initials, then pass out, undo (when shown), then Enter to submit.
       </p>
 
       <button type="submit" className="sr-only">

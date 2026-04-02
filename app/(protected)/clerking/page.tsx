@@ -37,7 +37,7 @@ export default function ClerkingPage() {
     <div>
       <Header
         title="Clerking"
-        description={`Record sales for ${currentEvent.name}. Keyboard: Enter to submit, Shift+Enter to enable pass-out and submit, Esc exits pass-out and clears.`}
+        description={`Record sales for ${currentEvent.name}. Tab: lot → price → paddle → qty → description → notes → consignor → initials. Enter submits; Shift+Enter pass-out; Esc clears.`}
         actions={
           <Link href="/bidders/" className={linkSecondary}>
             Bidders
@@ -56,22 +56,24 @@ export default function ClerkingPage() {
             />
           </Card>
           <div className="mt-6">
-            <LotLookup eventId={currentEventId} />
+            <Card>
+              <h2 className="mb-4 text-lg font-semibold text-navy">
+                Recent sales
+              </h2>
+              <RecentSales
+                eventId={currentEventId}
+                currencySymbol={sym}
+              />
+            </Card>
           </div>
         </div>
         <div className="lg:col-span-2 space-y-6">
           <Card className="lg:sticky lg:top-6">
             <BidderQuickLookup eventId={currentEventId} />
           </Card>
-          <Card className="lg:sticky lg:top-6">
-            <h2 className="mb-4 text-lg font-semibold text-navy">
-              Recent sales
-            </h2>
-            <RecentSales
-              eventId={currentEventId}
-              currencySymbol={sym}
-            />
-          </Card>
+          <div className="lg:sticky lg:top-6">
+            <LotLookup eventId={currentEventId} />
+          </div>
         </div>
       </div>
     </div>

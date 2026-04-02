@@ -1,6 +1,8 @@
 "use client";
 
 import { useState } from "react";
+import { useLiveQuery } from "dexie-react-hooks";
+import { ChevronDown, ChevronRight } from "lucide-react";
 import type { AuctionDB, Lot } from "@/lib/db";
 import { parseLotDisplay } from "@/lib/clerking/lotParse";
 import { displayLotNumberFromParts } from "@/lib/utils/lotSuffix";
@@ -9,6 +11,8 @@ import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { useUserDb } from "@/components/providers/UserDbProvider";
+import { compareLotsForReport } from "@/lib/services/reportCalculator";
+import { liveQueryGuard } from "@/lib/dexie/liveQueryGuard";
 
 type LookupResult = { display: string; lot: Lot | undefined };
 
@@ -27,10 +31,38 @@ async function lookupLot(
   return { display, lot };
 }
 
+function statusTone(
+  status: Lot["status"]
+): "success" | "neutral" | "warning" {
+  if (status === "sold") return "success";
+  if (status === "unsold") return "neutral";
+  return "warning";
+}
+
 export function LotLookup({ eventId }: { eventId: number }) {
-  const { db } = useUserDb();
+  const { db, ready } = useUserDb();
   const [q, setQ] = useState("");
   const [result, setResult] = useState<LookupResult | null>(null);
+  const [expandedIds, setExpandedIds] = useState<Set<number>>(() => new Set());
+
+  const allLots = useLiveQuery(
+    async () =>
+      liveQueryGuard("lotLookup.allLots", async () => {
+        if (!ready || !db) return [];
+        const rows = await db.lots.where("eventId").equals(eventId).toArray();
+        return [...rows].sort(compareLotsForReport);
+      }, []),
+    [ready, db, eventId]
+  );
+
+  function toggleExpanded(id: number) {
+    setExpandedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
 
   return (
     <Card className="!p-4">
@@ -68,15 +100,7 @@ export function LotLookup({ eventId }: { eventId: number }) {
             <>
               <p className="mt-1 text-ink">{result.lot.description}</p>
               <div className="mt-2 flex flex-wrap gap-2">
-                <Badge
-                  tone={
-                    result.lot.status === "sold"
-                      ? "success"
-                      : result.lot.status === "unsold"
-                        ? "neutral"
-                        : "warning"
-                  }
-                >
+                <Badge tone={statusTone(result.lot.status)}>
                   {result.lot.status}
                 </Badge>
                 {result.lot.consignor ? (
@@ -94,6 +118,83 @@ export function LotLookup({ eventId }: { eventId: number }) {
           )}
         </div>
       ) : null}
+
+      <div className="mt-6 border-t border-navy/10 pt-4">
+        <h4 className="text-xs font-semibold uppercase tracking-wide text-muted">
+          All lots in this event
+        </h4>
+        <p className="mt-1 text-xs text-muted">
+          Scroll the list; tap a row to expand details.
+        </p>
+        {!allLots || allLots.length === 0 ? (
+          <p className="mt-3 text-sm text-muted">No lots yet for this event.</p>
+        ) : (
+          <div
+            className="mt-3 max-h-[min(50vh,22rem)] overflow-y-auto overscroll-contain rounded-lg border border-navy/10 bg-white shadow-inner"
+            role="region"
+            aria-label="Lots in this auction"
+          >
+            <ul className="divide-y divide-navy/10">
+              {allLots.map((lot) => {
+                if (lot.id == null) return null;
+                const open = expandedIds.has(lot.id);
+                return (
+                  <li key={lot.id}>
+                    <button
+                      type="button"
+                      className="flex w-full items-start gap-2 px-3 py-2.5 text-left transition hover:bg-navy/[0.04] focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-navy"
+                      onClick={() => toggleExpanded(lot.id!)}
+                      aria-expanded={open}
+                    >
+                      <span className="mt-0.5 shrink-0 text-muted" aria-hidden>
+                        {open ? (
+                          <ChevronDown className="h-4 w-4" />
+                        ) : (
+                          <ChevronRight className="h-4 w-4" />
+                        )}
+                      </span>
+                      <span className="shrink-0 font-mono text-sm font-semibold text-navy">
+                        {lot.displayLotNumber}
+                      </span>
+                      <span className="shrink-0">
+                        <Badge tone={statusTone(lot.status)}>
+                          {lot.status}
+                        </Badge>
+                      </span>
+                      <span
+                        className={`min-w-0 flex-1 text-sm text-ink ${open ? "line-clamp-2" : "truncate"}`}
+                      >
+                        {lot.description}
+                      </span>
+                    </button>
+                    {open ? (
+                      <div className="border-t border-navy/5 bg-surface/60 px-3 py-3 pl-10 text-sm">
+                        <p className="text-ink">{lot.description}</p>
+                        <div className="mt-2 space-y-2 text-xs text-muted">
+                          <p className="flex flex-wrap gap-x-3 gap-y-1">
+                            <span>Qty {lot.quantity}</span>
+                            {lot.consignor ? (
+                              <span>Consignor: {lot.consignor}</span>
+                            ) : null}
+                          </p>
+                          {lot.notes ? (
+                            <div>
+                              <p className="font-medium text-ink">Notes</p>
+                              <p className="mt-0.5 whitespace-pre-wrap text-ink/90">
+                                {lot.notes}
+                              </p>
+                            </div>
+                          ) : null}
+                        </div>
+                      </div>
+                    ) : null}
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        )}
+      </div>
     </Card>
   );
 }
