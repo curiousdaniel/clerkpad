@@ -56,7 +56,7 @@ export async function POST(req: Request) {
       return NextResponse.json(
         {
           error:
-            "Password reset email could not be sent. Ask your administrator to configure email (Resend), or try again later.",
+            "Password reset email could not be sent. In Vercel: Project → Settings → Environment Variables, set RESEND_API_KEY and RESEND_FROM (verified domain in Resend). Redeploy after saving.",
         },
         { status: 503 }
       );

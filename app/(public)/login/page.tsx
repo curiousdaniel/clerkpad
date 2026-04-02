@@ -94,6 +94,28 @@ export default function LoginPage() {
             Register your organization
           </Link>
         </p>
+        <p className="mt-4 text-center text-xs text-muted">
+          <Link
+            href="/user-agreement/"
+            className="underline underline-offset-2 hover:text-ink"
+          >
+            User agreement
+          </Link>
+          <span className="mx-2 text-navy/20">·</span>
+          <Link
+            href="/privacy-policy/"
+            className="underline underline-offset-2 hover:text-ink"
+          >
+            Privacy policy
+          </Link>
+          <span className="mx-2 text-navy/20">·</span>
+          <Link
+            href="/feedback/"
+            className="underline underline-offset-2 hover:text-ink"
+          >
+            Feedback
+          </Link>
+        </p>
       </Card>
     </AuthPageFrame>
   );

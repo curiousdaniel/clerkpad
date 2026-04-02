@@ -115,10 +115,27 @@ export default function RegisterPage() {
             minLength={8}
             required
           />
-          <Button type="submit" className="w-full" disabled={pending}>
-            {pending ? "Creating account…" : "Create account"}
-          </Button>
-        </form>
+        <p className="text-xs leading-relaxed text-muted">
+          By creating an account, you agree to the{" "}
+          <Link
+            href="/user-agreement/"
+            className="font-medium text-navy underline underline-offset-2"
+          >
+            User agreement
+          </Link>{" "}
+          and{" "}
+          <Link
+            href="/privacy-policy/"
+            className="font-medium text-navy underline underline-offset-2"
+          >
+            Privacy policy
+          </Link>
+          .
+        </p>
+        <Button type="submit" className="w-full" disabled={pending}>
+          {pending ? "Creating account…" : "Create account"}
+        </Button>
+      </form>
         <p className="mt-6 text-center text-sm text-muted">
           Already have an account?{" "}
           <Link href="/login/" className="font-medium text-navy underline">

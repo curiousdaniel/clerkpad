@@ -159,6 +159,32 @@ export default async function LandingPage() {
               AuctionMethod.com
             </a>
           </p>
+          <p className="mt-3 flex flex-wrap items-center justify-center gap-x-3 gap-y-1">
+            <Link
+              href="/user-agreement/"
+              className="font-medium text-navy underline decoration-navy/25 underline-offset-4 hover:decoration-navy"
+            >
+              User agreement
+            </Link>
+            <span className="text-navy/20" aria-hidden>
+              ·
+            </span>
+            <Link
+              href="/privacy-policy/"
+              className="font-medium text-navy underline decoration-navy/25 underline-offset-4 hover:decoration-navy"
+            >
+              Privacy policy
+            </Link>
+            <span className="text-navy/20" aria-hidden>
+              ·
+            </span>
+            <Link
+              href="/feedback/"
+              className="font-medium text-navy underline decoration-navy/25 underline-offset-4 hover:decoration-navy"
+            >
+              Feedback
+            </Link>
+          </p>
         </footer>
       </div>
     </div>

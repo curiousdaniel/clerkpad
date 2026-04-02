@@ -291,6 +291,28 @@ export default function SettingsPage() {
             Version <span className="font-mono text-ink">{APP_VERSION}</span>
           </p>
           <p className="text-muted">
+            <Link
+              href="/user-agreement/"
+              className="font-medium text-navy underline underline-offset-2"
+            >
+              User agreement
+            </Link>
+            <span className="mx-2 text-navy/25">·</span>
+            <Link
+              href="/privacy-policy/"
+              className="font-medium text-navy underline underline-offset-2"
+            >
+              Privacy policy
+            </Link>
+            <span className="mx-2 text-navy/25">·</span>
+            <Link
+              href="/feedback/"
+              className="font-medium text-navy underline underline-offset-2"
+            >
+              Feedback
+            </Link>
+          </p>
+          <p className="text-muted">
             Storage (approx.): {formatBytes(storage.usage)} used
             {storage.quota != null
               ? ` of ${formatBytes(storage.quota)} available`

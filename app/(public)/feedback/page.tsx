@@ -1,0 +1,139 @@
+"use client";
+
+import { useState } from "react";
+import Link from "next/link";
+import { AuthPageFrame } from "@/components/layout/AuthPageFrame";
+import { Card } from "@/components/ui/Card";
+import { Button } from "@/components/ui/Button";
+import { Input } from "@/components/ui/Input";
+
+export default function FeedbackPage() {
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [message, setMessage] = useState("");
+  const [website, setWebsite] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [done, setDone] = useState(false);
+  const [pending, setPending] = useState(false);
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setError(null);
+    setPending(true);
+    try {
+      const res = await fetch("/api/feedback", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: name.trim(),
+          email: email.trim(),
+          message: message.trim(),
+          website,
+        }),
+      });
+      const data = (await res.json()) as { ok?: boolean; error?: string };
+      if (!res.ok) {
+        setError(data.error ?? "Could not send feedback.");
+        setPending(false);
+        return;
+      }
+      setDone(true);
+      setPending(false);
+    } catch {
+      setError("Something went wrong.");
+      setPending(false);
+    }
+  }
+
+  return (
+    <AuthPageFrame>
+      <Card className="w-full max-w-lg">
+        <h1 className="text-xl font-bold text-navy">Questions & feedback</h1>
+        <p className="mt-1 text-sm text-muted">
+          Send a note to{" "}
+          <a
+            href="mailto:info@auctionmethod.com"
+            className="font-medium text-navy underline"
+          >
+            info@auctionmethod.com
+          </a>
+          . We read every message.
+        </p>
+
+        {done ? (
+          <p className="mt-6 text-sm text-ink" role="status">
+            Thanks—your message was sent. We&apos;ll get back to you if a reply
+            is needed.
+          </p>
+        ) : (
+          <form className="mt-6 space-y-4" onSubmit={handleSubmit}>
+            {error ? (
+              <p className="text-sm text-danger" role="alert">
+                {error}
+              </p>
+            ) : null}
+            <Input
+              id="feedback-name"
+              label="Name (optional)"
+              autoComplete="name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              maxLength={120}
+            />
+            <Input
+              id="feedback-email"
+              label="Your email"
+              type="email"
+              autoComplete="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+            />
+            <div className="w-full">
+              <label
+                htmlFor="feedback-message"
+                className="mb-1 block text-sm font-medium text-ink"
+              >
+                Message
+              </label>
+              <textarea
+                id="feedback-message"
+                className="w-full min-h-[140px] rounded-lg border border-navy/20 bg-white px-3 py-2 text-sm text-ink placeholder:text-muted focus:border-navy focus:outline-none focus:ring-1 focus:ring-navy"
+                value={message}
+                onChange={(e) => setMessage(e.target.value)}
+                required
+                minLength={10}
+                maxLength={8000}
+                placeholder="Questions, ideas, or issues using ClerkBid…"
+              />
+              <p className="mt-1 text-xs text-muted">
+                {message.length.toLocaleString()} / 8,000 characters
+              </p>
+            </div>
+            <div className="hidden" aria-hidden>
+              <label htmlFor="feedback-website">Website</label>
+              <input
+                id="feedback-website"
+                name="website"
+                type="text"
+                tabIndex={-1}
+                autoComplete="off"
+                value={website}
+                onChange={(e) => setWebsite(e.target.value)}
+              />
+            </div>
+            <Button type="submit" className="w-full" disabled={pending}>
+              {pending ? "Sending…" : "Send message"}
+            </Button>
+          </form>
+        )}
+
+        <p className="mt-6 text-center text-sm text-muted">
+          <Link href="/" className="font-medium text-navy underline">
+            Back to home
+          </Link>
+        </p>
+      </Card>
+    </AuthPageFrame>
+  );
+}
