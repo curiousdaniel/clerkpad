@@ -9,7 +9,8 @@ import { Input } from "@/components/ui/Input";
 
 export default function RegisterPage() {
   const [organizationName, setOrganizationName] = useState("");
-  const [name, setName] = useState("");
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -25,7 +26,8 @@ export default function RegisterPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           organizationName,
-          name: name.trim() || undefined,
+          firstName: firstName.trim(),
+          lastName: lastName.trim(),
           email: email.trim(),
           password,
         }),
@@ -74,12 +76,24 @@ export default function RegisterPage() {
           onChange={(e) => setOrganizationName(e.target.value)}
           required
         />
-        <Input
-          id="reg-name"
-          label="Your name (optional)"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-        />
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <Input
+            id="reg-first-name"
+            label="First name"
+            autoComplete="given-name"
+            value={firstName}
+            onChange={(e) => setFirstName(e.target.value)}
+            required
+          />
+          <Input
+            id="reg-last-name"
+            label="Last name"
+            autoComplete="family-name"
+            value={lastName}
+            onChange={(e) => setLastName(e.target.value)}
+            required
+          />
+        </div>
         <Input
           id="reg-email"
           label="Email"

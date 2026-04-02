@@ -10,18 +10,23 @@ export async function POST(req: Request) {
     const body = (await req.json()) as {
       email?: string;
       password?: string;
-      name?: string;
+      firstName?: string;
+      lastName?: string;
       organizationName?: string;
     };
 
     const email = body.email?.trim().toLowerCase();
     const password = body.password;
-    const name = body.name?.trim();
+    const firstName = body.firstName?.trim();
+    const lastName = body.lastName?.trim();
     const organizationName = body.organizationName?.trim();
 
-    if (!email || !password || !organizationName) {
+    if (!email || !password || !organizationName || !firstName || !lastName) {
       return NextResponse.json(
-        { error: "Email, password, and organization name are required." },
+        {
+          error:
+            "Email, password, organization name, first name, and last name are required.",
+        },
         { status: 400 }
       );
     }
@@ -69,8 +74,8 @@ export async function POST(req: Request) {
 
     try {
       await sql`
-        INSERT INTO users (email, password_hash, name, vendor_id)
-        VALUES (${email}, ${passwordHash}, ${name || null}, ${vendorId})
+        INSERT INTO users (email, password_hash, first_name, last_name, vendor_id)
+        VALUES (${email}, ${passwordHash}, ${firstName}, ${lastName}, ${vendorId})
       `;
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);

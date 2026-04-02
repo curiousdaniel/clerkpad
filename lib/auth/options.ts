@@ -28,10 +28,11 @@ export const authOptions: NextAuthOptions = {
           id: number;
           email: string;
           password_hash: string;
-          name: string | null;
+          first_name: string;
+          last_name: string;
           vendor_id: number;
         }>`
-          SELECT id, email, password_hash, name, vendor_id
+          SELECT id, email, password_hash, first_name, last_name, vendor_id
           FROM users
           WHERE email = ${email}
           LIMIT 1
@@ -43,10 +44,13 @@ export const authOptions: NextAuthOptions = {
         const ok = await bcrypt.compare(password, user.password_hash);
         if (!ok) return null;
 
+        const displayName =
+          `${user.first_name} ${user.last_name}`.trim() || user.email;
+
         return {
           id: String(user.id),
           email: user.email,
-          name: user.name ?? undefined,
+          name: displayName,
           vendorId: String(user.vendor_id),
         };
       },
