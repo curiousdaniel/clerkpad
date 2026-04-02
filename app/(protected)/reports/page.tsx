@@ -31,7 +31,7 @@ import {
 import { liveQueryGuard } from "@/lib/dexie/liveQueryGuard";
 
 const linkSecondary =
-  "inline-flex items-center justify-center gap-2 rounded-lg border border-navy/15 bg-surface px-4 py-2 text-sm font-medium text-ink transition hover:border-navy/30 focus:outline-none focus-visible:ring-2 focus-visible:ring-navy focus-visible:ring-offset-2";
+  "inline-flex items-center justify-center gap-2 rounded-lg border border-navy/15 bg-surface px-4 py-2 text-sm font-medium text-ink transition hover:border-navy/30 focus:outline-none focus-visible:ring-2 focus-visible:ring-navy focus-visible:ring-offset-2 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:hover:border-slate-500 dark:focus-visible:ring-offset-slate-950";
 
 function slug(s: string) {
   return s.replace(/[^a-z0-9-_]+/gi, "-").slice(0, 48) || "event";
@@ -128,7 +128,7 @@ export default function ReportsPage() {
         <p className="text-muted">Loading…</p>
       ) : (
         <>
-          <div className="flex flex-wrap gap-3 rounded-xl border border-navy/15 bg-surface/80 p-4">
+          <div className="flex flex-wrap gap-3 rounded-xl border border-navy/15 bg-surface/80 p-4 dark:border-slate-600 dark:bg-slate-800/60">
             <Button
               type="button"
               variant="secondary"

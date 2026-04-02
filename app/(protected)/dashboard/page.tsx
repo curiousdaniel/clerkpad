@@ -25,9 +25,9 @@ function daysBetween(
 }
 
 const linkPrimary =
-  "inline-flex items-center justify-center gap-2 rounded-lg bg-navy px-4 py-2 text-sm font-medium text-white transition hover:bg-navy-dark focus:outline-none focus-visible:ring-2 focus-visible:ring-navy focus-visible:ring-offset-2";
+  "inline-flex items-center justify-center gap-2 rounded-lg bg-navy px-4 py-2 text-sm font-medium text-white transition hover:bg-navy-dark focus:outline-none focus-visible:ring-2 focus-visible:ring-navy focus-visible:ring-offset-2 dark:focus-visible:ring-offset-slate-950";
 const linkSecondary =
-  "inline-flex items-center justify-center gap-2 rounded-lg border border-navy/15 bg-surface px-4 py-2 text-sm font-medium text-ink transition hover:border-navy/30 focus:outline-none focus-visible:ring-2 focus-visible:ring-navy focus-visible:ring-offset-2";
+  "inline-flex items-center justify-center gap-2 rounded-lg border border-navy/15 bg-surface px-4 py-2 text-sm font-medium text-ink transition hover:border-navy/30 focus:outline-none focus-visible:ring-2 focus-visible:ring-navy focus-visible:ring-offset-2 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:hover:border-slate-500 dark:focus-visible:ring-offset-slate-950";
 
 export default function DashboardPage() {
   const { db, ready: dbReady } = useUserDb();
@@ -119,8 +119,10 @@ export default function DashboardPage() {
           title="Dashboard"
           description="Select or create an event to see live stats and recent sales."
         />
-        <div className="rounded-xl border border-dashed border-navy/20 bg-surface/50 p-10 text-center">
-          <p className="text-lg font-medium text-navy">Welcome to ClerkBid</p>
+        <div className="rounded-xl border border-dashed border-navy/20 bg-surface/50 p-10 text-center dark:border-slate-600 dark:bg-slate-800/40">
+          <p className="text-lg font-medium text-navy dark:text-slate-100">
+            Welcome to ClerkBid
+          </p>
           <p className="mt-2 text-sm text-muted">
             Create an event to start registering bidders and recording sales.
           </p>
@@ -153,8 +155,10 @@ export default function DashboardPage() {
       />
 
       {showBackupNudge && db ? (
-        <div className="mb-6 rounded-xl border border-navy/15 bg-surface px-4 py-3 text-sm">
-          <p className="font-medium text-navy">Cloud backup reminder</p>
+        <div className="mb-6 rounded-xl border border-navy/15 bg-surface px-4 py-3 text-sm dark:border-slate-600 dark:bg-slate-800/60">
+          <p className="font-medium text-navy dark:text-slate-100">
+            Cloud backup reminder
+          </p>
           <p className="mt-1 text-muted">
             You have not saved this event to the cloud recently. Sync now so
             another device—or a lost browser—does not mean lost work.
@@ -189,7 +193,7 @@ export default function DashboardPage() {
             <p className="text-xs font-medium uppercase tracking-wide text-muted">
               Bidders
             </p>
-            <p className="mt-1 font-mono text-2xl font-semibold text-navy">
+            <p className="mt-1 font-mono text-2xl font-semibold text-navy dark:text-slate-100">
               {stats.bidderCount}
             </p>
           </Card>
@@ -197,7 +201,7 @@ export default function DashboardPage() {
             <p className="text-xs font-medium uppercase tracking-wide text-muted">
               Lots
             </p>
-            <p className="mt-1 font-mono text-2xl font-semibold text-navy">
+            <p className="mt-1 font-mono text-2xl font-semibold text-navy dark:text-slate-100">
               {stats.totalLots}
             </p>
             <p className="mt-1 text-xs text-muted">
@@ -217,7 +221,7 @@ export default function DashboardPage() {
             <p className="text-xs font-medium uppercase tracking-wide text-muted">
               Invoices
             </p>
-            <p className="mt-1 font-mono text-2xl font-semibold text-navy">
+            <p className="mt-1 font-mono text-2xl font-semibold text-navy dark:text-slate-100">
               {stats.invTotal}
             </p>
             <p className="mt-1 text-xs text-muted">
@@ -234,16 +238,16 @@ export default function DashboardPage() {
         {!recentSales || recentSales.length === 0 ? (
           <p className="text-sm text-muted">No sales recorded yet.</p>
         ) : (
-          <ul className="divide-y divide-navy/10 rounded-xl border border-navy/10 bg-white">
+          <ul className="divide-y divide-navy/10 rounded-xl border border-navy/10 bg-white dark:divide-slate-700 dark:border-slate-700 dark:bg-slate-900">
             {recentSales.map((s) => (
               <li
                 key={s.id}
                 className="flex flex-wrap items-baseline gap-x-3 gap-y-1 px-4 py-3 text-sm"
               >
-                <span className="font-mono font-medium text-navy">
+                <span className="font-mono font-medium text-navy dark:text-slate-200">
                   Lot {s.displayLotNumber}
                 </span>
-                <span className="text-ink">{s.description}</span>
+                <span className="text-ink dark:text-slate-100">{s.description}</span>
                 <span className="font-mono text-gold">
                   {formatCurrency(s.amount, sym)}
                 </span>

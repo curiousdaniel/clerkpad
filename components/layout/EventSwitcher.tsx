@@ -19,7 +19,7 @@ export function EventSwitcher() {
 
   if (!ready || !dbReady || !events) {
     return (
-      <div className="rounded-lg border border-navy/10 bg-white px-3 py-2 text-xs text-muted">
+      <div className="rounded-lg border border-navy/10 bg-white px-3 py-2 text-xs text-muted dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400">
         Loading events…
       </div>
     );
@@ -32,7 +32,7 @@ export function EventSwitcher() {
       </label>
       <select
         id="event-switcher"
-        className="w-full rounded-lg border border-navy/20 bg-white px-3 py-2 text-sm font-medium text-ink focus:border-navy focus:outline-none focus:ring-1 focus:ring-navy"
+        className="w-full rounded-lg border border-navy/20 bg-white px-3 py-2 text-sm font-medium text-ink focus:border-navy focus:outline-none focus:ring-1 focus:ring-navy dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
         value={currentEventId ?? ""}
         onChange={(e) => {
           const v = e.target.value;

@@ -92,8 +92,10 @@ export function RecentSales({
         {groups.map((g) => (
           <li key={g.base}>
             <ul
-              className={`rounded-lg border border-navy/10 ${
-                g.items.length > 1 ? "border-l-4 border-l-gold/60 bg-amber-50/30" : "bg-white"
+              className={`rounded-lg border border-navy/10 dark:border-slate-700 ${
+                g.items.length > 1
+                  ? "border-l-4 border-l-gold/60 bg-amber-50/30 dark:bg-amber-950/25"
+                  : "bg-white dark:bg-slate-900"
               }`}
             >
               {g.items.map((s) => {
@@ -108,7 +110,7 @@ export function RecentSales({
                   >
                     <button
                       type="button"
-                      className="flex w-full items-start gap-2 px-3 py-2 text-left text-sm hover:bg-surface/80"
+                      className="flex w-full items-start gap-2 px-3 py-2 text-left text-sm hover:bg-surface/80 dark:hover:bg-slate-800/80"
                       onClick={() =>
                         setOpenId(expanded ? null : (s.id as number))
                       }

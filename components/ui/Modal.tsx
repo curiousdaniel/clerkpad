@@ -32,18 +32,21 @@ export function Modal({
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <button
         type="button"
-        className="absolute inset-0 bg-ink/40"
+        className="absolute inset-0 bg-ink/40 dark:bg-black/60"
         aria-label="Close dialog"
         onClick={onClose}
       />
       <div
-        className="relative z-10 w-full max-w-lg rounded-xl border border-navy/10 bg-white shadow-xl"
+        className="relative z-10 w-full max-w-lg rounded-xl border border-navy/10 bg-white shadow-xl dark:border-slate-700 dark:bg-slate-900"
         role="dialog"
         aria-modal="true"
         aria-labelledby="modal-title"
       >
-        <div className="flex items-center justify-between border-b border-navy/10 px-5 py-3">
-          <h2 id="modal-title" className="text-lg font-semibold text-navy">
+        <div className="flex items-center justify-between border-b border-navy/10 px-5 py-3 dark:border-slate-700">
+          <h2
+            id="modal-title"
+            className="text-lg font-semibold text-navy dark:text-slate-100"
+          >
             {title}
           </h2>
           <Button variant="ghost" className="!p-1" onClick={onClose} aria-label="Close">
@@ -52,7 +55,7 @@ export function Modal({
         </div>
         <div className="max-h-[70vh] overflow-y-auto px-5 py-4">{children}</div>
         {footer ? (
-          <div className="flex justify-end gap-2 border-t border-navy/10 px-5 py-3">
+          <div className="flex justify-end gap-2 border-t border-navy/10 px-5 py-3 dark:border-slate-700">
             {footer}
           </div>
         ) : null}

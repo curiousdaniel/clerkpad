@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { useUserDb } from "@/components/providers/UserDbProvider";
 import { displayLotNumberFromParts } from "@/lib/utils/lotSuffix";
 import { parseLotDisplay } from "@/lib/clerking/lotParse";
@@ -15,10 +15,30 @@ import { PassOutCheckbox } from "./PassOutCheckbox";
 import { useToast } from "@/components/providers/ToastProvider";
 import { formatCurrency } from "@/lib/utils/formatCurrency";
 import { roundMoney } from "@/lib/services/invoiceLogic";
+import {
+  DEFAULT_SALE_FIELD_ORDER,
+  readSaleFieldOrder,
+  SALE_FIELD_ORDER_CHANGED,
+  type SaleFieldId,
+  tabOrderHelpFragment,
+} from "@/lib/saleFormOrder";
 
 const CLERK_KEY = "clerkbid:clerkInitials";
 
 type UndoState = { saleId: number; lotId: number; until: number };
+
+function subscribeSaleFieldOrder(onStoreChange: () => void) {
+  const fn = () => onStoreChange();
+  if (typeof window !== "undefined") {
+    window.addEventListener(SALE_FIELD_ORDER_CHANGED, fn);
+    window.addEventListener("storage", fn);
+    return () => {
+      window.removeEventListener(SALE_FIELD_ORDER_CHANGED, fn);
+      window.removeEventListener("storage", fn);
+    };
+  }
+  return () => {};
+}
 
 export function SaleForm({
   eventId,
@@ -43,8 +63,20 @@ export function SaleForm({
   const [formError, setFormError] = useState<string | null>(null);
   const [undoState, setUndoState] = useState<UndoState | null>(null);
 
-  const lotRef = useRef<HTMLInputElement>(null);
-  const paddleRef = useRef<HTMLInputElement>(null);
+  const fieldRefs = useRef<Partial<Record<SaleFieldId, HTMLElement | null>>>(
+    {}
+  );
+
+  const fieldOrder = useSyncExternalStore(
+    subscribeSaleFieldOrder,
+    readSaleFieldOrder,
+    () => [...DEFAULT_SALE_FIELD_ORDER]
+  );
+
+  const focusField = useCallback((id: SaleFieldId) => {
+    const el = fieldRefs.current[id];
+    requestAnimationFrame(() => el?.focus());
+  }, []);
 
   const refreshLotSuggestion = useCallback(async () => {
     if (!db) return;
@@ -123,7 +155,7 @@ export function SaleForm({
     setSellPrice("");
     setPaddleNumber("");
     await refreshLotSuggestion();
-    requestAnimationFrame(() => lotRef.current?.focus());
+    focusField("lot");
   }
 
   async function undoLastSale() {
@@ -152,7 +184,7 @@ export function SaleForm({
       setUndoState(null);
       showToast({ kind: "success", message: "Last sale undone." });
       await refreshLotSuggestion();
-      requestAnimationFrame(() => lotRef.current?.focus());
+      focusField("lot");
     } catch (e) {
       showToast({
         kind: "error",
@@ -294,7 +326,7 @@ export function SaleForm({
       setLotNotes("");
       const nextDisp = await nextPassOutLineDisplay(db, eventId, baseNum);
       setLotNumber(nextDisp);
-      requestAnimationFrame(() => paddleRef.current?.focus());
+      focusField("paddle");
     } else {
       setPassOutEnabled(false);
       setTitle("");
@@ -304,13 +336,166 @@ export function SaleForm({
       setSellPrice("");
       setPaddleNumber("");
       await refreshLotSuggestion();
-      requestAnimationFrame(() => lotRef.current?.focus());
+      focusField("lot");
     }
   }
 
   const undoSecondsLeft = undoState
     ? Math.max(0, Math.ceil((undoState.until - Date.now()) / 1000))
     : 0;
+
+  const setRef =
+    (id: SaleFieldId) => (el: HTMLElement | null) => {
+      fieldRefs.current[id] = el;
+    };
+
+  function renderField(id: SaleFieldId) {
+    switch (id) {
+      case "lot":
+        return (
+          <Input
+            key="lot"
+            ref={(el) => {
+              setRef("lot")(el);
+            }}
+            id="sale-lot"
+            label="Lot number"
+            value={lotNumber}
+            onChange={(e) => setLotNumber(e.target.value)}
+            onBlur={() => void autofillFromLot()}
+            className="font-mono"
+            autoComplete="off"
+          />
+        );
+      case "price":
+        return (
+          <div key="price">
+            <Input
+              ref={(el) => {
+                setRef("price")(el);
+              }}
+              id="sale-price"
+              label={`Hammer / sell price (${currencySymbol})`}
+              inputMode="decimal"
+              value={sellPrice}
+              onChange={(e) => setSellPrice(e.target.value)}
+              className="font-mono"
+              autoComplete="off"
+            />
+            {bpPreview != null ? (
+              <p className="mt-1 text-xs text-muted">
+                With {Math.round(buyersPremiumRate * 100)}% buyer&apos;s premium
+                (before tax):{" "}
+                <span className="font-mono font-medium text-navy">
+                  {formatCurrency(bpPreview, currencySymbol)}
+                </span>
+              </p>
+            ) : null}
+          </div>
+        );
+      case "paddle":
+        return (
+          <Input
+            key="paddle"
+            ref={(el) => {
+              setRef("paddle")(el);
+            }}
+            id="sale-paddle"
+            label="Paddle number"
+            inputMode="numeric"
+            value={paddleNumber}
+            onChange={(e) => setPaddleNumber(e.target.value)}
+            className="font-mono"
+            autoComplete="off"
+          />
+        );
+      case "quantity":
+        return (
+          <Input
+            key="quantity"
+            ref={(el) => {
+              setRef("quantity")(el);
+            }}
+            id="sale-qty"
+            label="Quantity"
+            inputMode="numeric"
+            value={quantity}
+            onChange={(e) => setQuantity(e.target.value)}
+            autoComplete="off"
+          />
+        );
+      case "description":
+        return (
+          <Input
+            key="description"
+            ref={(el) => {
+              setRef("description")(el);
+            }}
+            id="sale-title"
+            label="Lot description / title"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            autoComplete="off"
+          />
+        );
+      case "notes":
+        return (
+          <div key="notes">
+            <label
+              htmlFor="sale-lot-notes"
+              className="mb-1 block text-sm font-medium text-ink"
+            >
+              Lot notes / ring (optional)
+            </label>
+            <textarea
+              ref={(el) => {
+                setRef("notes")(el);
+              }}
+              id="sale-lot-notes"
+              className="w-full rounded-lg border border-navy/20 bg-white px-3 py-2 text-sm text-ink placeholder:text-muted focus:border-navy focus:outline-none focus:ring-1 focus:ring-navy dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:placeholder:text-slate-500"
+              rows={2}
+              value={lotNotes}
+              onChange={(e) => setLotNotes(e.target.value)}
+              placeholder="Announcement line, ring notes…"
+            />
+          </div>
+        );
+      case "consignor":
+        return (
+          <Input
+            key="consignor"
+            ref={(el) => {
+              setRef("consignor")(el);
+            }}
+            id="sale-consignor"
+            label="Consignor (optional)"
+            value={consignor}
+            onChange={(e) => setConsignor(e.target.value)}
+            autoComplete="off"
+          />
+        );
+      case "initials":
+        return (
+          <Input
+            key="initials"
+            ref={(el) => {
+              setRef("initials")(el);
+            }}
+            id="sale-initials"
+            label="Clerk initials"
+            value={clerkInitials}
+            onChange={(e) =>
+              setClerkInitials(e.target.value.toUpperCase().slice(0, 3))
+            }
+            maxLength={3}
+            className="font-mono uppercase"
+            autoComplete="off"
+          />
+        );
+      default:
+        return null;
+    }
+  }
 
   return (
     <form
@@ -331,111 +516,13 @@ export function SaleForm({
         }
       }}
     >
-      <div className="grid gap-4 sm:grid-cols-2">
-        <Input
-          ref={lotRef}
-          id="sale-lot"
-          label="Lot number"
-          value={lotNumber}
-          onChange={(e) => setLotNumber(e.target.value)}
-          onBlur={() => void autofillFromLot()}
-          className="font-mono"
-          autoComplete="off"
-        />
-        <div>
-          <Input
-            id="sale-price"
-            label={`Hammer / sell price (${currencySymbol})`}
-            inputMode="decimal"
-            value={sellPrice}
-            onChange={(e) => setSellPrice(e.target.value)}
-            className="font-mono"
-            autoComplete="off"
-          />
-          {bpPreview != null ? (
-            <p className="mt-1 text-xs text-muted">
-              With {Math.round(buyersPremiumRate * 100)}% buyer&apos;s premium
-              (before tax):{" "}
-              <span className="font-mono font-medium text-navy">
-                {formatCurrency(bpPreview, currencySymbol)}
-              </span>
-            </p>
-          ) : null}
-        </div>
-      </div>
-
       {formError ? (
         <p className="text-sm text-danger" role="alert">
           {formError}
         </p>
       ) : null}
 
-      <div className="grid gap-4 sm:grid-cols-2">
-        <Input
-          ref={paddleRef}
-          id="sale-paddle"
-          label="Paddle number"
-          inputMode="numeric"
-          value={paddleNumber}
-          onChange={(e) => setPaddleNumber(e.target.value)}
-          className="font-mono"
-          autoComplete="off"
-        />
-        <Input
-          id="sale-qty"
-          label="Quantity"
-          inputMode="numeric"
-          value={quantity}
-          onChange={(e) => setQuantity(e.target.value)}
-          autoComplete="off"
-        />
-      </div>
-
-      <Input
-        id="sale-title"
-        label="Lot description / title"
-        value={title}
-        onChange={(e) => setTitle(e.target.value)}
-        autoComplete="off"
-      />
-
-      <div>
-        <label
-          htmlFor="sale-lot-notes"
-          className="mb-1 block text-sm font-medium text-ink"
-        >
-          Lot notes / ring (optional)
-        </label>
-        <textarea
-          id="sale-lot-notes"
-          className="w-full rounded-lg border border-navy/20 bg-white px-3 py-2 text-sm text-ink placeholder:text-muted focus:border-navy focus:outline-none focus:ring-1 focus:ring-navy"
-          rows={2}
-          value={lotNotes}
-          onChange={(e) => setLotNotes(e.target.value)}
-          placeholder="Announcement line, ring notes…"
-        />
-      </div>
-
-      <div className="grid gap-4 sm:grid-cols-2">
-        <Input
-          id="sale-consignor"
-          label="Consignor (optional)"
-          value={consignor}
-          onChange={(e) => setConsignor(e.target.value)}
-          autoComplete="off"
-        />
-        <Input
-          id="sale-initials"
-          label="Clerk initials"
-          value={clerkInitials}
-          onChange={(e) =>
-            setClerkInitials(e.target.value.toUpperCase().slice(0, 3))
-          }
-          maxLength={3}
-          className="font-mono uppercase"
-          autoComplete="off"
-        />
-      </div>
+      {fieldOrder.map((id) => renderField(id))}
 
       <PassOutCheckbox
         checked={passOutEnabled}
@@ -443,7 +530,7 @@ export function SaleForm({
       />
 
       {undoState && undoSecondsLeft > 0 ? (
-        <div className="flex flex-wrap items-center gap-2 rounded-lg border border-navy/15 bg-surface px-3 py-2 text-sm">
+        <div className="flex flex-wrap items-center gap-2 rounded-lg border border-navy/15 bg-surface px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-800/60">
           <span className="text-muted">
             Undo last sale ({undoSecondsLeft}s)
           </span>
@@ -454,9 +541,9 @@ export function SaleForm({
       ) : null}
 
       <p className="text-xs text-muted">
-        Enter records the sale (normal or pass-out per checkbox). Tab order:
-        lot → price → paddle → quantity → description → notes → consignor →
-        initials, then pass out, undo (when shown), then Enter to submit.
+        Enter records the sale (normal or pass-out per checkbox). Tab order:{" "}
+        {tabOrderHelpFragment(fieldOrder)}, then pass out, undo (when shown),
+        then Enter to submit.
       </p>
 
       <button type="submit" className="sr-only">

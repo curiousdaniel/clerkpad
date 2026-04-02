@@ -31,13 +31,13 @@ export function Sidebar() {
   const pathname = usePathname();
 
   return (
-    <aside className="flex h-full w-60 shrink-0 flex-col border-r border-navy/10 bg-surface">
-      <div className="border-b border-navy/10 p-4">
+    <aside className="flex h-full w-60 shrink-0 flex-col border-r border-navy/10 bg-surface dark:border-slate-700 dark:bg-slate-900">
+      <div className="border-b border-navy/10 p-4 dark:border-slate-700">
         <Link href="/dashboard/" className="block">
-          <span className="text-lg font-bold tracking-tight text-navy">
+          <span className="text-lg font-bold tracking-tight text-navy dark:text-slate-100">
             Clerk<span className="text-gold">Bid</span>
           </span>
-          <span className="mt-0.5 block text-xs text-muted">
+          <span className="mt-0.5 block text-xs text-muted dark:text-slate-400">
             Auction clerking
           </span>
         </Link>
@@ -56,8 +56,8 @@ export function Sidebar() {
               href={href}
               className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition ${
                 active
-                  ? "bg-white text-navy shadow-sm ring-1 ring-navy/10"
-                  : "text-muted hover:bg-white/60 hover:text-ink"
+                  ? "bg-white text-navy shadow-sm ring-1 ring-navy/10 dark:bg-slate-800 dark:text-slate-100 dark:ring-slate-600"
+                  : "text-muted hover:bg-white/60 hover:text-ink dark:hover:bg-slate-800/60 dark:hover:text-slate-100"
               }`}
             >
               <Icon className="h-4 w-4 shrink-0" aria-hidden />
@@ -66,10 +66,10 @@ export function Sidebar() {
           );
         })}
       </nav>
-      <div className="border-t border-navy/10 p-3">
+      <div className="border-t border-navy/10 p-3 dark:border-slate-700">
         <button
           type="button"
-          className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-muted transition hover:bg-white/60 hover:text-ink"
+          className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-muted transition hover:bg-white/60 hover:text-ink dark:hover:bg-slate-800/60 dark:hover:text-slate-100"
           onClick={() => {
             try {
               sessionStorage.removeItem(OFFLINE_SESSION_STORAGE_KEY);

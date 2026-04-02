@@ -37,7 +37,7 @@ export function BidderQuickLookup({ eventId }: { eventId: number }) {
         autoComplete="off"
       />
       {match ? (
-        <div className="rounded-lg border border-navy/15 bg-surface px-3 py-2 text-sm">
+        <div className="rounded-lg border border-navy/15 bg-surface px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-800/60">
           <p className="font-medium text-navy">
             {match.firstName} {match.lastName}
           </p>

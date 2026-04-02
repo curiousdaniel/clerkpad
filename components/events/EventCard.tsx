@@ -45,7 +45,9 @@ export function EventCard({
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div>
           <div className="flex flex-wrap items-center gap-2">
-            <h2 className="text-lg font-semibold text-navy">{event.name}</h2>
+            <h2 className="text-lg font-semibold text-navy dark:text-slate-100">
+              {event.name}
+            </h2>
             {isCurrent ? <Badge tone="success">Current</Badge> : null}
           </div>
           {event.description ? (
@@ -58,21 +60,21 @@ export function EventCard({
         </div>
       </div>
       <dl className="grid grid-cols-3 gap-3 text-center text-sm">
-        <div className="rounded-lg bg-surface px-2 py-2">
+        <div className="rounded-lg bg-surface px-2 py-2 dark:bg-slate-800/80">
           <dt className="text-xs text-muted">Bidders</dt>
-          <dd className="font-mono font-semibold text-ink">
+          <dd className="font-mono font-semibold text-ink dark:text-slate-100">
             {counts?.bidders ?? "—"}
           </dd>
         </div>
-        <div className="rounded-lg bg-surface px-2 py-2">
+        <div className="rounded-lg bg-surface px-2 py-2 dark:bg-slate-800/80">
           <dt className="text-xs text-muted">Lots</dt>
-          <dd className="font-mono font-semibold text-ink">
+          <dd className="font-mono font-semibold text-ink dark:text-slate-100">
             {counts?.lots ?? "—"}
           </dd>
         </div>
-        <div className="rounded-lg bg-surface px-2 py-2">
+        <div className="rounded-lg bg-surface px-2 py-2 dark:bg-slate-800/80">
           <dt className="text-xs text-muted">Sales</dt>
-          <dd className="font-mono font-semibold text-ink">
+          <dd className="font-mono font-semibold text-ink dark:text-slate-100">
             {counts?.sales ?? "—"}
           </dd>
         </div>

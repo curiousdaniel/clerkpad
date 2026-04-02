@@ -55,10 +55,10 @@ export function ToastProvider({ children }: { children: ReactNode }) {
             key={t.id}
             className={`pointer-events-auto flex items-start gap-2 rounded-lg border px-4 py-3 shadow-lg ${
               t.kind === "success"
-                ? "border-success/30 bg-white text-ink"
+                ? "border-success/30 bg-white text-ink dark:border-emerald-800 dark:bg-slate-900 dark:text-slate-100"
                 : t.kind === "error"
-                  ? "border-danger/40 bg-white text-ink"
-                  : "border-navy/20 bg-white text-ink"
+                  ? "border-danger/40 bg-white text-ink dark:border-red-900 dark:bg-slate-900 dark:text-slate-100"
+                  : "border-navy/20 bg-white text-ink dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"
             }`}
             role="status"
           >
@@ -66,7 +66,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
             <button
               type="button"
               onClick={() => dismiss(t.id)}
-              className="rounded p-0.5 text-muted hover:bg-surface"
+              className="rounded p-0.5 text-muted hover:bg-surface dark:hover:bg-slate-800"
               aria-label="Dismiss"
             >
               <X className="h-4 w-4" />

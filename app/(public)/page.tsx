@@ -16,9 +16,9 @@ const body = DM_Sans({
 });
 
 const btnPrimary =
-  "inline-flex items-center justify-center rounded-xl bg-navy px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-navy-dark focus:outline-none focus-visible:ring-2 focus-visible:ring-navy focus-visible:ring-offset-2";
+  "inline-flex items-center justify-center rounded-xl bg-navy px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-navy-dark focus:outline-none focus-visible:ring-2 focus-visible:ring-navy focus-visible:ring-offset-2 dark:focus-visible:ring-offset-slate-950";
 const btnSecondary =
-  "inline-flex items-center justify-center rounded-xl border border-navy/20 bg-white px-5 py-2.5 text-sm font-semibold text-navy transition hover:border-navy/40 hover:bg-surface focus:outline-none focus-visible:ring-2 focus-visible:ring-navy focus-visible:ring-offset-2";
+  "inline-flex items-center justify-center rounded-xl border border-navy/20 bg-white px-5 py-2.5 text-sm font-semibold text-navy transition hover:border-navy/40 hover:bg-surface focus:outline-none focus-visible:ring-2 focus-visible:ring-navy focus-visible:ring-offset-2 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:hover:border-slate-500 dark:hover:bg-slate-700 dark:focus-visible:ring-offset-slate-950";
 
 const features = [
   {
@@ -40,17 +40,17 @@ export default async function LandingPage() {
 
   return (
     <div
-      className={`${body.className} relative min-h-screen overflow-x-hidden text-ink`}
+      className={`${body.className} relative min-h-screen overflow-x-hidden text-ink dark:bg-slate-950 dark:text-slate-100`}
     >
       <div
-        className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_120%_80%_at_50%_-20%,rgba(212,168,67,0.18),transparent_55%),radial-gradient(ellipse_80%_50%_at_100%_50%,rgba(30,58,95,0.08),transparent_50%)]"
+        className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_120%_80%_at_50%_-20%,rgba(212,168,67,0.18),transparent_55%),radial-gradient(ellipse_80%_50%_at_100%_50%,rgba(30,58,95,0.08),transparent_50%)] dark:bg-[radial-gradient(ellipse_120%_80%_at_50%_-20%,rgba(212,168,67,0.12),transparent_55%),radial-gradient(ellipse_80%_50%_at_100%_50%,rgba(30,58,95,0.15),transparent_50%)]"
         aria-hidden
       />
       <div className="relative">
         <header className="mx-auto flex max-w-5xl items-center justify-between gap-4 px-6 py-6 sm:px-8">
           <Link
             href="/"
-            className={`${display.className} text-xl font-semibold tracking-tight text-navy`}
+            className={`${display.className} text-xl font-semibold tracking-tight text-navy dark:text-slate-100`}
           >
             Clerk<span className="text-gold">Bid</span>
           </Link>
@@ -74,15 +74,15 @@ export default async function LandingPage() {
 
         <main className="mx-auto max-w-5xl px-6 pb-20 pt-4 sm:px-8 sm:pb-28 sm:pt-8">
           <div className="max-w-3xl">
-            <p className="text-sm font-semibold uppercase tracking-[0.2em] text-gold-muted">
+            <p className="text-sm font-semibold uppercase tracking-[0.2em] text-gold-muted dark:text-gold">
               Live auction clerking
             </p>
             <h1
-              className={`${display.className} mt-4 text-4xl font-semibold leading-[1.1] tracking-tight text-navy sm:text-5xl sm:leading-[1.08]`}
+              className={`${display.className} mt-4 text-4xl font-semibold leading-[1.1] tracking-tight text-navy dark:text-slate-100 sm:text-5xl sm:leading-[1.08]`}
             >
               A calm, capable clerk&apos;s companion for sale day.
             </h1>
-            <p className="mt-6 max-w-xl text-lg leading-relaxed text-muted">
+            <p className="mt-6 max-w-xl text-lg leading-relaxed text-muted dark:text-slate-400">
               ClerkBid is a free, straightforward tool for auctioneers who need
               to clerk live auctions without wrestling complex software. Manage
               events, bidders, and sales from one place—on the floor or at the
@@ -110,14 +110,14 @@ export default async function LandingPage() {
             {features.map(({ title, body: text }) => (
               <li
                 key={title}
-                className="rounded-2xl border border-navy/10 bg-white/80 p-6 shadow-sm backdrop-blur-sm"
+                className="rounded-2xl border border-navy/10 bg-white/80 p-6 shadow-sm backdrop-blur-sm dark:border-slate-700 dark:bg-slate-900/80"
               >
                 <h2
-                  className={`${display.className} text-lg font-semibold text-navy`}
+                  className={`${display.className} text-lg font-semibold text-navy dark:text-slate-100`}
                 >
                   {title}
                 </h2>
-                <p className="mt-3 text-sm leading-relaxed text-muted">
+                <p className="mt-3 text-sm leading-relaxed text-muted dark:text-slate-400">
                   {text}
                 </p>
               </li>
@@ -147,14 +147,14 @@ export default async function LandingPage() {
           </section>
         </main>
 
-        <footer className="border-t border-navy/10 bg-white/60 py-8 text-center text-sm text-muted backdrop-blur-sm">
+        <footer className="border-t border-navy/10 bg-white/60 py-8 text-center text-sm text-muted backdrop-blur-sm dark:border-slate-700 dark:bg-slate-900/60 dark:text-slate-400">
           <p>
             © {new Date().getFullYear()} ClerkBid · A free tool from{" "}
             <a
               href="https://auctionmethod.com/"
               target="_blank"
               rel="noopener noreferrer"
-              className="font-medium text-navy underline decoration-navy/25 underline-offset-4 hover:decoration-navy"
+              className="font-medium text-navy underline decoration-navy/25 underline-offset-4 hover:decoration-navy dark:text-slate-200 dark:decoration-slate-500 dark:hover:decoration-slate-300"
             >
               AuctionMethod.com
             </a>
@@ -162,25 +162,25 @@ export default async function LandingPage() {
           <p className="mt-3 flex flex-wrap items-center justify-center gap-x-3 gap-y-1">
             <Link
               href="/user-agreement/"
-              className="font-medium text-navy underline decoration-navy/25 underline-offset-4 hover:decoration-navy"
+              className="font-medium text-navy underline decoration-navy/25 underline-offset-4 hover:decoration-navy dark:text-slate-200 dark:decoration-slate-500 dark:hover:decoration-slate-300"
             >
               User agreement
             </Link>
-            <span className="text-navy/20" aria-hidden>
+            <span className="text-navy/20 dark:text-slate-600" aria-hidden>
               ·
             </span>
             <Link
               href="/privacy-policy/"
-              className="font-medium text-navy underline decoration-navy/25 underline-offset-4 hover:decoration-navy"
+              className="font-medium text-navy underline decoration-navy/25 underline-offset-4 hover:decoration-navy dark:text-slate-200 dark:decoration-slate-500 dark:hover:decoration-slate-300"
             >
               Privacy policy
             </Link>
-            <span className="text-navy/20" aria-hidden>
+            <span className="text-navy/20 dark:text-slate-600" aria-hidden>
               ·
             </span>
             <Link
               href="/feedback/"
-              className="font-medium text-navy underline decoration-navy/25 underline-offset-4 hover:decoration-navy"
+              className="font-medium text-navy underline decoration-navy/25 underline-offset-4 hover:decoration-navy dark:text-slate-200 dark:decoration-slate-500 dark:hover:decoration-slate-300"
             >
               Feedback
             </Link>

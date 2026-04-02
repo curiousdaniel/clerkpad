@@ -94,7 +94,7 @@ export function LotLookup({ eventId }: { eventId: number }) {
         </div>
       </div>
       {result ? (
-        <div className="mt-4 rounded-lg border border-navy/10 bg-surface/50 p-3 text-sm">
+        <div className="mt-4 rounded-lg border border-navy/10 bg-surface/50 p-3 text-sm dark:border-slate-700 dark:bg-slate-800/40">
           <p className="font-mono font-semibold text-navy">{result.display}</p>
           {result.lot ? (
             <>
@@ -130,7 +130,7 @@ export function LotLookup({ eventId }: { eventId: number }) {
           <p className="mt-3 text-sm text-muted">No lots yet for this event.</p>
         ) : (
           <div
-            className="mt-3 max-h-[min(50vh,22rem)] overflow-y-auto overscroll-contain rounded-lg border border-navy/10 bg-white shadow-inner"
+            className="mt-3 max-h-[min(50vh,22rem)] overflow-y-auto overscroll-contain rounded-lg border border-navy/10 bg-white shadow-inner dark:border-slate-700 dark:bg-slate-900"
             role="region"
             aria-label="Lots in this auction"
           >
@@ -168,7 +168,7 @@ export function LotLookup({ eventId }: { eventId: number }) {
                       </span>
                     </button>
                     {open ? (
-                      <div className="border-t border-navy/5 bg-surface/60 px-3 py-3 pl-10 text-sm">
+                      <div className="border-t border-navy/5 bg-surface/60 px-3 py-3 pl-10 text-sm dark:border-slate-700 dark:bg-slate-800/50">
                         <p className="text-ink">{lot.description}</p>
                         <div className="mt-2 space-y-2 text-xs text-muted">
                           <p className="flex flex-wrap gap-x-3 gap-y-1">

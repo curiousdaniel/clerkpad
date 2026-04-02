@@ -31,7 +31,7 @@ import { formatDateTime } from "@/lib/utils/formatDate";
 import { liveQueryGuard } from "@/lib/dexie/liveQueryGuard";
 
 const linkSecondary =
-  "inline-flex items-center justify-center gap-2 rounded-lg border border-navy/15 bg-surface px-4 py-2 text-sm font-medium text-ink transition hover:border-navy/30 focus:outline-none focus-visible:ring-2 focus-visible:ring-navy focus-visible:ring-offset-2";
+  "inline-flex items-center justify-center gap-2 rounded-lg border border-navy/15 bg-surface px-4 py-2 text-sm font-medium text-ink transition hover:border-navy/30 focus:outline-none focus-visible:ring-2 focus-visible:ring-navy focus-visible:ring-offset-2 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:hover:border-slate-500 dark:focus-visible:ring-offset-slate-950";
 
 async function touchBackupDate(db: AuctionDB) {
   await ensureSettingsRow(db);
@@ -224,16 +224,17 @@ export default function SettingsPage() {
       )}
 
       <section>
-        <h2 className="mb-3 text-lg font-semibold text-navy">Cloud backup</h2>
+        <h2 className="mb-3 text-lg font-semibold text-navy dark:text-slate-100">Cloud backup</h2>
         <Card className="space-y-4">
           <p className="text-sm text-muted">
-            While signed in, the current event is saved to your account on the
-            server (encrypted at rest on the database). Use this if you switch
-            devices or want a safety copy beyond this browser.
+            While you&apos;re signed in, we can keep a copy of the current
+            event tied to your account so you can continue on another device or
+            recover if this browser is cleared. Use &quot;Sync now&quot; after
+            important changes.
           </p>
           {currentEvent ? (
             <p className="text-xs text-muted">
-              Event sync ID:{" "}
+              Backup reference (for support):{" "}
               <span className="font-mono text-ink">{currentEvent.syncId}</span>
             </p>
           ) : null}
@@ -278,7 +279,7 @@ export default function SettingsPage() {
               onClick={() => {
                 if (
                   !window.confirm(
-                    "Overwrite the server backup with this device’s copy? Use this if the server has someone else’s data or an old version."
+                    "Replace the cloud backup with what’s on this device? Use this if the cloud copy is wrong or out of date."
                   )
                 ) {
                   return;
@@ -286,14 +287,13 @@ export default function SettingsPage() {
                 void pushNow({ force: true });
               }}
             >
-              Push (overwrite server)
+              Overwrite cloud copy
             </Button>
           </div>
           <p className="text-xs text-muted">
-            Requires{" "}
-            <code className="rounded bg-surface px-1">db/migrate_cloud_sync.sql</code>{" "}
-            on your Neon database. JSON export below still works as a manual
-            backup.
+            If sync always fails, your site administrator may need to finish
+            backup setup. You can still use &quot;Export&quot; below to download
+            a file you keep yourself.
           </p>
           <div className="border-t border-navy/10 pt-4">
             <label className="flex cursor-pointer items-start gap-3 text-sm">
@@ -340,10 +340,10 @@ export default function SettingsPage() {
                   Email me a monthly JSON backup
                 </span>
                 <span className="mt-0.5 block text-xs text-muted">
-                  On the 1st of each month (UTC), we email cloud snapshots to
-                  your account address. Requires cloud saves, Resend, and{" "}
-                  <code className="rounded bg-surface px-1">CRON_SECRET</code>{" "}
-                  on Vercel.
+                  On the first day of each month we&apos;ll email a backup file
+                  of your cloud-saved events to the address you use to sign in.
+                  Turn this off anytime. This only runs if you&apos;ve been
+                  using cloud sync successfully.
                 </span>
               </span>
             </label>
@@ -352,7 +352,7 @@ export default function SettingsPage() {
       </section>
 
       <section>
-        <h2 className="mb-3 text-lg font-semibold text-navy">Data management</h2>
+        <h2 className="mb-3 text-lg font-semibold text-navy dark:text-slate-100">Data management</h2>
         <Card className="space-y-4">
           <input
             ref={fileEventRef}
@@ -371,9 +371,9 @@ export default function SettingsPage() {
             onChange={onImportFullFile}
           />
           <p className="text-sm text-muted">
-            Event data is stored in this browser per signed-in user — other
-            accounts cannot see it. Cloud backup (above) and JSON exports are
-            your safety net and transfer path.
+            Your auction data stays on this device for your signed-in account.
+            Cloud backup (above) and file export give you extra copies and a
+            way to move data to another computer.
             {settingsRow?.lastBackupDate ? (
               <span className="mt-1 block text-xs">
                 Last backup recorded:{" "}
@@ -413,11 +413,10 @@ export default function SettingsPage() {
             </Button>
           </div>
           <p className="text-xs text-muted">
-            <strong>Import event</strong> uses a single-event ClerkBid export and
-            creates a new event. <strong>Import full backup</strong> expects{" "}
-            <code className="rounded bg-surface px-1">fullExportVersion: 1</code>{" "}
-            with an <code className="rounded bg-surface px-1">events</code>{" "}
-            array; each event is appended as new.
+            <strong>Import event</strong> adds one new event from a single-event
+            file you exported from ClerkBid. <strong>Import full backup</strong>{" "}
+            adds every event from a &quot;Export all events&quot; file—each
+            becomes a separate new event in your list.
           </p>
           <div className="border-t border-navy/10 pt-4">
             <Button
@@ -437,12 +436,13 @@ export default function SettingsPage() {
       </section>
 
       <section>
-        <h2 className="mb-3 text-lg font-semibold text-navy">About</h2>
+        <h2 className="mb-3 text-lg font-semibold text-navy dark:text-slate-100">About</h2>
         <Card className="space-y-3 text-sm">
           <p>
-            <span className="font-semibold text-navy">ClerkBid</span> — offline
-            auction clerking for fundraisers. Progressive Web App; primary
-            data in IndexedDB with optional cloud backup when signed in.
+            <span className="font-semibold text-navy">ClerkBid</span> — auction
+            clerking for live sales, designed to work even when the network is
+            spotty. You can install it like an app; optional cloud backup is
+            available when you&apos;re signed in.
           </p>
           <p className="text-muted">
             Version <span className="font-mono text-ink">{APP_VERSION}</span>
@@ -480,7 +480,7 @@ export default function SettingsPage() {
           </p>
           <div className="border-t border-navy/10 pt-3">
             {isStandalone ? (
-              <p className="text-success">Running as installed app.</p>
+              <p className="text-green-700">Running as installed app.</p>
             ) : canInstall ? (
               <div className="flex flex-wrap items-center gap-3">
                 <p className="text-muted">Install ClerkBid for quick offline access.</p>

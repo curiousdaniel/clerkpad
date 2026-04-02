@@ -29,7 +29,7 @@ export function BidderSearch({
           value={value}
           onChange={(e) => onChange(e.target.value)}
           autoComplete="off"
-          className="w-full rounded-lg border border-navy/20 bg-white py-2 pl-9 pr-3 font-mono text-sm text-ink placeholder:text-muted focus:border-navy focus:outline-none focus:ring-1 focus:ring-navy"
+          className="w-full rounded-lg border border-navy/20 bg-white py-2 pl-9 pr-3 font-mono text-sm text-ink placeholder:text-muted focus:border-navy focus:outline-none focus:ring-1 focus:ring-navy dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:placeholder:text-slate-500"
         />
       </div>
     </div>

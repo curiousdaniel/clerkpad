@@ -68,7 +68,7 @@ export function PaymentModal({
         </label>
         <select
           id="pay-method"
-          className="w-full rounded-lg border border-navy/20 bg-white px-3 py-2 text-sm focus:border-navy focus:outline-none focus:ring-1 focus:ring-navy"
+          className="w-full rounded-lg border border-navy/20 bg-white px-3 py-2 text-sm focus:border-navy focus:outline-none focus:ring-1 focus:ring-navy dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
           value={method}
           onChange={(e) => setMethod(e.target.value)}
         >

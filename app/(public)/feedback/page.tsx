@@ -110,7 +110,7 @@ export default function FeedbackPage() {
               </label>
               <textarea
                 id="feedback-message"
-                className="w-full min-h-[140px] rounded-lg border border-navy/20 bg-white px-3 py-2 text-sm text-ink placeholder:text-muted focus:border-navy focus:outline-none focus:ring-1 focus:ring-navy"
+                className="w-full min-h-[140px] rounded-lg border border-navy/20 bg-white px-3 py-2 text-sm text-ink placeholder:text-muted focus:border-navy focus:outline-none focus:ring-1 focus:ring-navy dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:placeholder:text-slate-500"
                 value={message}
                 onChange={(e) => setMessage(e.target.value)}
                 required

@@ -26,7 +26,7 @@ import {
 import { liveQueryGuard } from "@/lib/dexie/liveQueryGuard";
 
 const linkSecondary =
-  "inline-flex items-center justify-center gap-2 rounded-lg border border-navy/15 bg-surface px-4 py-2 text-sm font-medium text-ink transition hover:border-navy/30 focus:outline-none focus-visible:ring-2 focus-visible:ring-navy focus-visible:ring-offset-2";
+  "inline-flex items-center justify-center gap-2 rounded-lg border border-navy/15 bg-surface px-4 py-2 text-sm font-medium text-ink transition hover:border-navy/30 focus:outline-none focus-visible:ring-2 focus-visible:ring-navy focus-visible:ring-offset-2 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:hover:border-slate-500 dark:focus-visible:ring-offset-slate-950";
 
 type Filter = "all" | "unpaid" | "paid";
 
@@ -195,12 +195,15 @@ export default function InvoicesPage() {
       />
 
       <div className="mb-4 flex flex-wrap items-center gap-3">
-        <label htmlFor="inv-filter" className="text-sm font-medium text-ink">
+        <label
+          htmlFor="inv-filter"
+          className="text-sm font-medium text-ink dark:text-slate-200"
+        >
           Show
         </label>
         <select
           id="inv-filter"
-          className="rounded-lg border border-navy/20 bg-white px-3 py-2 text-sm focus:border-navy focus:outline-none focus:ring-1 focus:ring-navy"
+          className="rounded-lg border border-navy/20 bg-white px-3 py-2 text-sm focus:border-navy focus:outline-none focus:ring-1 focus:ring-navy dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
           value={filter}
           onChange={(e) => setFilter(e.target.value as Filter)}
         >
@@ -211,21 +214,21 @@ export default function InvoicesPage() {
       </div>
 
       {pendingBidders && pendingBidders.length > 0 ? (
-        <div className="mb-8 rounded-xl border border-gold/30 bg-amber-50/40 p-4">
-          <h2 className="text-sm font-semibold text-navy">
+        <div className="mb-8 rounded-xl border border-gold/30 bg-amber-50/40 p-4 dark:border-amber-900/50 dark:bg-amber-950/30">
+          <h2 className="text-sm font-semibold text-navy dark:text-amber-100">
             Bidders with sales — no invoice yet
           </h2>
           <ul className="mt-3 space-y-2">
             {pendingBidders.map((b) => (
               <li
                 key={b.id}
-                className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-navy/10 bg-white px-3 py-2 text-sm"
+                className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-navy/10 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-900"
               >
                 <span>
                   <span className="font-mono font-medium">
                     Paddle #{b.paddleNumber}
                   </span>
-                  <span className="ml-2 text-ink">
+                  <span className="ml-2 text-ink dark:text-slate-100">
                     {b.firstName} {b.lastName}
                   </span>
                 </span>

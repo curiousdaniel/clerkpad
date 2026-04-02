@@ -15,7 +15,7 @@ export const Input = forwardRef<
       {label ? (
         <label
           htmlFor={id}
-          className="mb-1 block text-sm font-medium text-ink"
+          className="mb-1 block text-sm font-medium text-ink dark:text-slate-200"
         >
           {label}
         </label>
@@ -23,7 +23,7 @@ export const Input = forwardRef<
       <input
         ref={ref}
         id={id}
-        className={`w-full rounded-lg border border-navy/20 bg-white px-3 py-2 font-mono text-sm text-ink placeholder:text-muted focus:border-navy focus:outline-none focus:ring-1 focus:ring-navy ${error ? "border-danger" : ""} ${className}`}
+        className={`w-full rounded-lg border border-navy/20 bg-white px-3 py-2 font-mono text-sm text-ink placeholder:text-muted focus:border-navy focus:outline-none focus:ring-1 focus:ring-navy dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:placeholder:text-slate-500 ${error ? "border-danger" : ""} ${className}`}
         {...props}
       />
       {error ? (

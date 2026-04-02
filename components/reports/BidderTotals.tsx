@@ -98,7 +98,7 @@ export function BidderTotals({
       <button
         type="button"
         onClick={() => toggle(key)}
-        className="font-semibold text-navy hover:underline"
+        className="font-semibold text-navy hover:underline dark:text-slate-200"
       >
         {label}
         {sortKey === key ? (sortDir === "asc" ? " ↑" : " ↓") : ""}
@@ -109,14 +109,16 @@ export function BidderTotals({
   return (
     <section>
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <h2 className="text-lg font-semibold text-navy">Bidder totals</h2>
+        <h2 className="text-lg font-semibold text-navy dark:text-slate-100">
+          Bidder totals
+        </h2>
         <Button type="button" variant="secondary" onClick={exportCsv}>
           Export as CSV
         </Button>
       </div>
-      <div className="overflow-x-auto rounded-xl border border-navy/10 bg-white">
+      <div className="overflow-x-auto rounded-xl border border-navy/10 bg-white dark:border-slate-700 dark:bg-slate-900">
         <table className="w-full min-w-[720px] text-sm">
-          <thead className="border-b border-navy/10 bg-surface">
+          <thead className="border-b border-navy/10 bg-surface dark:border-slate-700 dark:bg-slate-800/80">
             <tr>
               {th("paddle", "Paddle #")}
               {th("name", "Name")}
@@ -127,7 +129,7 @@ export function BidderTotals({
               {th("status", "Payment status")}
             </tr>
           </thead>
-          <tbody className="divide-y divide-navy/10">
+          <tbody className="divide-y divide-navy/10 dark:divide-slate-700">
             {sorted.length === 0 ? (
               <tr>
                 <td colSpan={7} className="px-3 py-6 text-center text-muted">
@@ -136,7 +138,10 @@ export function BidderTotals({
               </tr>
             ) : (
               sorted.map((r) => (
-                <tr key={r.bidderId} className="hover:bg-surface/50">
+                <tr
+                  key={r.bidderId}
+                  className="hover:bg-surface/50 dark:hover:bg-slate-800/50"
+                >
                   <td className="px-3 py-2 font-mono font-medium">
                     {r.paddleNumber}
                   </td>

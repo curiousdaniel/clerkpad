@@ -220,7 +220,7 @@ export default function EventsPage() {
       {!ready || !events ? (
         <p className="text-muted">Loading…</p>
       ) : events.length === 0 ? (
-        <div className="rounded-xl border border-dashed border-navy/20 bg-surface/50 p-10 text-center">
+        <div className="rounded-xl border border-dashed border-navy/20 bg-surface/50 p-10 text-center dark:border-slate-600 dark:bg-slate-800/40">
           <p className="text-muted">No events yet.</p>
           <Button
             className="mt-4"

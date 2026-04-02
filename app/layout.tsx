@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Analytics } from "@vercel/analytics/next";
 import "./globals.css";
 import { AppProviders } from "./providers";
+import { THEME_BOOTSTRAP_SCRIPT } from "@/lib/displayPrefs";
 
 export const metadata: Metadata = {
   title: "ClerkBid",
@@ -25,7 +26,12 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
+      <head>
+        <script
+          dangerouslySetInnerHTML={{ __html: THEME_BOOTSTRAP_SCRIPT }}
+        />
+      </head>
       <body>
         <AppProviders>{children}</AppProviders>
         <Analytics />

@@ -78,7 +78,7 @@ export function BidderTable({
       <button
         type="button"
         onClick={() => toggleSort(key)}
-        className="font-semibold text-navy hover:underline"
+        className="font-semibold text-navy hover:underline dark:text-slate-200"
       >
         {label}
         {sortKey === key ? (sortDir === "asc" ? " ↑" : " ↓") : ""}
@@ -87,9 +87,9 @@ export function BidderTable({
   );
 
   return (
-    <div className="overflow-x-auto rounded-xl border border-navy/10 bg-white">
+    <div className="overflow-x-auto rounded-xl border border-navy/10 bg-white dark:border-slate-700 dark:bg-slate-900">
       <table className="w-full min-w-[640px] text-sm">
-        <thead className="border-b border-navy/10 bg-surface">
+        <thead className="border-b border-navy/10 bg-surface dark:border-slate-700 dark:bg-slate-800/80">
           <tr>
             {th("paddleNumber", "Paddle #")}
             {th("name", "Name")}
@@ -102,7 +102,7 @@ export function BidderTable({
             </th>
           </tr>
         </thead>
-        <tbody className="divide-y divide-navy/10">
+        <tbody className="divide-y divide-navy/10 dark:divide-slate-700">
           {sorted.length === 0 ? (
             <tr>
               <td colSpan={7} className="px-3 py-8 text-center text-muted">
@@ -111,11 +111,16 @@ export function BidderTable({
             </tr>
           ) : (
             sorted.map((b) => (
-              <tr key={b.id} className="hover:bg-surface/50">
+              <tr
+                key={b.id}
+                className="hover:bg-surface/50 dark:hover:bg-slate-800/50"
+              >
                 <td className="px-3 py-2 font-mono font-medium">
                   {b.paddleNumber}
                 </td>
-                <td className="px-3 py-2 text-ink">{bidderName(b)}</td>
+                <td className="px-3 py-2 text-ink dark:text-slate-100">
+                  {bidderName(b)}
+                </td>
                 <td className="px-3 py-2 font-mono text-muted">
                   {b.phone ?? "—"}
                 </td>

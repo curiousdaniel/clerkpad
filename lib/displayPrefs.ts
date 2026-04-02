@@ -1,7 +1,15 @@
 const FONT_KEY = "clerkbid:fontScale";
 const CONTRAST_KEY = "clerkbid:highContrast";
+export const COLOR_SCHEME_STORAGE_KEY = "clerkbid:colorScheme";
 
 export type FontScaleKey = "1" | "1.15" | "1.3";
+
+export type ColorSchemePreference = "light" | "dark" | "system";
+
+export const DEFAULT_COLOR_SCHEME: ColorSchemePreference = "system";
+
+/** Inline head script: must stay in sync with readColorScheme / isEffectiveDark. */
+export const THEME_BOOTSTRAP_SCRIPT = `(function(){try{var k=${JSON.stringify(COLOR_SCHEME_STORAGE_KEY)};var v=localStorage.getItem(k)||"system";var d=v==="dark"||(v==="system"&&window.matchMedia("(prefers-color-scheme: dark)").matches);document.documentElement.classList.toggle("dark",d);}catch(e){}})();`;
 
 export function readFontScale(): FontScaleKey {
   if (typeof window === "undefined") return "1";
@@ -40,11 +48,44 @@ export function writeHighContrast(on: boolean): void {
   }
 }
 
+export function readColorScheme(): ColorSchemePreference {
+  if (typeof window === "undefined") return DEFAULT_COLOR_SCHEME;
+  try {
+    const v = localStorage.getItem(COLOR_SCHEME_STORAGE_KEY);
+    if (v === "light" || v === "dark" || v === "system") return v;
+  } catch {
+    /* ignore */
+  }
+  return DEFAULT_COLOR_SCHEME;
+}
+
+export function writeColorScheme(p: ColorSchemePreference): void {
+  try {
+    localStorage.setItem(COLOR_SCHEME_STORAGE_KEY, p);
+  } catch {
+    /* ignore */
+  }
+}
+
+export function isEffectiveDark(pref: ColorSchemePreference): boolean {
+  if (typeof window === "undefined") return false;
+  if (pref === "dark") return true;
+  if (pref === "light") return false;
+  return window.matchMedia("(prefers-color-scheme: dark)").matches;
+}
+
+export function applyColorSchemeClass(pref: ColorSchemePreference): void {
+  if (typeof document === "undefined") return;
+  document.documentElement.classList.toggle("dark", isEffectiveDark(pref));
+}
+
 export function applyDisplayPrefsToDocument(
   font: FontScaleKey,
-  highContrast: boolean
+  highContrast: boolean,
+  colorScheme: ColorSchemePreference
 ): void {
   if (typeof document === "undefined") return;
   document.documentElement.dataset.fontScale = font;
   document.documentElement.dataset.highContrast = highContrast ? "true" : "false";
+  applyColorSchemeClass(colorScheme);
 }

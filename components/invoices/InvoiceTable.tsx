@@ -31,37 +31,37 @@ export function InvoiceTable({
   const sym = currencySymbol;
 
   return (
-    <div className="overflow-x-auto rounded-xl border border-navy/10 bg-white">
+    <div className="overflow-x-auto rounded-xl border border-navy/10 bg-white dark:border-slate-700 dark:bg-slate-900">
       <table className="w-full min-w-[880px] text-sm">
-        <thead className="border-b border-navy/10 bg-surface">
+        <thead className="border-b border-navy/10 bg-surface dark:border-slate-700 dark:bg-slate-800/80">
           <tr>
-            <th className="px-3 py-2 text-left font-semibold text-navy">
+            <th className="px-3 py-2 text-left font-semibold text-navy dark:text-slate-200">
               Invoice #
             </th>
-            <th className="px-3 py-2 text-left font-semibold text-navy">
+            <th className="px-3 py-2 text-left font-semibold text-navy dark:text-slate-200">
               Bidder
             </th>
-            <th className="px-3 py-2 text-right font-semibold text-navy">
+            <th className="px-3 py-2 text-right font-semibold text-navy dark:text-slate-200">
               Subtotal
             </th>
-            <th className="px-3 py-2 text-right font-semibold text-navy">
+            <th className="px-3 py-2 text-right font-semibold text-navy dark:text-slate-200">
               Tax
             </th>
-            <th className="px-3 py-2 text-right font-semibold text-navy">
+            <th className="px-3 py-2 text-right font-semibold text-navy dark:text-slate-200">
               Total
             </th>
-            <th className="px-3 py-2 text-left font-semibold text-navy">
+            <th className="px-3 py-2 text-left font-semibold text-navy dark:text-slate-200">
               Status
             </th>
-            <th className="px-3 py-2 text-left font-semibold text-navy">
+            <th className="px-3 py-2 text-left font-semibold text-navy dark:text-slate-200">
               Payment
             </th>
-            <th className="px-3 py-2 text-right font-semibold text-navy">
+            <th className="px-3 py-2 text-right font-semibold text-navy dark:text-slate-200">
               Actions
             </th>
           </tr>
         </thead>
-        <tbody className="divide-y divide-navy/10">
+        <tbody className="divide-y divide-navy/10 dark:divide-slate-700">
           {rows.length === 0 ? (
             <tr>
               <td colSpan={8} className="px-3 py-8 text-center text-muted">
@@ -72,16 +72,16 @@ export function InvoiceTable({
             rows.map((inv) => (
               <tr
                 key={inv.id}
-                className="cursor-pointer hover:bg-surface/60"
+                className="cursor-pointer hover:bg-surface/60 dark:hover:bg-slate-800/60"
                 onClick={() => onRowClick(inv)}
               >
-                <td className="px-3 py-2 font-mono font-medium text-navy">
+                <td className="px-3 py-2 font-mono font-medium text-navy dark:text-slate-200">
                   {inv.invoiceNumber}
                 </td>
                 <td className="px-3 py-2">
                   {inv.bidder ? (
                     <>
-                      <span className="text-ink">
+                      <span className="text-ink dark:text-slate-100">
                         {inv.bidder.firstName} {inv.bidder.lastName}
                       </span>
                       <span className="ml-2 font-mono text-xs text-muted">

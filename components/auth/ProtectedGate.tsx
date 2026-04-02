@@ -65,7 +65,7 @@ export function ProtectedGate({ children }: { children: React.ReactNode }) {
 
   if (!mounted || (status === "loading" && !offlineOk)) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-surface text-muted">
+      <div className="flex min-h-screen items-center justify-center bg-surface text-muted dark:bg-slate-950 dark:text-slate-400">
         Loading…
       </div>
     );
@@ -73,7 +73,7 @@ export function ProtectedGate({ children }: { children: React.ReactNode }) {
 
   if (status === "unauthenticated" && !offlineOk) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-surface text-muted">
+      <div className="flex min-h-screen items-center justify-center bg-surface text-muted dark:bg-slate-950 dark:text-slate-400">
         Redirecting to sign in…
       </div>
     );

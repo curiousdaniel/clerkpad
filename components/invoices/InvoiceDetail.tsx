@@ -68,8 +68,8 @@ export function InvoiceDetailModal({
         </div>
 
         {bidder ? (
-          <div className="rounded-lg border border-navy/10 bg-surface/50 p-3">
-            <p className="font-medium text-navy">
+          <div className="rounded-lg border border-navy/10 bg-surface/50 p-3 dark:border-slate-700 dark:bg-slate-800/50">
+            <p className="font-medium text-navy dark:text-slate-100">
               {bidder.firstName} {bidder.lastName}
             </p>
             <p className="font-mono text-muted">Paddle #{bidder.paddleNumber}</p>
@@ -89,25 +89,25 @@ export function InvoiceDetailModal({
           </p>
         ) : null}
 
-        <div className="overflow-x-auto rounded-lg border border-navy/10">
+        <div className="overflow-x-auto rounded-lg border border-navy/10 dark:border-slate-700">
           <table className="w-full min-w-[400px] text-sm">
-            <thead className="bg-surface">
+            <thead className="bg-surface dark:bg-slate-800/80">
               <tr>
-                <th className="px-3 py-2 text-left font-semibold text-navy">
+                <th className="px-3 py-2 text-left font-semibold text-navy dark:text-slate-200">
                   Lot #
                 </th>
-                <th className="px-3 py-2 text-left font-semibold text-navy">
+                <th className="px-3 py-2 text-left font-semibold text-navy dark:text-slate-200">
                   Description
                 </th>
-                <th className="px-3 py-2 text-right font-semibold text-navy">
+                <th className="px-3 py-2 text-right font-semibold text-navy dark:text-slate-200">
                   Qty
                 </th>
-                <th className="px-3 py-2 text-right font-semibold text-navy">
+                <th className="px-3 py-2 text-right font-semibold text-navy dark:text-slate-200">
                   Amount
                 </th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-navy/10">
+            <tbody className="divide-y divide-navy/10 dark:divide-slate-700">
               {sales.length === 0 ? (
                 <tr>
                   <td colSpan={4} className="px-3 py-4 text-center text-muted">
