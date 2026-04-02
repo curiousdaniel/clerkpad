@@ -52,11 +52,35 @@ export async function POST(req: Request) {
     const sent = await sendPasswordResetEmail(email, plainToken);
     if (!sent.ok) {
       await sql`DELETE FROM password_reset_tokens WHERE user_id = ${user.id}`;
-      console.error("[forgot-password]", sent.reason);
+      console.error("[forgot-password]", sent.code, sent.reason);
+
+      const fallback =
+        "Password reset email could not be sent. Try again later or contact support at info@auctionmethod.com.";
+
+      if (sent.code === "domain_not_verified") {
+        return NextResponse.json(
+          {
+            error: fallback,
+            hint: "Administrators: Resend is blocking sends because the domain in RESEND_FROM is not verified. Verify it at https://resend.com/domains (DNS records), or change RESEND_FROM to an address on a domain already verified in your Resend account.",
+          },
+          { status: 503 }
+        );
+      }
+
+      if (sent.code === "missing_config") {
+        return NextResponse.json(
+          {
+            error: fallback,
+            hint: "Administrators: add RESEND_API_KEY and RESEND_FROM in Vercel → Environment Variables, then redeploy.",
+          },
+          { status: 503 }
+        );
+      }
+
       return NextResponse.json(
         {
-          error:
-            "Password reset email could not be sent. In Vercel: Project → Settings → Environment Variables, set RESEND_API_KEY and RESEND_FROM (verified domain in Resend). Redeploy after saving.",
+          error: fallback,
+          hint: "Administrators: see Vercel logs for the Resend API error.",
         },
         { status: 503 }
       );

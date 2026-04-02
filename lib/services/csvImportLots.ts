@@ -1,0 +1,128 @@
+import { normalizeHeaderKey, parseCsvTable } from "@/lib/services/csvParse";
+import { displayLotNumberFromParts } from "@/lib/utils/lotSuffix";
+
+export type LotCsvRow = {
+  baseLotNumber: number;
+  lotSuffix: string;
+  displayLotNumber: string;
+  description: string;
+  consignor?: string;
+  quantity: number;
+  notes?: string;
+};
+
+export type LotCsvImportIssue = { rowIndex: number; message: string };
+
+const ALIASES: Record<string, keyof LotCsvRow> = {
+  baselotnumber: "baseLotNumber",
+  base_lot_number: "baseLotNumber",
+  base: "baseLotNumber",
+  lotsuffix: "lotSuffix",
+  lot_suffix: "lotSuffix",
+  suffix: "lotSuffix",
+  description: "description",
+  consignor: "consignor",
+  quantity: "quantity",
+  notes: "notes",
+};
+
+function colIndex(headers: string[], key: keyof LotCsvRow): number {
+  const norm = headers.map(normalizeHeaderKey);
+  for (let i = 0; i < norm.length; i++) {
+    const k = ALIASES[norm[i]!];
+    if (k === key) return i;
+  }
+  return -1;
+}
+
+export function parseLotCsv(text: string): {
+  rows: LotCsvRow[];
+  issues: LotCsvImportIssue[];
+} {
+  const { headers, rows: rawRows } = parseCsvTable(text);
+  const issues: LotCsvImportIssue[] = [];
+  if (headers.length === 0) {
+    issues.push({ rowIndex: 0, message: "No header row found." });
+    return { rows: [], issues };
+  }
+
+  const iBase = colIndex(headers, "baseLotNumber");
+  const iSuffix = colIndex(headers, "lotSuffix");
+  const iDesc = colIndex(headers, "description");
+  const iConsignor = colIndex(headers, "consignor");
+  const iQty = colIndex(headers, "quantity");
+  const iNotes = colIndex(headers, "notes");
+
+  if (iBase < 0 || iDesc < 0) {
+    issues.push({
+      rowIndex: 0,
+      message:
+        "CSV must include baseLotNumber (or base) and description. Optional: suffix, consignor, quantity, notes.",
+    });
+    return { rows: [], issues };
+  }
+
+  const rows: LotCsvRow[] = [];
+  const displaysSeen = new Set<string>();
+
+  for (let r = 0; r < rawRows.length; r++) {
+    const line = rawRows[r]!;
+    const rowNum = r + 2;
+    const baseStr = (line[iBase] ?? "").trim();
+    const suffixRaw =
+      iSuffix >= 0 ? (line[iSuffix] ?? "").trim().toUpperCase() : "";
+    const description = (line[iDesc] ?? "").trim();
+    const consignor =
+      iConsignor >= 0 ? (line[iConsignor] ?? "").trim() : "";
+    const qtyStr = iQty >= 0 ? (line[iQty] ?? "").trim() : "1";
+    const notes = iNotes >= 0 ? (line[iNotes] ?? "").trim() : "";
+
+    if (!baseStr && !description) continue;
+
+    const baseLotNumber = parseInt(baseStr, 10);
+    if (!Number.isFinite(baseLotNumber) || baseLotNumber < 0) {
+      issues.push({
+        rowIndex: rowNum,
+        message: `Invalid base lot number: "${baseStr}".`,
+      });
+      continue;
+    }
+    if (!description) {
+      issues.push({ rowIndex: rowNum, message: "description is required." });
+      continue;
+    }
+
+    const lotSuffix = suffixRaw.replace(/[^A-Z]/g, "");
+    const displayLotNumber = displayLotNumberFromParts(baseLotNumber, lotSuffix);
+    if (displaysSeen.has(displayLotNumber)) {
+      issues.push({
+        rowIndex: rowNum,
+        message: `Duplicate lot ${displayLotNumber} in file.`,
+      });
+      continue;
+    }
+    displaysSeen.add(displayLotNumber);
+
+    let quantity = parseInt(qtyStr, 10);
+    if (qtyStr === "" || Number.isNaN(quantity)) quantity = 1;
+    if (quantity < 1) {
+      issues.push({
+        rowIndex: rowNum,
+        message: "quantity must be at least 1.",
+      });
+      continue;
+    }
+
+    rows.push({
+      baseLotNumber,
+      lotSuffix,
+      displayLotNumber,
+      description,
+      consignor: consignor || undefined,
+      quantity,
+      notes: notes || undefined,
+    });
+  }
+
+  return { rows, issues };
+}

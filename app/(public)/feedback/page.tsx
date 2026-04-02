@@ -13,12 +13,14 @@ export default function FeedbackPage() {
   const [message, setMessage] = useState("");
   const [website, setWebsite] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [errorHint, setErrorHint] = useState<string | null>(null);
   const [done, setDone] = useState(false);
   const [pending, setPending] = useState(false);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
+    setErrorHint(null);
     setPending(true);
     try {
       const res = await fetch("/api/feedback", {
@@ -31,9 +33,14 @@ export default function FeedbackPage() {
           website,
         }),
       });
-      const data = (await res.json()) as { ok?: boolean; error?: string };
+      const data = (await res.json()) as {
+        ok?: boolean;
+        error?: string;
+        hint?: string;
+      };
       if (!res.ok) {
         setError(data.error ?? "Could not send feedback.");
+        setErrorHint(data.hint ?? null);
         setPending(false);
         return;
       }
@@ -68,9 +75,14 @@ export default function FeedbackPage() {
         ) : (
           <form className="mt-6 space-y-4" onSubmit={handleSubmit}>
             {error ? (
-              <p className="text-sm text-danger" role="alert">
-                {error}
-              </p>
+              <div role="alert">
+                <p className="text-sm text-danger">{error}</p>
+                {errorHint ? (
+                  <p className="mt-2 text-xs leading-relaxed text-muted">
+                    {errorHint}
+                  </p>
+                ) : null}
+              </div>
             ) : null}
             <Input
               id="feedback-name"

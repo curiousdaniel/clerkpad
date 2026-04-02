@@ -19,6 +19,16 @@ describe("computeInvoiceFromSubtotal", () => {
     expect(r.taxAmount).toBe(8.75);
     expect(r.total).toBe(108.75);
   });
+
+  it("matches hammer aggregate with buyer’s premium before tax", () => {
+    const hammerSubtotal = roundMoney(100 + 50);
+    const bpRate = 0.1;
+    const taxableSubtotal = roundMoney(hammerSubtotal * (1 + bpRate));
+    expect(taxableSubtotal).toBe(165);
+    const inv = computeInvoiceFromSubtotal(taxableSubtotal, 0.1);
+    expect(inv.taxAmount).toBe(16.5);
+    expect(inv.total).toBe(181.5);
+  });
 });
 
 describe("formatInvoiceNumber", () => {

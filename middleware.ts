@@ -26,6 +26,6 @@ export const config = {
   matcher: [
     // Root path must be listed explicitly; some matchers skip `/` alone.
     "/",
-    "/((?!login|register|forgot-password|reset-password|feedback|user-agreement|privacy-policy|api/auth|api/register|api/feedback|_next/static|_next/image|favicon.ico|manifest.json|offline.html|sw.js|icons|workbox).*)",
+    "/((?!login|register|forgot-password|reset-password|feedback|user-agreement|privacy-policy|api/auth|api/register|api/feedback|api/sync|api/cron|_next/static|_next/image|favicon.ico|manifest.json|offline.html|sw.js|icons|workbox).*)",
   ],
 };

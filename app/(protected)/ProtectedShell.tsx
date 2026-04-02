@@ -4,7 +4,7 @@ import { ProtectedGate } from "@/components/auth/ProtectedGate";
 import { UserDbProvider } from "@/components/providers/UserDbProvider";
 import { EventProvider } from "@/components/providers/EventProvider";
 import { ToastProvider } from "@/components/providers/ToastProvider";
-import { AppShell } from "@/components/layout/AppShell";
+import { CloudSyncProvider } from "@/components/providers/CloudSyncProvider";
 
 export function ProtectedShell({ children }: { children: React.ReactNode }) {
   return (
@@ -12,7 +12,7 @@ export function ProtectedShell({ children }: { children: React.ReactNode }) {
       <UserDbProvider>
         <EventProvider>
           <ToastProvider>
-            <AppShell>{children}</AppShell>
+            <CloudSyncProvider>{children}</CloudSyncProvider>
           </ToastProvider>
         </EventProvider>
       </UserDbProvider>

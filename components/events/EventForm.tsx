@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import type { AuctionEvent } from "@/lib/db";
 import { useUserDb } from "@/components/providers/UserDbProvider";
+import { newEventSyncId } from "@/lib/utils/syncId";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
@@ -21,6 +22,7 @@ export function EventForm({ open, onClose, onSaved, editing }: Props) {
   const [organizationName, setOrganizationName] = useState("");
   const [taxRatePct, setTaxRatePct] = useState("0");
   const [currencySymbol, setCurrencySymbol] = useState("$");
+  const [buyersPremiumPct, setBuyersPremiumPct] = useState("0");
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -32,12 +34,20 @@ export function EventForm({ open, onClose, onSaved, editing }: Props) {
       setOrganizationName(editing.organizationName);
       setTaxRatePct(String((editing.taxRate * 100).toFixed(4).replace(/\.?0+$/, "")));
       setCurrencySymbol(editing.currencySymbol);
+      setBuyersPremiumPct(
+        String(
+          ((editing.buyersPremiumRate ?? 0) * 100)
+            .toFixed(2)
+            .replace(/\.?0+$/, "")
+        )
+      );
     } else {
       setName("");
       setDescription("");
       setOrganizationName("");
       setTaxRatePct("0");
       setCurrencySymbol("$");
+      setBuyersPremiumPct("0");
     }
   }, [open, editing]);
 
@@ -60,6 +70,12 @@ export function EventForm({ open, onClose, onSaved, editing }: Props) {
       return;
     }
     const taxRate = pct / 100;
+    const bpPct = Number(buyersPremiumPct);
+    if (Number.isNaN(bpPct) || bpPct < 0 || bpPct > 100) {
+      setError("Buyer’s premium must be between 0 and 100%.");
+      return;
+    }
+    const buyersPremiumRate = bpPct / 100;
     const now = new Date();
     if (!db) return;
     if (editing?.id != null) {
@@ -68,6 +84,7 @@ export function EventForm({ open, onClose, onSaved, editing }: Props) {
         description: description.trim() || undefined,
         organizationName: org,
         taxRate,
+        buyersPremiumRate,
         currencySymbol: currencySymbol.trim() || "$",
         updatedAt: now,
       });
@@ -77,7 +94,9 @@ export function EventForm({ open, onClose, onSaved, editing }: Props) {
         description: description.trim() || undefined,
         organizationName: org,
         taxRate,
+        buyersPremiumRate,
         currencySymbol: currencySymbol.trim() || "$",
+        syncId: newEventSyncId(),
         createdAt: now,
         updatedAt: now,
       });
@@ -143,6 +162,17 @@ export function EventForm({ open, onClose, onSaved, editing }: Props) {
           min={0}
           value={taxRatePct}
           onChange={(e) => setTaxRatePct(e.target.value)}
+        />
+        <Input
+          id="ev-bp"
+          label="Buyer’s premium (%)"
+          type="number"
+          inputMode="decimal"
+          step="0.01"
+          min={0}
+          max={100}
+          value={buyersPremiumPct}
+          onChange={(e) => setBuyersPremiumPct(e.target.value)}
         />
         <Input
           id="ev-currency"

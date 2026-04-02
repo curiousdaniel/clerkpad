@@ -2,6 +2,7 @@ import {
   escapeHtmlForEmail,
   feedbackMessageHtml,
   sendResendEmail,
+  type ResendSendResult,
 } from "@/lib/email/resendSend";
 
 const DEFAULT_TO = "info@auctionmethod.com";
@@ -10,7 +11,7 @@ export async function sendFeedbackEmail(payload: {
   name: string;
   email: string;
   message: string;
-}): Promise<{ ok: true } | { ok: false; reason: string }> {
+}): Promise<ResendSendResult> {
   const to = process.env.FEEDBACK_TO_EMAIL?.trim() || DEFAULT_TO;
   const displayName = payload.name.trim() || "—";
 

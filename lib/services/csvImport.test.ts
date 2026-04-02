@@ -1,0 +1,40 @@
+import { describe, expect, it } from "vitest";
+import { parseBidderCsv } from "./csvImportBidders";
+import { parseLotCsv } from "./csvImportLots";
+
+describe("parseBidderCsv", () => {
+  it("parses standard headers", () => {
+    const csv = `paddleNumber,firstName,lastName,email,phone
+101,Jane,Doe,j@x.com,555`;
+    const { rows, issues } = parseBidderCsv(csv);
+    expect(issues).toHaveLength(0);
+    expect(rows).toEqual([
+      {
+        paddleNumber: 101,
+        firstName: "Jane",
+        lastName: "Doe",
+        email: "j@x.com",
+        phone: "555",
+      },
+    ]);
+  });
+
+  it("detects duplicate paddles in file", () => {
+    const csv = `paddle,first,last
+1,A,B
+1,C,D`;
+    const { rows, issues } = parseBidderCsv(csv);
+    expect(rows).toHaveLength(1);
+    expect(issues.some((i) => i.message.includes("Duplicate"))).toBe(true);
+  });
+});
+
+describe("parseLotCsv", () => {
+  it("builds display lot from base and suffix", () => {
+    const csv = `baseLotNumber,suffix,description,quantity
+12,A,Widget,1`;
+    const { rows, issues } = parseLotCsv(csv);
+    expect(issues).toHaveLength(0);
+    expect(rows[0]?.displayLotNumber).toBe("0012A");
+  });
+});

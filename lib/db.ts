@@ -1,10 +1,11 @@
 import Dexie, { type Table } from "dexie";
+import { newEventSyncId } from "@/lib/utils/syncId";
 
 /** Pre–per-user DB; migrated once into the signed-in user's database. */
 export const LEGACY_DB_NAME = "AuctionManagerDB";
 
 const STORE_DEF = {
-  events: "++id, name, createdAt",
+  events: "++id, name, createdAt, syncId",
   bidders:
     "++id, eventId, paddleNumber, [eventId+paddleNumber]",
   lots:
@@ -29,7 +30,13 @@ export interface AuctionEvent {
   description?: string;
   organizationName: string;
   taxRate: number;
+  /** 0–1, applied to hammer subtotal before sales tax on invoices. */
+  buyersPremiumRate: number;
   currencySymbol: string;
+  /** Stable id for cloud backup / sync (UUID). */
+  syncId: string;
+  lastCloudPushAt?: Date;
+  lastCloudPullAt?: Date;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -54,6 +61,8 @@ export interface Lot {
   displayLotNumber: string;
   description: string;
   consignor?: string;
+  /** Ring / clerk notes, shown when clerking. */
+  notes?: string;
   quantity: number;
   status: "unsold" | "sold" | "passed" | "withdrawn";
   createdAt: Date;
@@ -93,6 +102,9 @@ export interface AppSettings {
   id?: number;
   currentEventId: number | null;
   lastBackupDate?: Date;
+  lastCloudPushAt?: Date;
+  lastCloudPullAt?: Date;
+  lastBackupNudgeDismissedAt?: Date;
 }
 
 export class AuctionDB extends Dexie {
@@ -105,7 +117,30 @@ export class AuctionDB extends Dexie {
 
   constructor(userId: string) {
     super(userDexieDatabaseName(userId));
-    this.version(1).stores(STORE_DEF);
+    this.version(1).stores({
+      events: "++id, name, createdAt",
+      bidders:
+        "++id, eventId, paddleNumber, [eventId+paddleNumber]",
+      lots:
+        "++id, eventId, baseLotNumber, lotSuffix, displayLotNumber, status, [eventId+displayLotNumber], [eventId+baseLotNumber]",
+      sales:
+        "++id, eventId, lotId, bidderId, displayLotNumber, paddleNumber",
+      invoices: "++id, eventId, bidderId, status, invoiceNumber",
+      settings: "++id",
+    });
+    this.version(2)
+      .stores(STORE_DEF)
+      .upgrade(async (tx) => {
+        const evTable = tx.table("events");
+        await evTable.toCollection().modify((row: Record<string, unknown>) => {
+          if (row.syncId == null || row.syncId === "") {
+            row.syncId = newEventSyncId();
+          }
+          if (row.buyersPremiumRate == null || row.buyersPremiumRate === "") {
+            row.buyersPremiumRate = 0;
+          }
+        });
+      });
   }
 }
 
@@ -138,7 +173,17 @@ export async function migrateLegacyToUserDb(userDb: AuctionDB): Promise<void> {
   if ((await userDb.events.count()) > 0) return;
 
   const legacy = new Dexie(LEGACY_DB_NAME);
-  legacy.version(1).stores(STORE_DEF);
+  legacy.version(1).stores({
+    events: "++id, name, createdAt",
+    bidders:
+      "++id, eventId, paddleNumber, [eventId+paddleNumber]",
+    lots:
+      "++id, eventId, baseLotNumber, lotSuffix, displayLotNumber, status, [eventId+displayLotNumber], [eventId+baseLotNumber]",
+    sales:
+      "++id, eventId, lotId, bidderId, displayLotNumber, paddleNumber",
+    invoices: "++id, eventId, bidderId, status, invoiceNumber",
+    settings: "++id",
+  });
   try {
     await legacy.open();
   } catch {
@@ -161,7 +206,17 @@ export async function migrateLegacyToUserDb(userDb: AuctionDB): Promise<void> {
       for (const name of tableNames) {
         const rows = await legacy.table(name).toArray();
         if (rows.length === 0) continue;
-        await userDb.table(name).bulkAdd(rows as never[]);
+        if (name === "events") {
+          for (const r of rows as Record<string, unknown>[]) {
+            if (r.syncId == null || r.syncId === "") {
+              r.syncId = newEventSyncId();
+            }
+            if (r.buyersPremiumRate == null) r.buyersPremiumRate = 0;
+            await userDb.table(name).add(r as never);
+          }
+        } else {
+          await userDb.table(name).bulkAdd(rows as never[]);
+        }
       }
     });
 

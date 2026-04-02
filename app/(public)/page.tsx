@@ -31,7 +31,7 @@ const features = [
   },
   {
     title: "Works when the hall is noisy",
-    body: "Install ClerkBid as an app and keep working offline; your session syncs when you are back online.",
+    body: "Install ClerkBid as a PWA and clerk offline; when you are signed in online, events back up to your account in the cloud so you can move between devices.",
   },
 ];
 

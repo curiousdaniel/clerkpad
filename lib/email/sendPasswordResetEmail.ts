@@ -3,7 +3,10 @@
  * Set RESEND_API_KEY and RESEND_FROM (see .env.example / Vercel env).
  */
 
-import { sendResendEmail } from "@/lib/email/resendSend";
+import {
+  sendResendEmail,
+  type ResendSendResult,
+} from "@/lib/email/resendSend";
 
 function baseUrl(): string {
   const u = process.env.NEXTAUTH_URL?.trim();
@@ -14,7 +17,7 @@ function baseUrl(): string {
 export async function sendPasswordResetEmail(
   toEmail: string,
   plainToken: string
-): Promise<{ ok: true } | { ok: false; reason: string }> {
+): Promise<ResendSendResult> {
   const resetUrl = `${baseUrl()}/reset-password/?token=${encodeURIComponent(plainToken)}`;
 
   return sendResendEmail({

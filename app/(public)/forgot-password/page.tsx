@@ -11,11 +11,13 @@ export default function ForgotPasswordPage() {
   const [email, setEmail] = useState("");
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [errorHint, setErrorHint] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
+    setErrorHint(null);
     setMessage(null);
     setPending(true);
     try {
@@ -24,9 +26,15 @@ export default function ForgotPasswordPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: email.trim() }),
       });
-      const data = (await res.json()) as { ok?: boolean; message?: string; error?: string };
+      const data = (await res.json()) as {
+        ok?: boolean;
+        message?: string;
+        error?: string;
+        hint?: string;
+      };
       if (!res.ok) {
         setError(data.error ?? "Request failed.");
+        setErrorHint(data.hint ?? null);
         setPending(false);
         return;
       }
@@ -53,9 +61,14 @@ export default function ForgotPasswordPage() {
         ) : (
           <form className="mt-6 space-y-4" onSubmit={handleSubmit}>
             {error ? (
-              <p className="text-sm text-danger" role="alert">
-                {error}
-              </p>
+              <div role="alert">
+                <p className="text-sm text-danger">{error}</p>
+                {errorHint ? (
+                  <p className="mt-2 text-xs leading-relaxed text-muted">
+                    {errorHint}
+                  </p>
+                ) : null}
+              </div>
             ) : null}
             <Input
               id="forgot-email"

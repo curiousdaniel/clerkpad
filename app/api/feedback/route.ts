@@ -53,11 +53,35 @@ export async function POST(req: Request) {
 
     const sent = await sendFeedbackEmail({ name, email, message });
     if (!sent.ok) {
-      console.error("[feedback]", sent.reason);
+      console.error("[feedback]", sent.code, sent.reason);
+
+      const fallback =
+        "We could not send your message. You can email info@auctionmethod.com directly.";
+
+      if (sent.code === "domain_not_verified") {
+        return NextResponse.json(
+          {
+            error: fallback,
+            hint: "For administrators: the domain in RESEND_FROM must be verified in Resend. Open https://resend.com/domains, add that domain, publish the DNS records Resend provides, wait until it shows “Verified,” then try again. Until then, use RESEND_FROM with a verified domain (e.g. clerkbid.com if verified there) or Resend’s onboarding test sender for non-production.",
+          },
+          { status: 503 }
+        );
+      }
+
+      if (sent.code === "missing_config") {
+        return NextResponse.json(
+          {
+            error: fallback,
+            hint: "For administrators: set RESEND_API_KEY and RESEND_FROM in Vercel (Environment Variables) and redeploy.",
+          },
+          { status: 503 }
+        );
+      }
+
       return NextResponse.json(
         {
-          error:
-            "We could not send your message. Email may not be configured yet—try again later or write to info@auctionmethod.com.",
+          error: fallback,
+          hint: "For administrators: check Vercel function logs for the Resend API response.",
         },
         { status: 503 }
       );

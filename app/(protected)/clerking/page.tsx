@@ -6,6 +6,7 @@ import { Card } from "@/components/ui/Card";
 import { SaleForm } from "@/components/clerking/SaleForm";
 import { RecentSales } from "@/components/clerking/RecentSales";
 import { LotLookup } from "@/components/clerking/LotLookup";
+import { BidderQuickLookup } from "@/components/clerking/BidderQuickLookup";
 import { useCurrentEvent } from "@/lib/hooks/useCurrentEvent";
 
 const linkSecondary =
@@ -48,13 +49,20 @@ export default function ClerkingPage() {
         <div className="lg:col-span-3">
           <Card>
             <h2 className="mb-4 text-lg font-semibold text-navy">Sale entry</h2>
-            <SaleForm eventId={currentEventId} currencySymbol={sym} />
+            <SaleForm
+              eventId={currentEventId}
+              currencySymbol={sym}
+              buyersPremiumRate={currentEvent.buyersPremiumRate}
+            />
           </Card>
           <div className="mt-6">
             <LotLookup eventId={currentEventId} />
           </div>
         </div>
-        <div className="lg:col-span-2">
+        <div className="lg:col-span-2 space-y-6">
+          <Card className="lg:sticky lg:top-6">
+            <BidderQuickLookup eventId={currentEventId} />
+          </Card>
           <Card className="lg:sticky lg:top-6">
             <h2 className="mb-4 text-lg font-semibold text-navy">
               Recent sales

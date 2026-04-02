@@ -4,12 +4,24 @@ import { useMemo } from "react";
 import Link from "next/link";
 import { useLiveQuery } from "dexie-react-hooks";
 import { Header } from "@/components/layout/Header";
+import { Button } from "@/components/ui/Button";
 import { SummaryStats } from "@/components/reports/SummaryStats";
 import { BidderTotals } from "@/components/reports/BidderTotals";
 import { LotResults } from "@/components/reports/LotResults";
 import { PaymentMethodSummary } from "@/components/reports/PaymentMethodSummary";
 import { useCurrentEvent } from "@/lib/hooks/useCurrentEvent";
 import { useUserDb } from "@/components/providers/UserDbProvider";
+import { useToast } from "@/components/providers/ToastProvider";
+import {
+  ACCOUNTING_CSV_HEADERS,
+  buildAccountingCsvRows,
+} from "@/lib/services/accountingCsv";
+import { downloadCsv } from "@/lib/services/csvExporter";
+import {
+  buildBidderListPdf,
+  buildRunListPdf,
+  saveListPdf,
+} from "@/lib/services/listPdfs";
 import {
   buildBidderReportRows,
   buildLotReportRows,
@@ -27,6 +39,7 @@ function slug(s: string) {
 export default function ReportsPage() {
   const { db, ready: dbReady } = useUserDb();
   const { currentEvent, currentEventId } = useCurrentEvent();
+  const { showToast } = useToast();
 
   const bundle = useLiveQuery(
     async () => {
@@ -96,7 +109,7 @@ export default function ReportsPage() {
     <div className="space-y-12">
       <Header
         title="Reports"
-        description={`Summaries and CSV exports for ${currentEvent.name}.`}
+        description={`Summaries, accounting CSV, list PDFs, and detail exports for ${currentEvent.name}.`}
         actions={
           <>
             <Link href="/invoices/" className={linkSecondary}>
@@ -113,6 +126,54 @@ export default function ReportsPage() {
         <p className="text-muted">Loading…</p>
       ) : (
         <>
+          <div className="flex flex-wrap gap-3 rounded-xl border border-navy/15 bg-surface/80 p-4">
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => {
+                if (!currentEvent || !bundle) return;
+                const rows = buildAccountingCsvRows(
+                  currentEvent,
+                  bundle.sales,
+                  bundle.bidders,
+                  bundle.invoices
+                );
+                downloadCsv(
+                  `clerkbid-accounting-${eventSlug}.csv`,
+                  [...ACCOUNTING_CSV_HEADERS],
+                  rows
+                );
+                showToast({
+                  kind: "success",
+                  message: "Accounting CSV downloaded.",
+                });
+              }}
+            >
+              Download accounting CSV
+            </Button>
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => {
+                if (!currentEvent || !bundle) return;
+                const doc = buildRunListPdf(currentEvent, bundle.lots);
+                saveListPdf(doc, `clerkbid-run-list-${eventSlug}.pdf`);
+              }}
+            >
+              Run list PDF
+            </Button>
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => {
+                if (!currentEvent || !bundle) return;
+                const doc = buildBidderListPdf(currentEvent, bundle.bidders);
+                saveListPdf(doc, `clerkbid-bidders-${eventSlug}.pdf`);
+              }}
+            >
+              Bidder list PDF
+            </Button>
+          </div>
           <SummaryStats stats={summary} currencySymbol={sym} />
           <PaymentMethodSummary rows={paymentRows} currencySymbol={sym} />
           <BidderTotals

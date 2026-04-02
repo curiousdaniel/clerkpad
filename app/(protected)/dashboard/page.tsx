@@ -4,10 +4,17 @@ import Link from "next/link";
 import { useLiveQuery } from "dexie-react-hooks";
 import { Header } from "@/components/layout/Header";
 import { Card } from "@/components/ui/Card";
+import { Button } from "@/components/ui/Button";
 import { useCurrentEvent } from "@/lib/hooks/useCurrentEvent";
 import { useUserDb } from "@/components/providers/UserDbProvider";
+import { useCloudSync } from "@/components/providers/CloudSyncProvider";
+import { ensureSettingsRow } from "@/lib/settings";
 import { formatCurrency } from "@/lib/utils/formatCurrency";
 import { formatDateTime } from "@/lib/utils/formatDate";
+
+function daysBetween(a: Date, b: Date): number {
+  return (b.getTime() - a.getTime()) / (86400 * 1000);
+}
 
 const linkPrimary =
   "inline-flex items-center justify-center gap-2 rounded-lg bg-navy px-4 py-2 text-sm font-medium text-white transition hover:bg-navy-dark focus:outline-none focus-visible:ring-2 focus-visible:ring-navy focus-visible:ring-offset-2";
@@ -16,7 +23,14 @@ const linkSecondary =
 
 export default function DashboardPage() {
   const { db, ready: dbReady } = useUserDb();
-  const { ready, currentEventId, currentEvent } = useCurrentEvent();
+  const { ready, currentEventId, currentEvent, refresh } = useCurrentEvent();
+  const { pushNow } = useCloudSync();
+
+  const settingsRow = useLiveQuery(async () => {
+    if (!dbReady || !db) return undefined;
+    await ensureSettingsRow(db);
+    return db.settings.get(1);
+  }, [dbReady, db]);
 
   const stats = useLiveQuery(
     async () => {
@@ -69,6 +83,17 @@ export default function DashboardPage() {
 
   const sym = currentEvent?.currencySymbol ?? "$";
 
+  const showBackupNudge =
+    currentEvent != null &&
+    settingsRow != null &&
+    (() => {
+      const dismiss = settingsRow.lastBackupNudgeDismissedAt;
+      if (dismiss && daysBetween(dismiss, new Date()) < 4) return false;
+      const last = currentEvent.lastCloudPushAt;
+      if (!last) return true;
+      return daysBetween(last, new Date()) > 7;
+    })();
+
   if (!ready) {
     return <p className="text-muted">Loading…</p>;
   }
@@ -112,6 +137,37 @@ export default function DashboardPage() {
           </>
         }
       />
+
+      {showBackupNudge && db ? (
+        <div className="mb-6 rounded-xl border border-navy/15 bg-surface px-4 py-3 text-sm">
+          <p className="font-medium text-navy">Cloud backup reminder</p>
+          <p className="mt-1 text-muted">
+            You have not saved this event to the cloud recently. Sync now so
+            another device—or a lost browser—does not mean lost work.
+          </p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <Button type="button" onClick={() => void pushNow()}>
+              Sync to cloud
+            </Button>
+            <Link href="/settings/" className={linkSecondary}>
+              Backup settings
+            </Link>
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={async () => {
+                await ensureSettingsRow(db);
+                await db.settings.update(1, {
+                  lastBackupNudgeDismissedAt: new Date(),
+                });
+                refresh();
+              }}
+            >
+              Dismiss for a few days
+            </Button>
+          </div>
+        </div>
+      ) : null}
 
       {stats ? (
         <div className="mb-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">

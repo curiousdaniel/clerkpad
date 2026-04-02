@@ -7,16 +7,29 @@ import type {
   Sale,
 } from "@/lib/db";
 import { APP_VERSION } from "@/lib/utils/constants";
+import { newEventSyncId } from "@/lib/utils/syncId";
 
-export const EXPORT_VERSION = 1;
+export const EXPORT_VERSION = 2;
+export const EXPORT_VERSION_LEGACY = 1;
+
+/** JSON shape for `event` inside export (no local `id` / `updatedAt`). */
+export type EventExportEventShape = Omit<
+  AuctionEvent,
+  "id" | "updatedAt" | "createdAt" | "lastCloudPushAt" | "lastCloudPullAt"
+> & {
+  createdAt: string;
+  lastCloudPushAt?: string;
+  lastCloudPullAt?: string;
+  /** v1 exports omit these */
+  syncId?: string;
+  buyersPremiumRate?: number;
+};
 
 export type EventExportPayload = {
   exportVersion: number;
   exportDate: string;
   appVersion: string;
-  event: Omit<AuctionEvent, "id" | "updatedAt" | "createdAt"> & {
-    createdAt: string;
-  };
+  event: EventExportEventShape;
   bidders: Array<
     Omit<Bidder, "id" | "eventId" | "createdAt" | "updatedAt"> & {
       legacyId?: number;
@@ -54,6 +67,10 @@ function iso(d: Date) {
   return d.toISOString();
 }
 
+function isoOpt(d: Date | undefined) {
+  return d ? iso(d) : undefined;
+}
+
 export async function buildEventExport(
   db: AuctionDB,
   eventId: number,
@@ -71,6 +88,8 @@ export async function buildEventExport(
     id: _eid,
     updatedAt: _eu,
     createdAt: _ca,
+    lastCloudPushAt: _lcp,
+    lastCloudPullAt: _lcl,
     ...eventFields
   } = event;
 
@@ -81,6 +100,8 @@ export async function buildEventExport(
     event: {
       ...eventFields,
       createdAt: iso(event.createdAt),
+      lastCloudPushAt: isoOpt(event.lastCloudPushAt),
+      lastCloudPullAt: isoOpt(event.lastCloudPullAt),
     },
     bidders: bidders.map(({ id, eventId: _ev, ...b }) => ({
       ...b,
@@ -138,8 +159,9 @@ export function parseEventExportPayload(raw: unknown): EventExportPayload {
     throw new Error("Invalid JSON: expected an object");
   }
   const o = raw as Record<string, unknown>;
-  if (o.exportVersion !== EXPORT_VERSION) {
-    throw new Error(`Unsupported export version: ${String(o.exportVersion)}`);
+  const v = o.exportVersion;
+  if (v !== EXPORT_VERSION && v !== EXPORT_VERSION_LEGACY) {
+    throw new Error(`Unsupported export version: ${String(v)}`);
   }
   if (typeof o.event !== "object" || o.event == null) {
     throw new Error("Missing event");
@@ -151,6 +173,7 @@ export function parseEventExportPayload(raw: unknown): EventExportPayload {
   const invoices = Array.isArray(o.invoices) ? o.invoices : [];
   return {
     ...(o as EventExportPayload),
+    exportVersion: v as number,
     sales: sales as EventExportPayload["sales"],
     invoices: invoices as EventExportPayload["invoices"],
   };
@@ -249,6 +272,113 @@ export async function importFullDatabaseEvents(
   return { imported, failures };
 }
 
+function eventRowFromPayload(
+  ev: EventExportEventShape,
+  syncId: string,
+  buyersPremiumRate: number,
+  now: Date,
+  lastCloudPushAt?: Date,
+  lastCloudPullAt?: Date
+): Omit<AuctionEvent, "id"> {
+  return {
+    name: ev.name,
+    description: ev.description,
+    organizationName: ev.organizationName,
+    taxRate: ev.taxRate,
+    currencySymbol: ev.currencySymbol,
+    buyersPremiumRate,
+    syncId,
+    lastCloudPushAt,
+    lastCloudPullAt,
+    createdAt: parseDate(ev.createdAt),
+    updatedAt: now,
+  };
+}
+
+async function insertChildrenForEvent(
+  db: AuctionDB,
+  eventId: number,
+  payload: EventExportPayload
+): Promise<ImportSummary> {
+  const bidderMap = new Map<number, number>();
+  let bidderIndex = 0;
+  for (const b of payload.bidders) {
+    const { legacyId, createdAt, updatedAt, ...rest } = b;
+    const newId = (await db.bidders.add({
+      ...rest,
+      eventId,
+      createdAt: parseDate(createdAt),
+      updatedAt: parseDate(updatedAt),
+    })) as number;
+    const key = legacyId ?? bidderIndex;
+    bidderMap.set(key, newId);
+    bidderIndex++;
+  }
+
+  const lotMap = new Map<number, number>();
+  let lotIndex = 0;
+  for (const l of payload.lots) {
+    const { legacyId, createdAt, updatedAt, ...rest } = l;
+    const newId = (await db.lots.add({
+      ...rest,
+      eventId,
+      createdAt: parseDate(createdAt),
+      updatedAt: parseDate(updatedAt),
+    })) as number;
+    const key = legacyId ?? lotIndex;
+    lotMap.set(key, newId);
+    lotIndex++;
+  }
+
+  for (const s of payload.sales) {
+    const { legacyLotId, legacyBidderId, createdAt, ...rest } = s;
+    const lotId =
+      legacyLotId != null ? lotMap.get(legacyLotId) : undefined;
+    const bidderId =
+      legacyBidderId != null ? bidderMap.get(legacyBidderId) : undefined;
+    if (lotId == null || bidderId == null) {
+      throw new Error(
+        "Sale references unknown lot or bidder — export may be incomplete"
+      );
+    }
+    await db.sales.add({
+      ...rest,
+      eventId,
+      lotId,
+      bidderId,
+      createdAt: parseDate(createdAt),
+    });
+  }
+
+  for (const inv of payload.invoices) {
+    const { legacyBidderId, generatedAt, paymentDate, ...rest } = inv;
+    const bidderId =
+      legacyBidderId != null
+        ? bidderMap.get(legacyBidderId)
+        : undefined;
+    if (bidderId == null) {
+      throw new Error(
+        "Invoice references unknown bidder — export may be incomplete"
+      );
+    }
+    await db.invoices.add({
+      ...rest,
+      eventId,
+      bidderId,
+      generatedAt: parseDate(generatedAt),
+      paymentDate: paymentDate ? parseDate(paymentDate) : undefined,
+    });
+  }
+
+  return {
+    eventId,
+    bidders: payload.bidders.length,
+    lots: payload.lots.length,
+    sales: payload.sales.length,
+    invoices: payload.invoices.length,
+  };
+}
+
 /** Creates a new event and inserts related rows with remapped FKs. */
 export async function importEventFromPayload(
   db: AuctionDB,
@@ -260,93 +390,91 @@ export async function importEventFromPayload(
     async () => {
       const ev = payload.event;
       const now = new Date();
-      const eventId = (await db.events.add({
-        name: ev.name,
-        description: ev.description,
-        organizationName: ev.organizationName,
-        taxRate: ev.taxRate,
-        currencySymbol: ev.currencySymbol,
-        createdAt: parseDate(ev.createdAt),
-        updatedAt: now,
-      })) as number;
+      const syncId =
+        typeof ev.syncId === "string" && ev.syncId.length > 0
+          ? ev.syncId
+          : newEventSyncId();
+      const buyersPremiumRate =
+        typeof ev.buyersPremiumRate === "number" &&
+        Number.isFinite(ev.buyersPremiumRate)
+          ? Math.max(0, ev.buyersPremiumRate)
+          : 0;
+      const lastCloudPushAt = ev.lastCloudPushAt
+        ? parseDate(String(ev.lastCloudPushAt))
+        : undefined;
+      const lastCloudPullAt = ev.lastCloudPullAt
+        ? parseDate(String(ev.lastCloudPullAt))
+        : undefined;
 
-      const bidderMap = new Map<number, number>();
-      let bidderIndex = 0;
-      for (const b of payload.bidders) {
-        const { legacyId, createdAt, updatedAt, ...rest } = b;
-        const newId = (await db.bidders.add({
-          ...rest,
-          eventId,
-          createdAt: parseDate(createdAt),
-          updatedAt: parseDate(updatedAt),
-        })) as number;
-        const key = legacyId ?? bidderIndex;
-        bidderMap.set(key, newId);
-        bidderIndex++;
-      }
+      const eventId = (await db.events.add(
+        eventRowFromPayload(
+          ev,
+          syncId,
+          buyersPremiumRate,
+          now,
+          lastCloudPushAt,
+          lastCloudPullAt
+        )
+      )) as number;
 
-      const lotMap = new Map<number, number>();
-      let lotIndex = 0;
-      for (const l of payload.lots) {
-        const { legacyId, createdAt, updatedAt, ...rest } = l;
-        const newId = (await db.lots.add({
-          ...rest,
-          eventId,
-          createdAt: parseDate(createdAt),
-          updatedAt: parseDate(updatedAt),
-        })) as number;
-        const key = legacyId ?? lotIndex;
-        lotMap.set(key, newId);
-        lotIndex++;
-      }
+      return insertChildrenForEvent(db, eventId, payload);
+    }
+  );
+}
 
-      for (const s of payload.sales) {
-        const { legacyLotId, legacyBidderId, createdAt, ...rest } = s;
-        const lotId =
-          legacyLotId != null ? lotMap.get(legacyLotId) : undefined;
-        const bidderId =
-          legacyBidderId != null ? bidderMap.get(legacyBidderId) : undefined;
-        if (lotId == null || bidderId == null) {
-          throw new Error(
-            "Sale references unknown lot or bidder — export may be incomplete"
-          );
-        }
-        await db.sales.add({
-          ...rest,
-          eventId,
-          lotId,
-          bidderId,
-          createdAt: parseDate(createdAt),
-        });
-      }
+/**
+ * Replaces all child rows for an existing event and updates the event row from payload.
+ * Used when restoring from cloud without changing local numeric event id.
+ */
+export async function replaceEventFromPayload(
+  db: AuctionDB,
+  eventId: number,
+  payload: EventExportPayload
+): Promise<ImportSummary> {
+  return db.transaction(
+    "rw",
+    [db.events, db.bidders, db.lots, db.sales, db.invoices],
+    async () => {
+      const existing = await db.events.get(eventId);
+      if (existing == null) throw new Error("Event not found");
 
-      for (const inv of payload.invoices) {
-        const { legacyBidderId, generatedAt, paymentDate, ...rest } = inv;
-        const bidderId =
-          legacyBidderId != null
-            ? bidderMap.get(legacyBidderId)
-            : undefined;
-        if (bidderId == null) {
-          throw new Error(
-            "Invoice references unknown bidder — export may be incomplete"
-          );
-        }
-        await db.invoices.add({
-          ...rest,
-          eventId,
-          bidderId,
-          generatedAt: parseDate(generatedAt),
-          paymentDate: paymentDate ? parseDate(paymentDate) : undefined,
-        });
-      }
+      await db.invoices.where("eventId").equals(eventId).delete();
+      await db.sales.where("eventId").equals(eventId).delete();
+      await db.lots.where("eventId").equals(eventId).delete();
+      await db.bidders.where("eventId").equals(eventId).delete();
 
-      return {
+      const ev = payload.event;
+      const now = new Date();
+      const syncId =
+        typeof ev.syncId === "string" && ev.syncId.length > 0
+          ? ev.syncId
+          : existing.syncId;
+      const buyersPremiumRate =
+        typeof ev.buyersPremiumRate === "number" &&
+        Number.isFinite(ev.buyersPremiumRate)
+          ? Math.max(0, ev.buyersPremiumRate)
+          : existing.buyersPremiumRate;
+
+      const lastCloudPushAt = ev.lastCloudPushAt
+        ? parseDate(String(ev.lastCloudPushAt))
+        : existing.lastCloudPushAt;
+      const lastCloudPullAt = ev.lastCloudPullAt
+        ? parseDate(String(ev.lastCloudPullAt))
+        : existing.lastCloudPullAt;
+
+      await db.events.update(
         eventId,
-        bidders: payload.bidders.length,
-        lots: payload.lots.length,
-        sales: payload.sales.length,
-        invoices: payload.invoices.length,
-      };
+        eventRowFromPayload(
+          ev,
+          syncId,
+          buyersPremiumRate,
+          now,
+          lastCloudPushAt,
+          lastCloudPullAt
+        )
+      );
+
+      return insertChildrenForEvent(db, eventId, payload);
     }
   );
 }

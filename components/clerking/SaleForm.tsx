@@ -10,29 +10,38 @@ import {
 } from "@/lib/clerking/passOutDb";
 import { getNextSuggestedLotDisplay } from "@/lib/clerking/nextBaseLot";
 import { Input } from "@/components/ui/Input";
+import { Button } from "@/components/ui/Button";
 import { PassOutCheckbox } from "./PassOutCheckbox";
 import { useToast } from "@/components/providers/ToastProvider";
+import { formatCurrency } from "@/lib/utils/formatCurrency";
+import { roundMoney } from "@/lib/services/invoiceLogic";
 
 const CLERK_KEY = "clerkbid:clerkInitials";
+
+type UndoState = { saleId: number; lotId: number; until: number };
 
 export function SaleForm({
   eventId,
   currencySymbol,
+  buyersPremiumRate = 0,
 }: {
   eventId: number;
   currencySymbol: string;
+  buyersPremiumRate?: number;
 }) {
   const { db } = useUserDb();
   const { showToast } = useToast();
   const [lotNumber, setLotNumber] = useState("");
   const [title, setTitle] = useState("");
   const [consignor, setConsignor] = useState("");
+  const [lotNotes, setLotNotes] = useState("");
   const [quantity, setQuantity] = useState("1");
   const [sellPrice, setSellPrice] = useState("");
   const [paddleNumber, setPaddleNumber] = useState("");
   const [clerkInitials, setClerkInitials] = useState("");
   const [passOutEnabled, setPassOutEnabled] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+  const [undoState, setUndoState] = useState<UndoState | null>(null);
 
   const lotRef = useRef<HTMLInputElement>(null);
   const paddleRef = useRef<HTMLInputElement>(null);
@@ -57,16 +66,35 @@ export function SaleForm({
       await refreshLotSuggestion();
       setTitle("");
       setConsignor("");
+      setLotNotes("");
       setQuantity("1");
       setSellPrice("");
       setPaddleNumber("");
       setPassOutEnabled(false);
       setFormError(null);
+      setUndoState(null);
     })();
     return () => {
       cancelled = true;
     };
   }, [eventId, refreshLotSuggestion]);
+
+  useEffect(() => {
+    if (!undoState) return;
+    const id = window.setInterval(() => {
+      if (Date.now() > undoState.until) setUndoState(null);
+    }, 500);
+    return () => clearInterval(id);
+  }, [undoState]);
+
+  const priceRaw = sellPrice.trim().replace(/[^0-9.-]/g, "");
+  const hammerPreview = parseFloat(priceRaw);
+  const bpPreview =
+    buyersPremiumRate > 0 &&
+    Number.isFinite(hammerPreview) &&
+    hammerPreview >= 0
+      ? roundMoney(hammerPreview * (1 + buyersPremiumRate))
+      : null;
 
   async function autofillFromLot() {
     if (!db) return;
@@ -81,6 +109,7 @@ export function SaleForm({
       setTitle(lot.description);
       setConsignor(lot.consignor ?? "");
       setQuantity(String(lot.quantity));
+      setLotNotes(lot.notes ?? "");
     }
   }
 
@@ -89,6 +118,7 @@ export function SaleForm({
     setFormError(null);
     setTitle("");
     setConsignor("");
+    setLotNotes("");
     setQuantity("1");
     setSellPrice("");
     setPaddleNumber("");
@@ -96,9 +126,45 @@ export function SaleForm({
     requestAnimationFrame(() => lotRef.current?.focus());
   }
 
+  async function undoLastSale() {
+    if (!db || !undoState || Date.now() > undoState.until) return;
+    const { saleId, lotId } = undoState;
+    try {
+      await db.transaction("rw", [db.sales, db.lots], async () => {
+        const sale = await db.sales.get(saleId);
+        if (!sale || sale.eventId !== eventId || sale.lotId !== lotId) {
+          throw new Error("Sale no longer available to undo.");
+        }
+        const lot = await db.lots.get(lotId);
+        if (!lot || lot.eventId !== eventId) {
+          throw new Error("Lot no longer available to undo.");
+        }
+        const salesOnLot = await db.sales
+          .where("lotId")
+          .equals(lotId)
+          .count();
+        if (salesOnLot !== 1) {
+          throw new Error("Cannot undo — lot has multiple sales.");
+        }
+        await db.sales.delete(saleId);
+        await db.lots.delete(lotId);
+      });
+      setUndoState(null);
+      showToast({ kind: "success", message: "Last sale undone." });
+      await refreshLotSuggestion();
+      requestAnimationFrame(() => lotRef.current?.focus());
+    } catch (e) {
+      showToast({
+        kind: "error",
+        message: e instanceof Error ? e.message : "Undo failed.",
+      });
+    }
+  }
+
   async function submitSale(shiftEnter: boolean) {
     if (!db) return;
     setFormError(null);
+    setUndoState(null);
     const passOutActive = passOutEnabled || shiftEnter;
     if (shiftEnter) {
       setPassOutEnabled(true);
@@ -116,8 +182,8 @@ export function SaleForm({
       return;
     }
 
-    const priceRaw = sellPrice.trim().replace(/[^0-9.-]/g, "");
-    const amount = parseFloat(priceRaw);
+    const priceRawInner = sellPrice.trim().replace(/[^0-9.-]/g, "");
+    const amount = parseFloat(priceRawInner);
     if (!Number.isFinite(amount) || amount < 0) {
       setFormError("Enter a valid sell price.");
       return;
@@ -168,24 +234,29 @@ export function SaleForm({
 
     const qty = Math.max(1, parseInt(quantity.trim(), 10) || 1);
     const now = new Date();
+    const notesTrim = lotNotes.trim();
+
+    let newLotId = 0;
+    let newSaleId = 0;
 
     try {
       await db.transaction("rw", [db.lots, db.sales], async () => {
-        const lotId = await db.lots.add({
+        newLotId = (await db.lots.add({
           eventId,
           baseLotNumber: baseNum,
           lotSuffix: newSuffix,
           displayLotNumber: displayStr,
           description: titleTrim,
           consignor: consignor.trim() || undefined,
+          notes: notesTrim || undefined,
           quantity: qty,
           status: "sold",
           createdAt: now,
           updatedAt: now,
-        });
-        await db.sales.add({
+        })) as number;
+        newSaleId = (await db.sales.add({
           eventId,
-          lotId: lotId as number,
+          lotId: newLotId,
           bidderId: bidder.id!,
           displayLotNumber: displayStr,
           paddleNumber: paddle,
@@ -195,7 +266,7 @@ export function SaleForm({
           amount,
           clerkInitials: initials,
           createdAt: now,
-        });
+        })) as number;
       });
     } catch (e) {
       setFormError(
@@ -203,6 +274,12 @@ export function SaleForm({
       );
       return;
     }
+
+    setUndoState({
+      saleId: newSaleId,
+      lotId: newLotId,
+      until: Date.now() + 120_000,
+    });
 
     try {
       sessionStorage.setItem(CLERK_KEY, initials);
@@ -214,6 +291,7 @@ export function SaleForm({
 
     if (passOutActive) {
       setPaddleNumber("");
+      setLotNotes("");
       const nextDisp = await nextPassOutLineDisplay(db, eventId, baseNum);
       setLotNumber(nextDisp);
       requestAnimationFrame(() => paddleRef.current?.focus());
@@ -221,6 +299,7 @@ export function SaleForm({
       setPassOutEnabled(false);
       setTitle("");
       setConsignor("");
+      setLotNotes("");
       setQuantity("1");
       setSellPrice("");
       setPaddleNumber("");
@@ -228,6 +307,10 @@ export function SaleForm({
       requestAnimationFrame(() => lotRef.current?.focus());
     }
   }
+
+  const undoSecondsLeft = undoState
+    ? Math.max(0, Math.ceil((undoState.until - Date.now()) / 1000))
+    : 0;
 
   return (
     <form
@@ -253,6 +336,17 @@ export function SaleForm({
         onChange={setPassOutEnabled}
       />
 
+      {undoState && undoSecondsLeft > 0 ? (
+        <div className="flex flex-wrap items-center gap-2 rounded-lg border border-navy/15 bg-surface px-3 py-2 text-sm">
+          <span className="text-muted">
+            Undo last sale ({undoSecondsLeft}s)
+          </span>
+          <Button type="button" variant="secondary" onClick={() => void undoLastSale()}>
+            Undo
+          </Button>
+        </div>
+      ) : null}
+
       {formError ? (
         <p className="text-sm text-danger" role="alert">
           {formError}
@@ -270,15 +364,26 @@ export function SaleForm({
           className="font-mono"
           autoComplete="off"
         />
-        <Input
-          id="sale-price"
-          label={`Sell price (${currencySymbol})`}
-          inputMode="decimal"
-          value={sellPrice}
-          onChange={(e) => setSellPrice(e.target.value)}
-          className="font-mono"
-          autoComplete="off"
-        />
+        <div>
+          <Input
+            id="sale-price"
+            label={`Hammer / sell price (${currencySymbol})`}
+            inputMode="decimal"
+            value={sellPrice}
+            onChange={(e) => setSellPrice(e.target.value)}
+            className="font-mono"
+            autoComplete="off"
+          />
+          {bpPreview != null ? (
+            <p className="mt-1 text-xs text-muted">
+              With {Math.round(buyersPremiumRate * 100)}% buyer&apos;s premium
+              (before tax):{" "}
+              <span className="font-mono font-medium text-navy">
+                {formatCurrency(bpPreview, currencySymbol)}
+              </span>
+            </p>
+          ) : null}
+        </div>
       </div>
 
       <Input
@@ -288,6 +393,23 @@ export function SaleForm({
         onChange={(e) => setTitle(e.target.value)}
         autoComplete="off"
       />
+
+      <div>
+        <label
+          htmlFor="sale-lot-notes"
+          className="mb-1 block text-sm font-medium text-ink"
+        >
+          Lot notes / ring (optional)
+        </label>
+        <textarea
+          id="sale-lot-notes"
+          className="w-full rounded-lg border border-navy/20 bg-white px-3 py-2 text-sm text-ink placeholder:text-muted focus:border-navy focus:outline-none focus:ring-1 focus:ring-navy"
+          rows={2}
+          value={lotNotes}
+          onChange={(e) => setLotNotes(e.target.value)}
+          placeholder="Announcement line, ring notes…"
+        />
+      </div>
 
       <div className="grid gap-4 sm:grid-cols-2">
         <Input
@@ -333,8 +455,8 @@ export function SaleForm({
 
       <p className="text-xs text-muted">
         Enter records the sale (normal or pass-out per checkbox). Tab order:
-        lot → description → consignor → quantity → price → paddle → initials,
-        then Enter to submit.
+        lot → description → notes → consignor → quantity → price → paddle →
+        initials, then Enter to submit.
       </p>
 
       <button type="submit" className="sr-only">

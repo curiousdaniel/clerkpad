@@ -18,6 +18,7 @@ export function EventSettingsForm({
   const [organizationName, setOrganizationName] = useState("");
   const [taxRatePct, setTaxRatePct] = useState("0");
   const [currencySymbol, setCurrencySymbol] = useState("$");
+  const [buyersPremiumPct, setBuyersPremiumPct] = useState("0");
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -26,8 +27,19 @@ export function EventSettingsForm({
       String((event.taxRate * 100).toFixed(4).replace(/\.?0+$/, ""))
     );
     setCurrencySymbol(event.currencySymbol);
+    setBuyersPremiumPct(
+      String(
+        ((event.buyersPremiumRate ?? 0) * 100).toFixed(2).replace(/\.?0+$/, "")
+      )
+    );
     setError(null);
-  }, [event.id, event.organizationName, event.taxRate, event.currencySymbol]);
+  }, [
+    event.id,
+    event.organizationName,
+    event.taxRate,
+    event.currencySymbol,
+    event.buyersPremiumRate,
+  ]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -42,10 +54,16 @@ export function EventSettingsForm({
       setError("Tax rate must be a non-negative number (percent).");
       return;
     }
+    const bpPct = Number(buyersPremiumPct);
+    if (Number.isNaN(bpPct) || bpPct < 0 || bpPct > 100) {
+      setError("Buyer’s premium must be between 0 and 100%.");
+      return;
+    }
     if (event.id == null || !db) return;
     await db.events.update(event.id, {
       organizationName: org,
       taxRate: pct / 100,
+      buyersPremiumRate: bpPct / 100,
       currencySymbol: currencySymbol.trim() || "$",
       updatedAt: new Date(),
     });
@@ -56,7 +74,8 @@ export function EventSettingsForm({
     <Card>
       <h2 className="text-lg font-semibold text-navy">Current event settings</h2>
       <p className="mt-1 text-sm text-muted">
-        Organization, tax, and currency apply to invoices and reports for{" "}
+        Organization, tax, buyer&apos;s premium, and currency apply to invoices
+        for{" "}
         <span className="font-medium text-ink">{event.name}</span>.
       </p>
       <form className="mt-4 space-y-4" onSubmit={handleSubmit}>
@@ -82,6 +101,21 @@ export function EventSettingsForm({
           value={taxRatePct}
           onChange={(e) => setTaxRatePct(e.target.value)}
         />
+        <Input
+          id="set-bp"
+          label="Buyer’s premium (%)"
+          type="number"
+          inputMode="decimal"
+          step="0.01"
+          min={0}
+          max={100}
+          value={buyersPremiumPct}
+          onChange={(e) => setBuyersPremiumPct(e.target.value)}
+        />
+        <p className="text-xs text-muted">
+          Applied to hammer subtotal before sales tax on invoices (e.g. 10%
+          adds 10% to the hammer total, then tax runs on that amount).
+        </p>
         <Input
           id="set-currency"
           label="Currency symbol"

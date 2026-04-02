@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { Header } from "@/components/layout/Header";
 import { Button } from "@/components/ui/Button";
@@ -16,6 +16,8 @@ import {
 } from "@/lib/hooks/useBidders";
 import { useToast } from "@/components/providers/ToastProvider";
 import { useUserDb } from "@/components/providers/UserDbProvider";
+import { downloadCsv } from "@/lib/services/csvExporter";
+import { parseBidderCsv } from "@/lib/services/csvImportBidders";
 
 const linkSecondary =
   "inline-flex items-center justify-center gap-2 rounded-lg border border-navy/15 bg-surface px-4 py-2 text-sm font-medium text-ink transition hover:border-navy/30 focus:outline-none focus-visible:ring-2 focus-visible:ring-navy focus-visible:ring-offset-2";
@@ -37,6 +39,7 @@ export default function BiddersPage() {
   const { db } = useUserDb();
   const { currentEvent, currentEventId } = useCurrentEvent();
   const { showToast } = useToast();
+  const csvRef = useRef<HTMLInputElement>(null);
   const [search, setSearch] = useState("");
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<BidderRow | null>(null);
@@ -74,6 +77,97 @@ export default function BiddersPage() {
         description={`Register and manage bidders for ${currentEvent.name}.`}
         actions={
           <>
+            <input
+              ref={csvRef}
+              type="file"
+              accept=".csv,text/csv"
+              className="hidden"
+              aria-hidden
+              onChange={async (e) => {
+                const file = e.target.files?.[0];
+                e.target.value = "";
+                if (!file || !db || currentEventId == null) return;
+                try {
+                  const text = await file.text();
+                  const { rows, issues } = parseBidderCsv(text);
+                  const existing = await db.bidders
+                    .where("eventId")
+                    .equals(currentEventId)
+                    .toArray();
+                  const taken = new Set(existing.map((b) => b.paddleNumber));
+                  const conflicts: string[] = [];
+                  const toAdd = rows.filter((r) => {
+                    if (taken.has(r.paddleNumber)) {
+                      conflicts.push(String(r.paddleNumber));
+                      return false;
+                    }
+                    taken.add(r.paddleNumber);
+                    return true;
+                  });
+                  const now = new Date();
+                  await db.transaction("rw", db.bidders, async () => {
+                    for (const r of toAdd) {
+                      await db.bidders.add({
+                        eventId: currentEventId,
+                        paddleNumber: r.paddleNumber,
+                        firstName: r.firstName,
+                        lastName: r.lastName,
+                        email: r.email,
+                        phone: r.phone,
+                        createdAt: now,
+                        updatedAt: now,
+                      });
+                    }
+                  });
+                  const parts: string[] = [];
+                  if (toAdd.length) parts.push(`Imported ${toAdd.length} bidder(s).`);
+                  if (issues.length)
+                    parts.push(`${issues.length} row issue(s) in file.`);
+                  if (conflicts.length)
+                    parts.push(
+                      `Skipped ${conflicts.length} duplicate paddle(s) already in this event.`
+                    );
+                  const ok =
+                    toAdd.length > 0 &&
+                    issues.length === 0 &&
+                    conflicts.length === 0;
+                  showToast({
+                    kind: ok ? "success" : toAdd.length > 0 ? "info" : "error",
+                    message: parts.join(" ") || "Nothing imported.",
+                  });
+                } catch (err) {
+                  showToast({
+                    kind: "error",
+                    message:
+                      err instanceof Error ? err.message : "CSV import failed.",
+                  });
+                }
+              }}
+            />
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() =>
+                downloadCsv("clerkbid-bidders-template.csv", [
+                  "paddleNumber",
+                  "firstName",
+                  "lastName",
+                  "email",
+                  "phone",
+                ], [
+                  [101, "Jane", "Doe", "jane@example.com", "555-0100"],
+                ])
+              }
+            >
+              Bidder CSV template
+            </Button>
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => csvRef.current?.click()}
+            >
+              Import bidders (CSV)
+            </Button>
             <Link href="/events/" className={linkSecondary}>
               Events
             </Link>

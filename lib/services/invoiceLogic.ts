@@ -73,9 +73,11 @@ export async function upsertInvoiceForBidder(
     .toArray();
   if (sales.length === 0) return { kind: "no_sales" };
 
-  const subtotal = roundMoney(sales.reduce((a, s) => a + s.amount, 0));
+  const hammerSubtotal = roundMoney(sales.reduce((a, s) => a + s.amount, 0));
+  const bpRate = event.buyersPremiumRate ?? 0;
+  const taxableSubtotal = roundMoney(hammerSubtotal * (1 + bpRate));
   const { taxAmount, total } = computeInvoiceFromSubtotal(
-    subtotal,
+    taxableSubtotal,
     event.taxRate
   );
 
@@ -87,7 +89,7 @@ export async function upsertInvoiceForBidder(
       return { kind: "skipped_paid" };
     }
     await db.invoices.update(existing.id, {
-      subtotal,
+      subtotal: taxableSubtotal,
       taxAmount,
       total,
       generatedAt: now,
@@ -101,7 +103,7 @@ export async function upsertInvoiceForBidder(
     eventId,
     bidderId,
     invoiceNumber,
-    subtotal,
+    subtotal: taxableSubtotal,
     taxAmount,
     total,
     status: "unpaid",
