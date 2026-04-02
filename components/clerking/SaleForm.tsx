@@ -1,6 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  type ReactNode,
+} from "react";
 import { useUserDb } from "@/components/providers/UserDbProvider";
 import { displayLotNumberFromParts } from "@/lib/utils/lotSuffix";
 import { parseLotDisplay } from "@/lib/clerking/lotParse";
@@ -17,6 +24,7 @@ import { formatCurrency } from "@/lib/utils/formatCurrency";
 import { roundMoney } from "@/lib/services/invoiceLogic";
 import {
   DEFAULT_SALE_FIELD_ORDER,
+  isNarrowSaleField,
   readSaleFieldOrder,
   SALE_FIELD_ORDER_CHANGED,
   type SaleFieldId,
@@ -497,6 +505,40 @@ export function SaleForm({
     }
   }
 
+  function renderLayoutGroups(): ReactNode[] {
+    const rows: ReactNode[] = [];
+    let i = 0;
+    while (i < fieldOrder.length) {
+      const id = fieldOrder[i]!;
+      if (!isNarrowSaleField(id)) {
+        rows.push(
+          <div key={`sale-row-${i}-${id}`}>{renderField(id)}</div>
+        );
+        i += 1;
+        continue;
+      }
+      const next = fieldOrder[i + 1];
+      if (next != null && isNarrowSaleField(next)) {
+        rows.push(
+          <div
+            key={`sale-row-${i}-${id}-${next}`}
+            className="grid gap-4 sm:grid-cols-2"
+          >
+            {renderField(id)}
+            {renderField(next)}
+          </div>
+        );
+        i += 2;
+      } else {
+        rows.push(
+          <div key={`sale-row-${i}-${id}`}>{renderField(id)}</div>
+        );
+        i += 1;
+      }
+    }
+    return rows;
+  }
+
   return (
     <form
       className="space-y-4"
@@ -522,7 +564,7 @@ export function SaleForm({
         </p>
       ) : null}
 
-      {fieldOrder.map((id) => renderField(id))}
+      {renderLayoutGroups()}
 
       <PassOutCheckbox
         checked={passOutEnabled}

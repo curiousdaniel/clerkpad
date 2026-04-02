@@ -61,7 +61,8 @@ export function SaleFormFieldOrderEditor() {
         <div className="border-t border-navy/10 px-3 pb-3 pt-2">
           <p className="text-xs text-muted">
             Order matches Tab key order in the sale form. Use Save after
-            reordering.
+            reordering. Short fields sit side by side on wider screens when they
+            are next to each other in this list.
           </p>
           <ol className="mt-3 space-y-1.5">
             {draft.map((id, i) => (

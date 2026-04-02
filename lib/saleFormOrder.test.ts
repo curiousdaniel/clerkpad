@@ -2,11 +2,28 @@
 import { describe, expect, it, beforeEach } from "vitest";
 import {
   DEFAULT_SALE_FIELD_ORDER,
+  isNarrowSaleField,
   isValidSaleFieldOrder,
   normalizeSaleFieldOrder,
   readSaleFieldOrder,
   writeSaleFieldOrder,
 } from "./saleFormOrder";
+
+describe("isNarrowSaleField", () => {
+  it("is true for compact inputs", () => {
+    expect(isNarrowSaleField("lot")).toBe(true);
+    expect(isNarrowSaleField("price")).toBe(true);
+    expect(isNarrowSaleField("paddle")).toBe(true);
+    expect(isNarrowSaleField("quantity")).toBe(true);
+    expect(isNarrowSaleField("consignor")).toBe(true);
+    expect(isNarrowSaleField("initials")).toBe(true);
+  });
+
+  it("is false for full-width fields", () => {
+    expect(isNarrowSaleField("description")).toBe(false);
+    expect(isNarrowSaleField("notes")).toBe(false);
+  });
+});
 
 describe("isValidSaleFieldOrder", () => {
   it("accepts default permutation", () => {

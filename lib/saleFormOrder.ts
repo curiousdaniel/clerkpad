@@ -16,6 +16,20 @@ export const ALL_SALE_FIELD_IDS = [
 
 export type SaleFieldId = (typeof ALL_SALE_FIELD_IDS)[number];
 
+/** Short inputs that may share a row (sm:grid-cols-2) when consecutive in tab order. */
+const NARROW_SALE_FIELD_IDS = new Set<SaleFieldId>([
+  "lot",
+  "price",
+  "paddle",
+  "quantity",
+  "consignor",
+  "initials",
+]);
+
+export function isNarrowSaleField(id: SaleFieldId): boolean {
+  return NARROW_SALE_FIELD_IDS.has(id);
+}
+
 export const DEFAULT_SALE_FIELD_ORDER: SaleFieldId[] = [
   ...ALL_SALE_FIELD_IDS,
 ];
