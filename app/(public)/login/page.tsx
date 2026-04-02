@@ -57,15 +57,31 @@ export default function LoginPage() {
           onChange={(e) => setEmail(e.target.value)}
           required
         />
-        <Input
-          id="login-password"
-          label="Password"
-          type="password"
-          autoComplete="current-password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          required
-        />
+        <div className="space-y-1">
+          <div className="flex items-end justify-between gap-2">
+            <label
+              htmlFor="login-password"
+              className="text-sm font-medium text-ink"
+            >
+              Password
+            </label>
+            <Link
+              href="/forgot-password/"
+              className="text-xs font-medium text-navy underline"
+            >
+              Forgot password?
+            </Link>
+          </div>
+          <Input
+            id="login-password"
+            label=""
+            type="password"
+            autoComplete="current-password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            required
+          />
+        </div>
         <Button type="submit" className="w-full" disabled={pending}>
           {pending ? "Signing in…" : "Sign in"}
         </Button>

@@ -40,5 +40,5 @@ public/fallback-*.js
 public/sw.js.map
 public/workbox-*.js.map
 
-# macOS folder custom icon (Icon + CR)
-Icon
+# macOS folder custom icon: filename is "Icon" + carriage return (one char)
+Icon?
