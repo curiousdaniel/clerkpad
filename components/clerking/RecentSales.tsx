@@ -3,8 +3,8 @@
 import { useMemo, useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { ChevronDown, ChevronRight, Ban } from "lucide-react";
-import { db } from "@/lib/db";
 import type { Sale } from "@/lib/db";
+import { useUserDb } from "@/components/providers/UserDbProvider";
 import { parseLotDisplay } from "@/lib/clerking/lotParse";
 import { formatCurrency } from "@/lib/utils/formatCurrency";
 import { formatDateTime } from "@/lib/utils/formatDate";
@@ -22,8 +22,10 @@ export function RecentSales({
   currencySymbol: string;
   onVoided?: () => void;
 }) {
+  const { db, ready } = useUserDb();
   const sales = useLiveQuery(
     async () => {
+      if (!ready || !db) return [];
       const rows = await db.sales.where("eventId").equals(eventId).toArray();
       rows.sort(
         (a, b) =>
@@ -37,7 +39,7 @@ export function RecentSales({
         } satisfies Row;
       });
     },
-    [eventId]
+    [ready, db, eventId]
   );
 
   const [openId, setOpenId] = useState<number | null>(null);
@@ -58,7 +60,7 @@ export function RecentSales({
   }, [sales]);
 
   async function confirmVoid() {
-    if (voidSale?.id == null || voidSale.lotId == null) return;
+    if (voidSale?.id == null || voidSale.lotId == null || !db) return;
     const saleId = voidSale.id;
     const lotId = voidSale.lotId;
     setVoidSale(null);

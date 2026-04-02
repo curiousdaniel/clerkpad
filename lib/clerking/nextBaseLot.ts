@@ -1,7 +1,8 @@
-import { db } from "@/lib/db";
+import type { AuctionDB } from "@/lib/db";
 import { formatBaseLotDisplay } from "./lotParse";
 
 export async function getNextSuggestedBaseLotNumber(
+  db: AuctionDB,
   eventId: number
 ): Promise<number> {
   const lots = await db.lots.where("eventId").equals(eventId).toArray();
@@ -11,8 +12,9 @@ export async function getNextSuggestedBaseLotNumber(
 }
 
 export async function getNextSuggestedLotDisplay(
+  db: AuctionDB,
   eventId: number
 ): Promise<string> {
-  const n = await getNextSuggestedBaseLotNumber(eventId);
+  const n = await getNextSuggestedBaseLotNumber(db, eventId);
   return formatBaseLotDisplay(n);
 }

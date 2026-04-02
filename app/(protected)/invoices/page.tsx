@@ -10,7 +10,7 @@ import { InvoiceDetailModal } from "@/components/invoices/InvoiceDetail";
 import { PaymentModal } from "@/components/invoices/PaymentModal";
 import { useCurrentEvent } from "@/lib/hooks/useCurrentEvent";
 import { useToast } from "@/components/providers/ToastProvider";
-import { db } from "@/lib/db";
+import { useUserDb } from "@/components/providers/UserDbProvider";
 import {
   bidderIdsPendingFirstInvoice,
   generateAllInvoicesForEvent,
@@ -30,6 +30,7 @@ const linkSecondary =
 type Filter = "all" | "unpaid" | "paid";
 
 export default function InvoicesPage() {
+  const { db, ready: dbReady } = useUserDb();
   const { currentEvent, currentEventId } = useCurrentEvent();
   const { showToast } = useToast();
   const [filter, setFilter] = useState<Filter>("all");
@@ -40,7 +41,7 @@ export default function InvoicesPage() {
 
   const invoiceRows = useLiveQuery(
     async () => {
-      if (currentEventId == null) return [];
+      if (currentEventId == null || !dbReady || !db) return [];
       const invs = await db.invoices
         .where("eventId")
         .equals(currentEventId)
@@ -54,7 +55,7 @@ export default function InvoicesPage() {
         .map((inv) => ({ ...inv, bidder: bMap.get(inv.bidderId) }))
         .sort((a, b) => b.generatedAt.getTime() - a.generatedAt.getTime());
     },
-    [currentEventId]
+    [currentEventId, dbReady, db]
   );
 
   const filteredRows = useMemo(() => {
@@ -65,8 +66,8 @@ export default function InvoicesPage() {
 
   const pendingBidders = useLiveQuery(
     async () => {
-      if (currentEventId == null) return [];
-      const ids = await bidderIdsPendingFirstInvoice(currentEventId);
+      if (currentEventId == null || !dbReady || !db) return [];
+      const ids = await bidderIdsPendingFirstInvoice(db, currentEventId);
       const out = [];
       for (const id of ids) {
         const b = await db.bidders.get(id);
@@ -75,21 +76,21 @@ export default function InvoicesPage() {
       out.sort((a, b) => a.paddleNumber - b.paddleNumber);
       return out;
     },
-    [currentEventId]
+    [currentEventId, dbReady, db]
   );
 
   const detailSales = useLiveQuery(
     async () => {
-      if (!detailInv || currentEventId == null) return [];
-      return getSalesForBidderInvoice(currentEventId, detailInv.bidderId);
+      if (!detailInv || currentEventId == null || !db) return [];
+      return getSalesForBidderInvoice(db, currentEventId, detailInv.bidderId);
     },
-    [detailInv?.id, detailInv?.bidderId, currentEventId]
+    [detailInv?.id, detailInv?.bidderId, currentEventId, db]
   );
 
   async function handleGenerateAll() {
-    if (currentEventId == null || !currentEvent) return;
+    if (currentEventId == null || !currentEvent || !db) return;
     try {
-      const r = await generateAllInvoicesForEvent(currentEventId);
+      const r = await generateAllInvoicesForEvent(db, currentEventId);
       showToast({
         kind: "success",
         message: `Invoices: ${r.created} created, ${r.updated} updated${r.skippedPaid ? `, ${r.skippedPaid} paid skipped` : ""}.`,
@@ -103,8 +104,8 @@ export default function InvoicesPage() {
   }
 
   async function handleCreateForBidder(bidderId: number) {
-    if (!currentEvent) return;
-    const r = await upsertInvoiceForBidder(currentEvent, bidderId);
+    if (!currentEvent || !db) return;
+    const r = await upsertInvoiceForBidder(db, currentEvent, bidderId);
     if (r.kind === "created" || r.kind === "updated") {
       showToast({ kind: "success", message: "Invoice created." });
     } else if (r.kind === "skipped_paid") {
@@ -115,8 +116,8 @@ export default function InvoicesPage() {
   }
 
   async function handlePrint(inv: InvoiceWithBidder) {
-    if (inv.id == null) return;
-    const input = await loadInvoicePdfInput(inv.id);
+    if (inv.id == null || !db) return;
+    const input = await loadInvoicePdfInput(db, inv.id);
     if (!input) {
       showToast({ kind: "error", message: "Could not build PDF." });
       return;
@@ -132,8 +133,9 @@ export default function InvoicesPage() {
       showToast({ kind: "info", message: "No unpaid invoices." });
       return;
     }
+    if (!db) return;
     const inputs = (
-      await Promise.all(unpaid.map((i) => loadInvoicePdfInput(i.id!)))
+      await Promise.all(unpaid.map((i) => loadInvoicePdfInput(db, i.id!)))
     ).filter((x): x is NonNullable<typeof x> => x != null);
     if (inputs.length === 0) {
       showToast({ kind: "error", message: "Could not build PDFs." });

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { db } from "@/lib/db";
+import { useUserDb } from "@/components/providers/UserDbProvider";
 import { displayLotNumberFromParts } from "@/lib/utils/lotSuffix";
 import { parseLotDisplay } from "@/lib/clerking/lotParse";
 import {
@@ -22,6 +22,7 @@ export function SaleForm({
   eventId: number;
   currencySymbol: string;
 }) {
+  const { db } = useUserDb();
   const { showToast } = useToast();
   const [lotNumber, setLotNumber] = useState("");
   const [title, setTitle] = useState("");
@@ -37,9 +38,10 @@ export function SaleForm({
   const paddleRef = useRef<HTMLInputElement>(null);
 
   const refreshLotSuggestion = useCallback(async () => {
-    const next = await getNextSuggestedLotDisplay(eventId);
+    if (!db) return;
+    const next = await getNextSuggestedLotDisplay(db, eventId);
     setLotNumber(next);
-  }, [eventId]);
+  }, [db, eventId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -67,6 +69,7 @@ export function SaleForm({
   }, [eventId, refreshLotSuggestion]);
 
   async function autofillFromLot() {
+    if (!db) return;
     const parsed = parseLotDisplay(lotNumber);
     if (!parsed) return;
     const display = displayLotNumberFromParts(parsed.base, parsed.suffix);
@@ -94,6 +97,7 @@ export function SaleForm({
   }
 
   async function submitSale(shiftEnter: boolean) {
+    if (!db) return;
     setFormError(null);
     const passOutActive = passOutEnabled || shiftEnter;
     if (shiftEnter) {
@@ -149,7 +153,7 @@ export function SaleForm({
 
     const baseNum = parsed.base;
     const newSuffix = passOutActive
-      ? await computeNewPassOutLotSuffix(eventId, baseNum)
+      ? await computeNewPassOutLotSuffix(db, eventId, baseNum)
       : "";
     const displayStr = displayLotNumberFromParts(baseNum, newSuffix);
 
@@ -210,7 +214,7 @@ export function SaleForm({
 
     if (passOutActive) {
       setPaddleNumber("");
-      const nextDisp = await nextPassOutLineDisplay(eventId, baseNum);
+      const nextDisp = await nextPassOutLineDisplay(db, eventId, baseNum);
       setLotNumber(nextDisp);
       requestAnimationFrame(() => paddleRef.current?.focus());
     } else {

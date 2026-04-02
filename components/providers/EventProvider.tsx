@@ -4,15 +4,14 @@ import {
   createContext,
   useCallback,
   useContext,
-  useEffect,
   useMemo,
   useState,
   type ReactNode,
 } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import type { AuctionEvent } from "@/lib/db";
-import { db } from "@/lib/db";
-import { ensureSettingsRow, setCurrentEventId } from "@/lib/settings";
+import { setCurrentEventId } from "@/lib/settings";
+import { useUserDb } from "@/components/providers/UserDbProvider";
 
 type EventContextValue = {
   ready: boolean;
@@ -25,54 +24,47 @@ type EventContextValue = {
 const EventContext = createContext<EventContextValue | null>(null);
 
 export function EventProvider({ children }: { children: ReactNode }) {
-  const [ready, setReady] = useState(false);
+  const { db, ready: dbReady } = useUserDb();
   const [tick, setTick] = useState(0);
-
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      await ensureSettingsRow();
-      if (!cancelled) setReady(true);
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
 
   const settings = useLiveQuery(
     async () => {
-      if (!ready) return undefined;
+      if (!dbReady || !db) return undefined;
       return db.settings.get(1);
     },
-    [ready, tick]
+    [dbReady, db, tick]
   );
 
   const currentEventId = settings?.currentEventId ?? null;
 
   const currentEvent = useLiveQuery(
     async () => {
-      if (!ready || currentEventId == null) return undefined;
+      if (!dbReady || !db || currentEventId == null) return undefined;
       return db.events.get(currentEventId);
     },
-    [ready, currentEventId, tick]
+    [dbReady, db, currentEventId, tick]
   );
 
-  const switchEvent = useCallback(async (id: number | null) => {
-    await setCurrentEventId(id);
-    setTick((t) => t + 1);
-  }, []);
+  const switchEvent = useCallback(
+    async (id: number | null) => {
+      if (!db) return;
+      await setCurrentEventId(db, id);
+      setTick((t) => t + 1);
+    },
+    [db]
+  );
 
   const refresh = useCallback(() => setTick((t) => t + 1), []);
 
   const value = useMemo<EventContextValue>(
     () => ({
-      ready,
+      ready: dbReady,
       currentEventId,
       currentEvent,
       switchEvent,
       refresh,
     }),
-    [ready, currentEventId, currentEvent, switchEvent, refresh]
+    [dbReady, currentEventId, currentEvent, switchEvent, refresh]
   );
 
   return (

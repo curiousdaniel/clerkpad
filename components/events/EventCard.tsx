@@ -2,7 +2,7 @@
 
 import { useLiveQuery } from "dexie-react-hooks";
 import type { AuctionEvent } from "@/lib/db";
-import { db } from "@/lib/db";
+import { useUserDb } from "@/components/providers/UserDbProvider";
 import { formatDateOnly } from "@/lib/utils/formatDate";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
@@ -23,9 +23,11 @@ export function EventCard({
   onDelete: () => void;
   onExport: () => void;
 }) {
+  const { db, ready } = useUserDb();
   const id = event.id!;
   const counts = useLiveQuery(
     async () => {
+      if (!ready || !db) return { bidders: 0, lots: 0, sales: 0 };
       const [bidders, lots, sales] = await Promise.all([
         db.bidders.where("eventId").equals(id).count(),
         db.lots.where("eventId").equals(id).count(),
@@ -33,7 +35,7 @@ export function EventCard({
       ]);
       return { bidders, lots, sales };
     },
-    [id]
+    [ready, db, id]
   );
 
   return (

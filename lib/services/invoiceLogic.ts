@@ -1,5 +1,4 @@
-import { db } from "@/lib/db";
-import type { AuctionEvent, Bidder, Invoice, Sale } from "@/lib/db";
+import type { AuctionDB, AuctionEvent, Bidder, Invoice, Sale } from "@/lib/db";
 import type { InvoicePdfInput } from "@/lib/services/invoicePdf";
 
 export function roundMoney(n: number): number {
@@ -16,7 +15,12 @@ export function computeInvoiceFromSubtotal(
   return { subtotal: s, taxAmount, total };
 }
 
+export function formatInvoiceNumber(eventId: number, seq: number): string {
+  return `${eventId}-${String(seq).padStart(3, "0")}`;
+}
+
 export async function findInvoiceForBidder(
+  db: AuctionDB,
   eventId: number,
   bidderId: number
 ): Promise<Invoice | undefined> {
@@ -24,7 +28,10 @@ export async function findInvoiceForBidder(
   return rows.find((i) => i.bidderId === bidderId);
 }
 
-export async function nextInvoiceSequence(eventId: number): Promise<number> {
+export async function nextInvoiceSequence(
+  db: AuctionDB,
+  eventId: number
+): Promise<number> {
   const all = await db.invoices.where("eventId").equals(eventId).toArray();
   let max = 0;
   for (const inv of all) {
@@ -35,11 +42,10 @@ export async function nextInvoiceSequence(eventId: number): Promise<number> {
   return max + 1;
 }
 
-export function formatInvoiceNumber(eventId: number, seq: number): string {
-  return `${eventId}-${String(seq).padStart(3, "0")}`;
-}
-
-export async function bidderIdsWithSales(eventId: number): Promise<number[]> {
+export async function bidderIdsWithSales(
+  db: AuctionDB,
+  eventId: number
+): Promise<number[]> {
   const sales = await db.sales.where("eventId").equals(eventId).toArray();
   return Array.from(new Set(sales.map((s) => s.bidderId)));
 }
@@ -55,6 +61,7 @@ export type UpsertResult =
  * Creates new invoice if none exists.
  */
 export async function upsertInvoiceForBidder(
+  db: AuctionDB,
   event: AuctionEvent,
   bidderId: number
 ): Promise<UpsertResult> {
@@ -72,7 +79,7 @@ export async function upsertInvoiceForBidder(
     event.taxRate
   );
 
-  const existing = await findInvoiceForBidder(eventId, bidderId);
+  const existing = await findInvoiceForBidder(db, eventId, bidderId);
   const now = new Date();
 
   if (existing?.id != null) {
@@ -88,7 +95,7 @@ export async function upsertInvoiceForBidder(
     return { kind: "updated", invoiceId: existing.id };
   }
 
-  const seq = await nextInvoiceSequence(eventId);
+  const seq = await nextInvoiceSequence(db, eventId);
   const invoiceNumber = formatInvoiceNumber(eventId, seq);
   const id = await db.invoices.add({
     eventId,
@@ -104,6 +111,7 @@ export async function upsertInvoiceForBidder(
 }
 
 export async function generateAllInvoicesForEvent(
+  db: AuctionDB,
   eventId: number
 ): Promise<{
   created: number;
@@ -114,7 +122,7 @@ export async function generateAllInvoicesForEvent(
   const event = await db.events.get(eventId);
   if (!event?.id) throw new Error("Event not found");
 
-  const bidderIds = await bidderIdsWithSales(eventId);
+  const bidderIds = await bidderIdsWithSales(db, eventId);
 
   let created = 0;
   let updated = 0;
@@ -122,7 +130,7 @@ export async function generateAllInvoicesForEvent(
   let noSales = 0;
 
   for (const bidderId of bidderIds) {
-    const r = await upsertInvoiceForBidder(event, bidderId);
+    const r = await upsertInvoiceForBidder(db, event, bidderId);
     if (r.kind === "created") created++;
     else if (r.kind === "updated") updated++;
     else if (r.kind === "skipped_paid") skippedPaid++;
@@ -133,6 +141,7 @@ export async function generateAllInvoicesForEvent(
 }
 
 export async function getSalesForBidderInvoice(
+  db: AuctionDB,
   eventId: number,
   bidderId: number
 ) {
@@ -182,6 +191,7 @@ export function toInvoicePdfInput(
 }
 
 export async function loadInvoicePdfInput(
+  db: AuctionDB,
   invoiceId: number
 ): Promise<InvoicePdfInput | null> {
   const inv = await db.invoices.get(invoiceId);
@@ -191,15 +201,16 @@ export async function loadInvoicePdfInput(
     db.bidders.get(inv.bidderId),
   ]);
   if (event?.id == null || bidder?.id == null) return null;
-  const sales = await getSalesForBidderInvoice(inv.eventId, inv.bidderId);
+  const sales = await getSalesForBidderInvoice(db, inv.eventId, inv.bidderId);
   return toInvoicePdfInput(inv, event, bidder, sales);
 }
 
 /** Bidders who have sales but no invoice row yet for this event. */
 export async function bidderIdsPendingFirstInvoice(
+  db: AuctionDB,
   eventId: number
 ): Promise<number[]> {
-  const withSales = await bidderIdsWithSales(eventId);
+  const withSales = await bidderIdsWithSales(db, eventId);
   const invs = await db.invoices.where("eventId").equals(eventId).toArray();
   const invoiced = new Set(invs.map((i) => i.bidderId));
   return withSales.filter((id) => !invoiced.has(id));

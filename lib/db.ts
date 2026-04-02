@@ -1,5 +1,28 @@
 import Dexie, { type Table } from "dexie";
 
+/** Pre–per-user DB; migrated once into the signed-in user's database. */
+export const LEGACY_DB_NAME = "AuctionManagerDB";
+
+const STORE_DEF = {
+  events: "++id, name, createdAt",
+  bidders:
+    "++id, eventId, paddleNumber, [eventId+paddleNumber]",
+  lots:
+    "++id, eventId, baseLotNumber, lotSuffix, displayLotNumber, status, [eventId+displayLotNumber], [eventId+baseLotNumber]",
+  sales:
+    "++id, eventId, lotId, bidderId, displayLotNumber, paddleNumber",
+  invoices: "++id, eventId, bidderId, status, invoiceNumber",
+  settings: "++id",
+} as const;
+
+export function sanitizeUserIdForDbName(userId: string): string {
+  return userId.replace(/[^a-zA-Z0-9_-]/g, "_");
+}
+
+export function userDexieDatabaseName(userId: string): string {
+  return `ClerkBid_u_${sanitizeUserIdForDbName(userId)}`;
+}
+
 export interface AuctionEvent {
   id?: number;
   name: string;
@@ -80,21 +103,70 @@ export class AuctionDB extends Dexie {
   invoices!: Table<Invoice>;
   settings!: Table<AppSettings>;
 
-  constructor() {
-    super("AuctionManagerDB");
-
-    this.version(1).stores({
-      events: "++id, name, createdAt",
-      bidders:
-        "++id, eventId, paddleNumber, [eventId+paddleNumber]",
-      lots:
-        "++id, eventId, baseLotNumber, lotSuffix, displayLotNumber, status, [eventId+displayLotNumber], [eventId+baseLotNumber]",
-      sales:
-        "++id, eventId, lotId, bidderId, displayLotNumber, paddleNumber",
-      invoices: "++id, eventId, bidderId, status, invoiceNumber",
-      settings: "++id",
-    });
+  constructor(userId: string) {
+    super(userDexieDatabaseName(userId));
+    this.version(1).stores(STORE_DEF);
   }
 }
 
-export const db = new AuctionDB();
+const dbInstanceCache = new Map<string, AuctionDB>();
+
+export function getAuctionDB(userId: string): AuctionDB {
+  let d = dbInstanceCache.get(userId);
+  if (!d) {
+    d = new AuctionDB(userId);
+    dbInstanceCache.set(userId, d);
+  }
+  return d;
+}
+
+/** Call on sign-out so another account on this device gets a clean open. */
+export function closeAndClearAuctionDbCache(): void {
+  dbInstanceCache.forEach((d) => {
+    d.close();
+  });
+  dbInstanceCache.clear();
+}
+
+/**
+ * One-time: copy legacy single-DB data into this user's DB, then delete legacy.
+ */
+export async function migrateLegacyToUserDb(userDb: AuctionDB): Promise<void> {
+  const exists = await Dexie.exists(LEGACY_DB_NAME);
+  if (!exists) return;
+
+  if ((await userDb.events.count()) > 0) return;
+
+  const legacy = new Dexie(LEGACY_DB_NAME);
+  legacy.version(1).stores(STORE_DEF);
+  try {
+    await legacy.open();
+  } catch {
+    return;
+  }
+
+  try {
+    if ((await legacy.table("events").count()) === 0) return;
+
+    const tableNames = [
+      "events",
+      "bidders",
+      "lots",
+      "sales",
+      "invoices",
+      "settings",
+    ] as const;
+
+    await userDb.transaction("rw", userDb.tables, async () => {
+      for (const name of tableNames) {
+        const rows = await legacy.table(name).toArray();
+        if (rows.length === 0) continue;
+        await userDb.table(name).bulkAdd(rows as never[]);
+      }
+    });
+
+    await legacy.delete();
+  } finally {
+    legacy.close();
+  }
+}

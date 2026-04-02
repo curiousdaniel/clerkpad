@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import type { Invoice } from "@/lib/db";
-import { db } from "@/lib/db";
+import { useUserDb } from "@/components/providers/UserDbProvider";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { PAYMENT_METHODS } from "@/lib/utils/constants";
@@ -18,6 +18,7 @@ export function PaymentModal({
   onClose: () => void;
   onPaid: (invoice: Invoice) => void;
 }) {
+  const { db } = useUserDb();
   const [method, setMethod] = useState<string>("cash");
 
   useEffect(() => {
@@ -25,7 +26,7 @@ export function PaymentModal({
   }, [open, invoice?.id]);
 
   async function confirm() {
-    if (invoice?.id == null) return;
+    if (invoice?.id == null || !db) return;
     await db.invoices.update(invoice.id, {
       status: "paid",
       paymentMethod: method as "cash" | "check" | "credit_card" | "other",

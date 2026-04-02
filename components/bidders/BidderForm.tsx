@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import type { Bidder } from "@/lib/db";
-import { db } from "@/lib/db";
+import { useUserDb } from "@/components/providers/UserDbProvider";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
@@ -23,6 +23,7 @@ export function BidderForm({
   eventId,
   editing,
 }: Props) {
+  const { db } = useUserDb();
   const [paddleNumber, setPaddleNumber] = useState("");
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
@@ -34,6 +35,7 @@ export function BidderForm({
     if (!open) return;
     setError(null);
     (async () => {
+      if (!db) return;
       if (editing) {
         setPaddleNumber(String(editing.paddleNumber));
         setFirstName(editing.firstName);
@@ -41,7 +43,7 @@ export function BidderForm({
         setPhone(editing.phone ?? "");
         setEmail(editing.email ?? "");
       } else {
-        const next = await getSuggestedPaddleNumber(eventId);
+        const next = await getSuggestedPaddleNumber(db, eventId);
         setPaddleNumber(String(next));
         setFirstName("");
         setLastName("");
@@ -49,10 +51,11 @@ export function BidderForm({
         setEmail("");
       }
     })();
-  }, [open, editing, eventId]);
+  }, [open, editing, eventId, db]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (!db) return;
     setError(null);
     const paddle = parseInt(paddleNumber.trim(), 10);
     if (!Number.isFinite(paddle) || paddle < 1) {

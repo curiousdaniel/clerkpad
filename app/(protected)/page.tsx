@@ -5,7 +5,7 @@ import { useLiveQuery } from "dexie-react-hooks";
 import { Header } from "@/components/layout/Header";
 import { Card } from "@/components/ui/Card";
 import { useCurrentEvent } from "@/lib/hooks/useCurrentEvent";
-import { db } from "@/lib/db";
+import { useUserDb } from "@/components/providers/UserDbProvider";
 import { formatCurrency } from "@/lib/utils/formatCurrency";
 import { formatDateTime } from "@/lib/utils/formatDate";
 
@@ -15,11 +15,12 @@ const linkSecondary =
   "inline-flex items-center justify-center gap-2 rounded-lg border border-navy/15 bg-surface px-4 py-2 text-sm font-medium text-ink transition hover:border-navy/30 focus:outline-none focus-visible:ring-2 focus-visible:ring-navy focus-visible:ring-offset-2";
 
 export default function DashboardPage() {
+  const { db, ready: dbReady } = useUserDb();
   const { ready, currentEventId, currentEvent } = useCurrentEvent();
 
   const stats = useLiveQuery(
     async () => {
-      if (!ready || currentEventId == null) return null;
+      if (!ready || !dbReady || !db || currentEventId == null) return null;
       const eid = currentEventId;
       const [bidderCount, lots, sales, invoices] = await Promise.all([
         db.bidders.where("eventId").equals(eid).count(),
@@ -47,12 +48,12 @@ export default function DashboardPage() {
         invTotal: invoices.length,
       };
     },
-    [ready, currentEventId]
+    [ready, dbReady, db, currentEventId]
   );
 
   const recentSales = useLiveQuery(
     async () => {
-      if (!ready || currentEventId == null) return [];
+      if (!ready || !dbReady || !db || currentEventId == null) return [];
       const rows = await db.sales
         .where("eventId")
         .equals(currentEventId)
@@ -63,7 +64,7 @@ export default function DashboardPage() {
       );
       return rows.slice(0, 10);
     },
-    [ready, currentEventId]
+    [ready, dbReady, db, currentEventId]
   );
 
   const sym = currentEvent?.currencySymbol ?? "$";

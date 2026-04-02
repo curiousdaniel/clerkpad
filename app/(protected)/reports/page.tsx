@@ -9,7 +9,7 @@ import { BidderTotals } from "@/components/reports/BidderTotals";
 import { LotResults } from "@/components/reports/LotResults";
 import { PaymentMethodSummary } from "@/components/reports/PaymentMethodSummary";
 import { useCurrentEvent } from "@/lib/hooks/useCurrentEvent";
-import { db } from "@/lib/db";
+import { useUserDb } from "@/components/providers/UserDbProvider";
 import {
   buildBidderReportRows,
   buildLotReportRows,
@@ -25,11 +25,12 @@ function slug(s: string) {
 }
 
 export default function ReportsPage() {
+  const { db, ready: dbReady } = useUserDb();
   const { currentEvent, currentEventId } = useCurrentEvent();
 
   const bundle = useLiveQuery(
     async () => {
-      if (currentEventId == null) return null;
+      if (currentEventId == null || !dbReady || !db) return null;
       const [sales, lots, bidders, invoices] = await Promise.all([
         db.sales.where("eventId").equals(currentEventId).toArray(),
         db.lots.where("eventId").equals(currentEventId).toArray(),
@@ -38,7 +39,7 @@ export default function ReportsPage() {
       ]);
       return { sales, lots, bidders, invoices };
     },
-    [currentEventId]
+    [currentEventId, dbReady, db]
   );
 
   const summary = useMemo(() => {

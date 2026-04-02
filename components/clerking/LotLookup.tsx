@@ -1,18 +1,19 @@
 "use client";
 
 import { useState } from "react";
-import { db } from "@/lib/db";
-import type { Lot } from "@/lib/db";
+import type { AuctionDB, Lot } from "@/lib/db";
 import { parseLotDisplay } from "@/lib/clerking/lotParse";
 import { displayLotNumberFromParts } from "@/lib/utils/lotSuffix";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
+import { useUserDb } from "@/components/providers/UserDbProvider";
 
 type LookupResult = { display: string; lot: Lot | undefined };
 
 async function lookupLot(
+  db: AuctionDB,
   eventId: number,
   displayRaw: string
 ): Promise<LookupResult | null> {
@@ -27,6 +28,7 @@ async function lookupLot(
 }
 
 export function LotLookup({ eventId }: { eventId: number }) {
+  const { db } = useUserDb();
   const [q, setQ] = useState("");
   const [result, setResult] = useState<LookupResult | null>(null);
 
@@ -50,7 +52,8 @@ export function LotLookup({ eventId }: { eventId: number }) {
           <Button
             type="button"
             onClick={async () => {
-              const r = await lookupLot(eventId, q);
+              if (!db) return;
+              const r = await lookupLot(db, eventId, q);
               setResult(r);
             }}
           >

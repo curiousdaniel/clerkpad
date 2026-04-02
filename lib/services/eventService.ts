@@ -1,8 +1,11 @@
-import { db } from "@/lib/db";
+import type { AuctionDB } from "@/lib/db";
 import { getCurrentEventId, setCurrentEventId } from "@/lib/settings";
 
 /** Removes all bidders, lots, sales, and invoices for the event; keeps the event row. */
-export async function clearEventDataKeepShell(eventId: number): Promise<void> {
+export async function clearEventDataKeepShell(
+  db: AuctionDB,
+  eventId: number
+): Promise<void> {
   await db.transaction(
     "rw",
     [db.bidders, db.lots, db.sales, db.invoices],
@@ -15,7 +18,10 @@ export async function clearEventDataKeepShell(eventId: number): Promise<void> {
   );
 }
 
-export async function deleteEventCascade(eventId: number): Promise<void> {
+export async function deleteEventCascade(
+  db: AuctionDB,
+  eventId: number
+): Promise<void> {
   await db.transaction(
     "rw",
     [db.bidders, db.lots, db.sales, db.invoices, db.events],
@@ -27,8 +33,8 @@ export async function deleteEventCascade(eventId: number): Promise<void> {
       await db.events.delete(eventId);
     }
   );
-  const current = await getCurrentEventId();
+  const current = await getCurrentEventId(db);
   if (current === eventId) {
-    await setCurrentEventId(null);
+    await setCurrentEventId(db, null);
   }
 }

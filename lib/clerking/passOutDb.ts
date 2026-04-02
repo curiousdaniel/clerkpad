@@ -1,4 +1,4 @@
-import { db } from "@/lib/db";
+import type { AuctionDB } from "@/lib/db";
 import {
   displayLotNumberFromParts,
   maxLotSuffix,
@@ -7,6 +7,7 @@ import {
 
 /** Suffix for the lot row we are about to create in pass-out mode (DB is source of truth). */
 export async function computeNewPassOutLotSuffix(
+  db: AuctionDB,
   eventId: number,
   baseLotNumber: number
 ): Promise<string> {
@@ -21,6 +22,7 @@ export async function computeNewPassOutLotSuffix(
 
 /** Display string for the *next* line after current DB state (for form refresh). */
 export async function nextPassOutLineDisplay(
+  db: AuctionDB,
   eventId: number,
   baseLotNumber: number
 ): Promise<string> {

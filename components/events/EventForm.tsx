@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import type { AuctionEvent } from "@/lib/db";
-import { db } from "@/lib/db";
+import { useUserDb } from "@/components/providers/UserDbProvider";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
@@ -15,6 +15,7 @@ type Props = {
 };
 
 export function EventForm({ open, onClose, onSaved, editing }: Props) {
+  const { db } = useUserDb();
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [organizationName, setOrganizationName] = useState("");
@@ -60,6 +61,7 @@ export function EventForm({ open, onClose, onSaved, editing }: Props) {
     }
     const taxRate = pct / 100;
     const now = new Date();
+    if (!db) return;
     if (editing?.id != null) {
       await db.events.update(editing.id, {
         name: n,

@@ -9,8 +9,8 @@ import { EventCard } from "@/components/events/EventCard";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { useCurrentEvent } from "@/lib/hooks/useCurrentEvent";
 import { useToast } from "@/components/providers/ToastProvider";
-import { db } from "@/lib/db";
 import type { AuctionEvent } from "@/lib/db";
+import { useUserDb } from "@/components/providers/UserDbProvider";
 import {
   buildEventExport,
   downloadJson,
@@ -20,6 +20,7 @@ import {
 import { deleteEventCascade } from "@/lib/services/eventService";
 
 export default function EventsPage() {
+  const { db, ready: dbReady } = useUserDb();
   const { ready, currentEventId, switchEvent, refresh } = useCurrentEvent();
   const { showToast } = useToast();
   const fileRef = useRef<HTMLInputElement>(null);
@@ -29,15 +30,16 @@ export default function EventsPage() {
 
   const events = useLiveQuery(
     async () => {
-      if (!ready) return [];
+      if (!ready || !dbReady || !db) return [];
       return db.events.orderBy("createdAt").reverse().toArray();
     },
-    [ready]
+    [ready, dbReady, db]
   );
 
   async function handleExport(eventId: number, slug: string) {
+    if (!db) return;
     try {
-      const data = await buildEventExport(eventId);
+      const data = await buildEventExport(db, eventId);
       const safe = slug.replace(/[^a-z0-9-_]+/gi, "-").slice(0, 40);
       downloadJson(`clerkbid-event-${safe || eventId}.json`, data);
       showToast({ kind: "success", message: "Event exported." });
@@ -56,12 +58,12 @@ export default function EventsPage() {
   async function onImportFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     e.target.value = "";
-    if (!file) return;
+    if (!file || !db) return;
     try {
       const text = await file.text();
       const raw = JSON.parse(text) as unknown;
       const payload = parseEventExportPayload(raw);
-      const summary = await importEventFromPayload(payload);
+      const summary = await importEventFromPayload(db, payload);
       showToast({
         kind: "success",
         message: `Imported: ${summary.bidders} bidders, ${summary.lots} lots, ${summary.sales} sales.`,
@@ -160,10 +162,10 @@ export default function EventsPage() {
         danger
         onClose={() => setDeleteTarget(null)}
         onConfirm={async () => {
-          if (deleteTarget?.id == null) return;
+          if (deleteTarget?.id == null || !db) return;
           const id = deleteTarget.id;
           setDeleteTarget(null);
-          await deleteEventCascade(id);
+          await deleteEventCascade(db, id);
           refresh();
           showToast({ kind: "success", message: "Event deleted." });
         }}

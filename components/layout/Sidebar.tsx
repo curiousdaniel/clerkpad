@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { signOut } from "next-auth/react";
 import { OFFLINE_SESSION_STORAGE_KEY } from "@/lib/auth/offlineSession";
+import { closeAndClearAuctionDbCache } from "@/lib/db";
 import { EventSwitcher } from "./EventSwitcher";
 
 const nav = [
@@ -76,6 +77,7 @@ export function Sidebar() {
             } catch {
               /* ignore */
             }
+            closeAndClearAuctionDbCache();
             void signOut({ callbackUrl: "/login/" });
           }}
         >

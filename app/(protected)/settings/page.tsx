@@ -11,7 +11,8 @@ import { ClearEventDataDialog } from "@/components/settings/ClearEventDataDialog
 import { useCurrentEvent } from "@/lib/hooks/useCurrentEvent";
 import { usePwaInstall } from "@/lib/hooks/usePwaInstall";
 import { useToast } from "@/components/providers/ToastProvider";
-import { db } from "@/lib/db";
+import type { AuctionDB } from "@/lib/db";
+import { useUserDb } from "@/components/providers/UserDbProvider";
 import { ensureSettingsRow } from "@/lib/settings";
 import {
   buildEventExport,
@@ -30,12 +31,13 @@ import { formatDateTime } from "@/lib/utils/formatDate";
 const linkSecondary =
   "inline-flex items-center justify-center gap-2 rounded-lg border border-navy/15 bg-surface px-4 py-2 text-sm font-medium text-ink transition hover:border-navy/30 focus:outline-none focus-visible:ring-2 focus-visible:ring-navy focus-visible:ring-offset-2";
 
-async function touchBackupDate() {
-  await ensureSettingsRow();
+async function touchBackupDate(db: AuctionDB) {
+  await ensureSettingsRow(db);
   await db.settings.update(1, { lastBackupDate: new Date() });
 }
 
 export default function SettingsPage() {
+  const { db, ready: dbReady } = useUserDb();
   const { currentEvent, currentEventId, switchEvent, refresh } =
     useCurrentEvent();
   const { showToast } = useToast();
@@ -49,9 +51,10 @@ export default function SettingsPage() {
   const fileFullRef = useRef<HTMLInputElement>(null);
 
   const settingsRow = useLiveQuery(async () => {
-    await ensureSettingsRow();
+    if (!dbReady || !db) return undefined;
+    await ensureSettingsRow(db);
     return db.settings.get(1);
-  }, []);
+  }, [dbReady, db]);
 
   useEffect(() => {
     if (typeof navigator === "undefined" || !navigator.storage?.estimate) {
@@ -67,14 +70,14 @@ export default function SettingsPage() {
   }
 
   async function exportCurrentEvent() {
-    if (currentEventId == null) return;
+    if (currentEventId == null || !db) return;
     try {
-      const data = await buildEventExport(currentEventId, APP_VERSION);
+      const data = await buildEventExport(db, currentEventId, APP_VERSION);
       downloadJson(
         `clerkbid-event-${slug(currentEvent?.name ?? "export")}.json`,
         data
       );
-      await touchBackupDate();
+      await touchBackupDate(db);
       refresh();
       showToast({ kind: "success", message: "Event exported." });
     } catch (e) {
@@ -86,11 +89,12 @@ export default function SettingsPage() {
   }
 
   async function exportAllEvents() {
+    if (!db) return;
     try {
-      const data = await buildFullDatabaseExport(APP_VERSION);
+      const data = await buildFullDatabaseExport(db, APP_VERSION);
       const stamp = new Date().toISOString().slice(0, 10);
       downloadJson(`clerkbid-all-events-${stamp}.json`, data);
-      await touchBackupDate();
+      await touchBackupDate(db);
       refresh();
       showToast({ kind: "success", message: "Full database exported." });
     } catch (e) {
@@ -104,12 +108,12 @@ export default function SettingsPage() {
   async function onImportEventFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     e.target.value = "";
-    if (!file) return;
+    if (!file || !db) return;
     try {
       const text = await file.text();
       const raw = JSON.parse(text) as unknown;
       const payload = parseEventExportPayload(raw);
-      const summary = await importEventFromPayload(payload);
+      const summary = await importEventFromPayload(db, payload);
       await switchEvent(summary.eventId);
       refresh();
       showToast({
@@ -127,12 +131,12 @@ export default function SettingsPage() {
   async function onImportFullFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     e.target.value = "";
-    if (!file) return;
+    if (!file || !db) return;
     try {
       const text = await file.text();
       const raw = JSON.parse(text) as unknown;
       const data = parseFullDatabaseExport(raw);
-      const { imported, failures } = await importFullDatabaseEvents(data);
+      const { imported, failures } = await importFullDatabaseEvents(db, data);
       refresh();
       const msg =
         failures.length === 0
@@ -151,8 +155,8 @@ export default function SettingsPage() {
   }
 
   async function handleClearConfirmed() {
-    if (currentEventId == null) return;
-    await clearEventDataKeepShell(currentEventId);
+    if (currentEventId == null || !db) return;
+    await clearEventDataKeepShell(db, currentEventId);
     setClearOpen(false);
     refresh();
     showToast({
@@ -210,8 +214,9 @@ export default function SettingsPage() {
             onChange={onImportFullFile}
           />
           <p className="text-sm text-muted">
-            All data stays in this browser. JSON files are your backup and
-            transfer path.
+            Event data is stored in this browser per signed-in user — other
+            accounts cannot see it. JSON exports are your backup and transfer
+            path.
             {settingsRow?.lastBackupDate ? (
               <span className="mt-1 block text-xs">
                 Last backup recorded:{" "}

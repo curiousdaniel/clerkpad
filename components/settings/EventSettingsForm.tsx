@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import type { AuctionEvent } from "@/lib/db";
-import { db } from "@/lib/db";
+import { useUserDb } from "@/components/providers/UserDbProvider";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
@@ -14,6 +14,7 @@ export function EventSettingsForm({
   event: AuctionEvent;
   onSaved: () => void;
 }) {
+  const { db } = useUserDb();
   const [organizationName, setOrganizationName] = useState("");
   const [taxRatePct, setTaxRatePct] = useState("0");
   const [currencySymbol, setCurrencySymbol] = useState("$");
@@ -41,7 +42,7 @@ export function EventSettingsForm({
       setError("Tax rate must be a non-negative number (percent).");
       return;
     }
-    if (event.id == null) return;
+    if (event.id == null || !db) return;
     await db.events.update(event.id, {
       organizationName: org,
       taxRate: pct / 100,

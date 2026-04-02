@@ -1,8 +1,8 @@
 "use client";
 
 import { useLiveQuery } from "dexie-react-hooks";
-import { db } from "@/lib/db";
-import type { Bidder } from "@/lib/db";
+import type { AuctionDB, Bidder } from "@/lib/db";
+import { useUserDb } from "@/components/providers/UserDbProvider";
 
 export type BidderRow = Bidder & {
   totalSpent: number;
@@ -10,9 +10,11 @@ export type BidderRow = Bidder & {
 };
 
 export function useBiddersForEvent(eventId: number | null | undefined) {
+  const { db, ready } = useUserDb();
+
   return useLiveQuery(
     async () => {
-      if (eventId == null) return [];
+      if (!ready || !db || eventId == null) return [];
       const bidders = await db.bidders
         .where("eventId")
         .equals(eventId)
@@ -34,11 +36,12 @@ export function useBiddersForEvent(eventId: number | null | undefined) {
         } satisfies BidderRow;
       });
     },
-    [eventId]
+    [ready, db, eventId]
   );
 }
 
 export async function getSuggestedPaddleNumber(
+  db: AuctionDB,
   eventId: number
 ): Promise<number> {
   const all = await db.bidders.where("eventId").equals(eventId).toArray();
@@ -46,6 +49,9 @@ export async function getSuggestedPaddleNumber(
   return Math.max(...all.map((b) => b.paddleNumber)) + 1;
 }
 
-export async function countSalesForBidder(bidderId: number): Promise<number> {
+export async function countSalesForBidder(
+  db: AuctionDB,
+  bidderId: number
+): Promise<number> {
   return db.sales.where("bidderId").equals(bidderId).count();
 }

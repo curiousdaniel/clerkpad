@@ -1,11 +1,11 @@
 import type {
+  AuctionDB,
   AuctionEvent,
   Bidder,
   Invoice,
   Lot,
   Sale,
 } from "@/lib/db";
-import { db } from "@/lib/db";
 import { APP_VERSION } from "@/lib/utils/constants";
 
 export const EXPORT_VERSION = 1;
@@ -55,6 +55,7 @@ function iso(d: Date) {
 }
 
 export async function buildEventExport(
+  db: AuctionDB,
   eventId: number,
   appVersion: string = APP_VERSION
 ): Promise<EventExportPayload> {
@@ -171,13 +172,14 @@ export type FullDatabaseExport = {
 };
 
 export async function buildFullDatabaseExport(
+  db: AuctionDB,
   appVersion: string = APP_VERSION
 ): Promise<FullDatabaseExport> {
   const eventRows = await db.events.orderBy("id").toArray();
   const events: EventExportPayload[] = [];
   for (const e of eventRows) {
     if (e.id != null) {
-      events.push(await buildEventExport(e.id, appVersion));
+      events.push(await buildEventExport(db, e.id, appVersion));
     }
   }
   return {
@@ -228,13 +230,14 @@ export type FullImportResult = {
 
 /** Imports each event as a new event (append). Continues on per-event errors. */
 export async function importFullDatabaseEvents(
+  db: AuctionDB,
   data: FullDatabaseExport
 ): Promise<FullImportResult> {
   const failures: FullImportResult["failures"] = [];
   let imported = 0;
   for (let i = 0; i < data.events.length; i++) {
     try {
-      await importEventFromPayload(data.events[i]);
+      await importEventFromPayload(db, data.events[i]);
       imported++;
     } catch (e) {
       failures.push({
@@ -248,6 +251,7 @@ export async function importFullDatabaseEvents(
 
 /** Creates a new event and inserts related rows with remapped FKs. */
 export async function importEventFromPayload(
+  db: AuctionDB,
   payload: EventExportPayload
 ): Promise<ImportSummary> {
   return db.transaction(

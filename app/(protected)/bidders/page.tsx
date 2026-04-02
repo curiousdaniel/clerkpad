@@ -15,7 +15,7 @@ import {
   type BidderRow,
 } from "@/lib/hooks/useBidders";
 import { useToast } from "@/components/providers/ToastProvider";
-import { db } from "@/lib/db";
+import { useUserDb } from "@/components/providers/UserDbProvider";
 
 const linkSecondary =
   "inline-flex items-center justify-center gap-2 rounded-lg border border-navy/15 bg-surface px-4 py-2 text-sm font-medium text-ink transition hover:border-navy/30 focus:outline-none focus-visible:ring-2 focus-visible:ring-navy focus-visible:ring-offset-2";
@@ -34,6 +34,7 @@ function matchesSearch(b: BidderRow, q: string): boolean {
 }
 
 export default function BiddersPage() {
+  const { db } = useUserDb();
   const { currentEvent, currentEventId } = useCurrentEvent();
   const { showToast } = useToast();
   const [search, setSearch] = useState("");
@@ -130,9 +131,9 @@ export default function BiddersPage() {
         danger
         onClose={() => setDeleteTarget(null)}
         onConfirm={async () => {
-          if (deleteTarget?.id == null) return;
+          if (deleteTarget?.id == null || !db) return;
           const id = deleteTarget.id;
-          const n = await countSalesForBidder(id);
+          const n = await countSalesForBidder(db, id);
           if (n > 0) {
             showToast({
               kind: "error",
