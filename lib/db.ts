@@ -79,6 +79,7 @@ export interface Sale {
   description: string;
   consignor?: string;
   quantity: number;
+  /** Hammer line total (unit hammer × quantity). */
   amount: number;
   clerkInitials: string;
   createdAt: Date;

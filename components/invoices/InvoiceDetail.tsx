@@ -1,6 +1,7 @@
 "use client";
 
 import type { Bidder, Invoice, Sale } from "@/lib/db";
+import { saleUnitHammer } from "@/lib/services/saleLineTotals";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
@@ -108,7 +109,7 @@ export function InvoiceDetailModal({
         ) : null}
 
         <div className="overflow-x-auto rounded-lg border border-navy/10 dark:border-slate-700">
-          <table className="w-full min-w-[400px] text-sm">
+          <table className="w-full min-w-[520px] text-sm">
             <thead className="bg-surface dark:bg-slate-800/80">
               <tr>
                 <th className="px-3 py-2 text-left font-semibold text-navy dark:text-slate-200">
@@ -121,14 +122,17 @@ export function InvoiceDetailModal({
                   Qty
                 </th>
                 <th className="px-3 py-2 text-right font-semibold text-navy dark:text-slate-200">
-                  Amount
+                  Unit
+                </th>
+                <th className="px-3 py-2 text-right font-semibold text-navy dark:text-slate-200">
+                  Line total
                 </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-navy/10 dark:divide-slate-700">
               {sales.length === 0 ? (
                 <tr>
-                  <td colSpan={4} className="px-3 py-4 text-center text-muted">
+                  <td colSpan={5} className="px-3 py-4 text-center text-muted">
                     No line items
                   </td>
                 </tr>
@@ -139,6 +143,9 @@ export function InvoiceDetailModal({
                     <td className="px-3 py-2">{s.description}</td>
                     <td className="px-3 py-2 text-right font-mono">
                       {s.quantity}
+                    </td>
+                    <td className="px-3 py-2 text-right font-mono">
+                      {formatCurrency(saleUnitHammer(s), sym)}
                     </td>
                     <td className="px-3 py-2 text-right font-mono">
                       {formatCurrency(s.amount, sym)}

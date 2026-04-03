@@ -36,7 +36,7 @@ export const DEFAULT_SALE_FIELD_ORDER: SaleFieldId[] = [
 
 const LABELS: Record<SaleFieldId, string> = {
   lot: "Lot number",
-  price: "Hammer / sell price",
+  price: "Hammer per unit",
   paddle: "Paddle number",
   quantity: "Quantity",
   description: "Lot description / title",

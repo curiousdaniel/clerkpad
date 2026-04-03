@@ -12,7 +12,8 @@ export type InvoicePdfLine = {
   displayLotNumber: string;
   description: string;
   quantity: number;
-  amount: number;
+  unitHammer: number;
+  lineHammer: number;
 };
 
 export type InvoicePdfInput = {
@@ -116,21 +117,23 @@ export function renderInvoiceOnDoc(doc: jsPDF, input: InvoicePdfInput): void {
     r.displayLotNumber,
     r.description,
     String(r.quantity),
-    formatCurrency(r.amount, sym),
+    formatCurrency(r.unitHammer, sym),
+    formatCurrency(r.lineHammer, sym),
   ]);
 
   autoTable(doc, {
     startY: y,
-    head: [["Lot #", "Description", "Qty", "Amount"]],
+    head: [["Lot #", "Description", "Qty", "Unit", "Line total"]],
     body,
     theme: "striped",
     headStyles: { fillColor: [30, 58, 95] },
     margin: { left: 14, right: 14 },
     styles: { fontSize: 9 },
     columnStyles: {
-      0: { cellWidth: 24 },
-      2: { halign: "right" },
+      0: { cellWidth: 22 },
+      2: { cellWidth: 14, halign: "right" },
       3: { halign: "right" },
+      4: { halign: "right" },
     },
   });
 

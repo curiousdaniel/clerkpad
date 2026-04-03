@@ -9,6 +9,7 @@ import { useCurrentEvent } from "@/lib/hooks/useCurrentEvent";
 import { useUserDb } from "@/components/providers/UserDbProvider";
 import { useCloudSync } from "@/components/providers/CloudSyncProvider";
 import { ensureSettingsRow } from "@/lib/settings";
+import { saleLineQuantity, saleUnitHammer } from "@/lib/services/saleLineTotals";
 import { formatCurrency } from "@/lib/utils/formatCurrency";
 import { formatDateTime } from "@/lib/utils/formatDate";
 import { dateGetTime } from "@/lib/utils/coerceDate";
@@ -250,6 +251,9 @@ export default function DashboardPage() {
                 <span className="text-ink dark:text-slate-100">{s.description}</span>
                 <span className="font-mono text-gold">
                   {formatCurrency(s.amount, sym)}
+                  {saleLineQuantity(s) > 1
+                    ? ` (${formatCurrency(saleUnitHammer(s), sym)} × ${s.quantity})`
+                    : ""}
                 </span>
                 <span className="font-mono text-muted">
                   Paddle #{s.paddleNumber}

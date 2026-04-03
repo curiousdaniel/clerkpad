@@ -182,12 +182,17 @@ export function SaleForm({
   }, [undoState]);
 
   const priceRaw = sellPrice.trim().replace(/[^0-9.-]/g, "");
-  const hammerPreview = parseFloat(priceRaw);
+  const unitHammerPreview = parseFloat(priceRaw);
+  const qtyPreview = Math.max(1, parseInt(quantity.trim(), 10) || 1);
+  const lineHammerPreview =
+    Number.isFinite(unitHammerPreview) && unitHammerPreview >= 0
+      ? roundMoney(unitHammerPreview * qtyPreview)
+      : NaN;
   const bpPreview =
     buyersPremiumRate > 0 &&
-    Number.isFinite(hammerPreview) &&
-    hammerPreview >= 0
-      ? roundMoney(hammerPreview * (1 + buyersPremiumRate))
+    Number.isFinite(lineHammerPreview) &&
+    lineHammerPreview >= 0
+      ? roundMoney(lineHammerPreview * (1 + buyersPremiumRate))
       : null;
 
   async function autofillFromLot() {
@@ -397,9 +402,9 @@ export function SaleForm({
     }
 
     const priceRawInner = sellPrice.trim().replace(/[^0-9.-]/g, "");
-    const amount = parseFloat(priceRawInner);
-    if (!Number.isFinite(amount) || amount < 0) {
-      setFormError("Enter a valid sell price.");
+    const unitHammer = parseFloat(priceRawInner);
+    if (!Number.isFinite(unitHammer) || unitHammer < 0) {
+      setFormError("Enter a valid hammer price per unit.");
       return;
     }
 
@@ -463,6 +468,8 @@ export function SaleForm({
 
     const bidderId = bidder.id!;
 
+    const lineHammer = roundMoney(unitHammer * qty);
+
     function buildSaleRow(lotId: number): Omit<Sale, "id"> {
       return {
         eventId,
@@ -473,7 +480,7 @@ export function SaleForm({
         description: titleTrim,
         consignor: consignorTrim,
         quantity: qty,
-        amount,
+        amount: lineHammer,
         clerkInitials: initials,
         createdAt: now,
       };
@@ -661,18 +668,27 @@ export function SaleForm({
                 setRef("price")(el);
               }}
               id="sale-price"
-              label={`Hammer / sell price (${currencySymbol})`}
+              label={`Hammer per unit (${currencySymbol})`}
               inputMode="decimal"
               value={sellPrice}
               onChange={(e) => setSellPrice(e.target.value)}
               className="font-mono"
               autoComplete="off"
             />
+            {Number.isFinite(lineHammerPreview) && qtyPreview > 1 ? (
+              <p className="mt-1 text-xs text-muted">
+                Line hammer ({qtyPreview} ×{" "}
+                {formatCurrency(unitHammerPreview, currencySymbol)}):{" "}
+                <span className="font-mono font-medium text-navy dark:text-slate-200">
+                  {formatCurrency(lineHammerPreview, currencySymbol)}
+                </span>
+              </p>
+            ) : null}
             {bpPreview != null ? (
               <p className="mt-1 text-xs text-muted">
                 With {Math.round(buyersPremiumRate * 100)}% buyer&apos;s premium
-                (before tax):{" "}
-                <span className="font-mono font-medium text-navy">
+                (before tax), line:{" "}
+                <span className="font-mono font-medium text-navy dark:text-slate-200">
                   {formatCurrency(bpPreview, currencySymbol)}
                 </span>
               </p>

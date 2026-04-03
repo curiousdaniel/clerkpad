@@ -1,5 +1,6 @@
 import type { AuctionDB, AuctionEvent, Bidder, Invoice, Sale } from "@/lib/db";
 import type { InvoicePdfInput } from "@/lib/services/invoicePdf";
+import { saleUnitHammer } from "@/lib/services/saleLineTotals";
 
 export function roundMoney(n: number): number {
   return Math.round(n * 100) / 100;
@@ -188,7 +189,8 @@ export function toInvoicePdfInput(
       displayLotNumber: s.displayLotNumber,
       description: s.description,
       quantity: s.quantity,
-      amount: s.amount,
+      unitHammer: saleUnitHammer(s),
+      lineHammer: roundMoney(s.amount),
     })),
     hammerSubtotal: invoice.subtotal,
     buyersPremiumAmount: invoice.buyersPremiumAmount,

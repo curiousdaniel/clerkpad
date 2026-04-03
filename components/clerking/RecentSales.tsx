@@ -6,6 +6,7 @@ import { ChevronDown, ChevronRight, Ban } from "lucide-react";
 import type { Sale } from "@/lib/db";
 import { useUserDb } from "@/components/providers/UserDbProvider";
 import { parseLotDisplay } from "@/lib/clerking/lotParse";
+import { saleLineQuantity, saleUnitHammer } from "@/lib/services/saleLineTotals";
 import { formatCurrency } from "@/lib/utils/formatCurrency";
 import { formatDateTime } from "@/lib/utils/formatDate";
 import { Button } from "@/components/ui/Button";
@@ -128,6 +129,9 @@ export function RecentSales({
                         {s.description} —{" "}
                         <span className="text-gold">
                           {formatCurrency(s.amount, currencySymbol)}
+                          {saleLineQuantity(s) > 1
+                            ? ` (${formatCurrency(saleUnitHammer(s), currencySymbol)} × ${s.quantity})`
+                            : ""}
                         </span>
                         {" — "}
                         Paddle #{s.paddleNumber} — Qty {s.quantity} —{" "}

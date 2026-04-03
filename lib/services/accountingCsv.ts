@@ -21,7 +21,7 @@ export type AccountingCsvRow = (string | number)[];
 
 /**
  * One row per sale. Tax is allocated from the bidder’s invoice in proportion to
- * each line’s taxable amount (hammer × (1 + BP rate)).
+ * each line’s taxable amount (line hammer total × (1 + BP rate)).
  */
 export function buildAccountingCsvRows(
   event: AuctionEvent,

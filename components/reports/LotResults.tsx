@@ -87,7 +87,7 @@ export function LotResults({
       "Consignor",
       "Qty",
       "Status",
-      "Winning bid",
+      "Hammer (line)",
       "Winning paddle",
       "Clerk",
     ];
@@ -141,7 +141,7 @@ export function LotResults({
               {th("consignor", "Consignor")}
               {th("qty", "Qty", "right")}
               {th("status", "Status")}
-              {th("bid", "Winning bid", "right")}
+              {th("bid", "Hammer (line)", "right")}
               {th("paddle", "Paddle", "right")}
               {th("clerk", "Clerk")}
             </tr>
