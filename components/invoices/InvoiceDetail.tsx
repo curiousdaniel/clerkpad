@@ -13,12 +13,26 @@ function paymentLabel(value: string | undefined): string {
   return PAYMENT_METHODS.find((p) => p.value === value)?.label ?? value;
 }
 
+function buyersPremiumLineLabel(buyersPremiumRate: number): string {
+  if (buyersPremiumRate <= 0) return "Buyer's premium";
+  const pct = `${(buyersPremiumRate * 100).toFixed(2).replace(/\.?0+$/, "")}%`;
+  return `Buyer's premium (${pct})`;
+}
+
+function taxLineLabel(taxRate: number): string {
+  if (taxRate <= 0) return "Tax";
+  const pct = `${(taxRate * 100).toFixed(2).replace(/\.?0+$/, "")}%`;
+  return `Tax (${pct})`;
+}
+
 export function InvoiceDetailModal({
   open,
   invoice,
   bidder,
   sales,
   currencySymbol,
+  buyersPremiumRate,
+  taxRate,
   onClose,
   onPrint,
   onMarkPaid,
@@ -28,6 +42,8 @@ export function InvoiceDetailModal({
   bidder: Bidder | undefined;
   sales: Sale[];
   currencySymbol: string;
+  buyersPremiumRate: number;
+  taxRate: number;
   onClose: () => void;
   onPrint: () => void;
   onMarkPaid: () => void;
@@ -35,6 +51,8 @@ export function InvoiceDetailModal({
   if (!invoice) return null;
 
   const sym = currencySymbol;
+  const showBpLine =
+    invoice.buyersPremiumAmount > 0 || buyersPremiumRate > 0;
 
   return (
     <Modal
@@ -134,11 +152,19 @@ export function InvoiceDetailModal({
 
         <dl className="space-y-1 border-t border-navy/10 pt-3 text-right font-mono">
           <div className="flex justify-between gap-4">
-            <dt className="text-muted">Subtotal</dt>
+            <dt className="text-muted">Hammer subtotal</dt>
             <dd>{formatCurrency(invoice.subtotal, sym)}</dd>
           </div>
+          {showBpLine ? (
+            <div className="flex justify-between gap-4">
+              <dt className="text-muted">
+                {buyersPremiumLineLabel(buyersPremiumRate)}
+              </dt>
+              <dd>{formatCurrency(invoice.buyersPremiumAmount, sym)}</dd>
+            </div>
+          ) : null}
           <div className="flex justify-between gap-4">
-            <dt className="text-muted">Tax</dt>
+            <dt className="text-muted">{taxLineLabel(taxRate)}</dt>
             <dd>{formatCurrency(invoice.taxAmount, sym)}</dd>
           </div>
           <div className="flex justify-between gap-4 text-base font-semibold text-navy">

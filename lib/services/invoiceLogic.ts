@@ -75,7 +75,8 @@ export async function upsertInvoiceForBidder(
 
   const hammerSubtotal = roundMoney(sales.reduce((a, s) => a + s.amount, 0));
   const bpRate = event.buyersPremiumRate ?? 0;
-  const taxableSubtotal = roundMoney(hammerSubtotal * (1 + bpRate));
+  const buyersPremiumAmount = roundMoney(hammerSubtotal * bpRate);
+  const taxableSubtotal = roundMoney(hammerSubtotal + buyersPremiumAmount);
   const { taxAmount, total } = computeInvoiceFromSubtotal(
     taxableSubtotal,
     event.taxRate
@@ -89,7 +90,8 @@ export async function upsertInvoiceForBidder(
       return { kind: "skipped_paid" };
     }
     await db.invoices.update(existing.id, {
-      subtotal: taxableSubtotal,
+      subtotal: hammerSubtotal,
+      buyersPremiumAmount,
       taxAmount,
       total,
       generatedAt: now,
@@ -103,7 +105,8 @@ export async function upsertInvoiceForBidder(
     eventId,
     bidderId,
     invoiceNumber,
-    subtotal: taxableSubtotal,
+    subtotal: hammerSubtotal,
+    buyersPremiumAmount,
     taxAmount,
     total,
     status: "unpaid",
@@ -172,6 +175,7 @@ export function toInvoicePdfInput(
     invoiceNumber: invoice.invoiceNumber,
     generatedAt: invoice.generatedAt,
     taxRate: event.taxRate,
+    buyersPremiumRate: event.buyersPremiumRate ?? 0,
     currencySymbol: event.currencySymbol,
     bidderName: `${bidder.firstName} ${bidder.lastName}`,
     paddleNumber: bidder.paddleNumber,
@@ -186,7 +190,8 @@ export function toInvoicePdfInput(
       quantity: s.quantity,
       amount: s.amount,
     })),
-    subtotal: invoice.subtotal,
+    hammerSubtotal: invoice.subtotal,
+    buyersPremiumAmount: invoice.buyersPremiumAmount,
     taxAmount: invoice.taxAmount,
     total: invoice.total,
   };

@@ -9,6 +9,7 @@ import type {
 import { APP_VERSION } from "@/lib/utils/constants";
 import { toDate } from "@/lib/utils/coerceDate";
 import { newEventSyncId } from "@/lib/utils/syncId";
+import { roundMoney } from "@/lib/services/invoiceLogic";
 
 export const EXPORT_VERSION = 2;
 export const EXPORT_VERSION_LEGACY = 1;
@@ -290,6 +291,30 @@ export async function importFullDatabaseEvents(
   return { imported, failures };
 }
 
+function invoiceAmountsFromImportPayload(
+  raw: {
+    subtotal: number;
+    taxAmount: number;
+    total: number;
+    buyersPremiumAmount?: number;
+  },
+  eventBuyersPremiumRate: number
+): Pick<Invoice, "subtotal" | "buyersPremiumAmount" | "taxAmount" | "total"> {
+  const bpRate = Math.max(0, eventBuyersPremiumRate);
+  let subtotal = raw.subtotal;
+  let buyersPremiumAmount = raw.buyersPremiumAmount;
+  if (typeof buyersPremiumAmount !== "number" || !Number.isFinite(buyersPremiumAmount)) {
+    const oldTaxable = subtotal;
+    const hammer = roundMoney(oldTaxable / (1 + bpRate));
+    buyersPremiumAmount = roundMoney(oldTaxable - hammer);
+    subtotal = hammer;
+  } else {
+    buyersPremiumAmount = roundMoney(buyersPremiumAmount);
+    subtotal = roundMoney(subtotal);
+  }
+  return { subtotal, buyersPremiumAmount, taxAmount: raw.taxAmount, total: raw.total };
+}
+
 function eventRowFromPayload(
   ev: EventExportEventShape,
   syncId: string,
@@ -316,7 +341,8 @@ function eventRowFromPayload(
 async function insertChildrenForEvent(
   db: AuctionDB,
   eventId: number,
-  payload: EventExportPayload
+  payload: EventExportPayload,
+  eventBuyersPremiumRate: number
 ): Promise<ImportSummary> {
   const bidderMap = new Map<number, number>();
   let bidderIndex = 0;
@@ -369,7 +395,16 @@ async function insertChildrenForEvent(
   }
 
   for (const inv of payload.invoices) {
-    const { legacyBidderId, generatedAt, paymentDate, ...rest } = inv;
+    const {
+      legacyBidderId,
+      generatedAt,
+      paymentDate,
+      subtotal,
+      taxAmount,
+      total,
+      buyersPremiumAmount,
+      ...meta
+    } = inv;
     const bidderId =
       legacyBidderId != null
         ? bidderMap.get(legacyBidderId)
@@ -379,8 +414,13 @@ async function insertChildrenForEvent(
         "Invoice references unknown bidder — export may be incomplete"
       );
     }
+    const amounts = invoiceAmountsFromImportPayload(
+      { subtotal, taxAmount, total, buyersPremiumAmount },
+      eventBuyersPremiumRate
+    );
     await db.invoices.add({
-      ...rest,
+      ...meta,
+      ...amounts,
       eventId,
       bidderId,
       generatedAt: parseDate(generatedAt),
@@ -435,7 +475,7 @@ export async function importEventFromPayload(
         )
       )) as number;
 
-      return insertChildrenForEvent(db, eventId, payload);
+      return insertChildrenForEvent(db, eventId, payload, buyersPremiumRate);
     }
   );
 }
@@ -492,7 +532,7 @@ export async function replaceEventFromPayload(
         )
       );
 
-      return insertChildrenForEvent(db, eventId, payload);
+      return insertChildrenForEvent(db, eventId, payload, buyersPremiumRate);
     }
   );
 }

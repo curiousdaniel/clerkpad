@@ -264,6 +264,8 @@ export default function InvoicesPage() {
         bidder={detailInv?.bidder}
         sales={detailSales ?? []}
         currencySymbol={sym}
+        buyersPremiumRate={currentEvent.buyersPremiumRate ?? 0}
+        taxRate={currentEvent.taxRate}
         onClose={() => setDetailInv(null)}
         onPrint={() => detailInv && void handlePrint(detailInv)}
         onMarkPaid={() => {

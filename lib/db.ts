@@ -30,7 +30,7 @@ export interface AuctionEvent {
   description?: string;
   organizationName: string;
   taxRate: number;
-  /** 0–1, applied to hammer subtotal before sales tax on invoices. */
+  /** 0–1, buyer's premium rate on hammer; invoice rows store premium separately. */
   buyersPremiumRate: number;
   currencySymbol: string;
   /** Stable id for cloud backup / sync (UUID). */
@@ -89,7 +89,10 @@ export interface Invoice {
   eventId: number;
   bidderId: number;
   invoiceNumber: string;
+  /** Sum of hammer / bid line amounts (before buyer's premium). */
   subtotal: number;
+  /** Buyer's premium dollars; tax applies to subtotal + buyersPremiumAmount. */
+  buyersPremiumAmount: number;
   taxAmount: number;
   total: number;
   status: "unpaid" | "paid";
@@ -141,6 +144,35 @@ export class AuctionDB extends Dexie {
           }
         });
       });
+    this.version(3)
+      .stores(STORE_DEF)
+      .upgrade(async (tx) => {
+        const round2 = (n: number) => Math.round(n * 100) / 100;
+        const events = await tx.table("events").toArray();
+        const eventById = new Map<number, Record<string, unknown>>();
+        for (const ev of events) {
+          const id = ev.id as number | undefined;
+          if (id != null) eventById.set(id, ev as Record<string, unknown>);
+        }
+        await tx
+          .table("invoices")
+          .toCollection()
+          .modify((inv: Invoice) => {
+            const row = inv as Invoice & { buyersPremiumAmount?: number };
+            if (typeof row.buyersPremiumAmount === "number") return;
+            const ev = eventById.get(inv.eventId);
+            const bpRateRaw = ev?.buyersPremiumRate;
+            const bpRate =
+              typeof bpRateRaw === "number" && Number.isFinite(bpRateRaw)
+                ? Math.max(0, bpRateRaw)
+                : 0;
+            const oldTaxable = inv.subtotal;
+            const hammer = round2(oldTaxable / (1 + bpRate));
+            const bpAmt = round2(oldTaxable - hammer);
+            row.subtotal = hammer;
+            row.buyersPremiumAmount = bpAmt;
+          });
+      });
   }
 }
 
@@ -162,6 +194,31 @@ export function closeAndClearAuctionDbCache(): void {
     d.close();
   });
   dbInstanceCache.clear();
+}
+
+/** Split pre–v3 invoice.subtotal (hammer + BP) using each event's BP rate. */
+async function normalizeInvoicesMissingBuyersPremium(db: AuctionDB): Promise<void> {
+  const events = await db.events.toArray();
+  const evMap = new Map<number, AuctionEvent>();
+  for (const e of events) {
+    if (e.id != null) evMap.set(e.id, e);
+  }
+  const round2 = (n: number) => Math.round(n * 100) / 100;
+  await db.invoices.toCollection().modify((inv: Invoice) => {
+    const row = inv as Invoice & { buyersPremiumAmount?: number };
+    if (typeof row.buyersPremiumAmount === "number") return;
+    const ev = evMap.get(inv.eventId);
+    const bpRateRaw = ev?.buyersPremiumRate;
+    const bpRate =
+      typeof bpRateRaw === "number" && Number.isFinite(bpRateRaw)
+        ? Math.max(0, bpRateRaw)
+        : 0;
+    const oldTaxable = inv.subtotal;
+    const hammer = round2(oldTaxable / (1 + bpRate));
+    const bpAmt = round2(oldTaxable - hammer);
+    row.subtotal = hammer;
+    row.buyersPremiumAmount = bpAmt;
+  });
 }
 
 /**
@@ -220,6 +277,8 @@ export async function migrateLegacyToUserDb(userDb: AuctionDB): Promise<void> {
         }
       }
     });
+
+    await normalizeInvoicesMissingBuyersPremium(userDb);
 
     await legacy.delete();
   } finally {

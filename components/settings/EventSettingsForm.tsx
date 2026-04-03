@@ -113,8 +113,8 @@ export function EventSettingsForm({
           onChange={(e) => setBuyersPremiumPct(e.target.value)}
         />
         <p className="text-xs text-muted">
-          Applied to hammer subtotal before sales tax on invoices (e.g. 10%
-          adds 10% to the hammer total, then tax runs on that amount).
+          Percent of hammer; shown as its own line on invoices (before tax).
+          Tax applies to hammer plus this premium.
         </p>
         <Input
           id="set-currency"

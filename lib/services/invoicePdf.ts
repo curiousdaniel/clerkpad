@@ -21,6 +21,8 @@ export type InvoicePdfInput = {
   invoiceNumber: string;
   generatedAt: Date;
   taxRate: number;
+  /** Event buyer's premium rate (for label); line amount is in buyersPremiumAmount. */
+  buyersPremiumRate: number;
   currencySymbol: string;
   bidderName: string;
   paddleNumber: number;
@@ -30,7 +32,8 @@ export type InvoicePdfInput = {
   paymentMethod?: string;
   paymentDate?: Date;
   lines: InvoicePdfLine[];
-  subtotal: number;
+  hammerSubtotal: number;
+  buyersPremiumAmount: number;
   taxAmount: number;
   total: number;
 };
@@ -137,16 +140,29 @@ export function renderInvoiceOnDoc(doc: jsPDF, input: InvoicePdfInput): void {
   let ty = finalY + 10;
   const taxPct =
     input.taxRate === 0 ? "0%" : `${(input.taxRate * 100).toFixed(2)}%`;
+  const bpPct =
+    input.buyersPremiumRate === 0
+      ? "0%"
+      : `${(input.buyersPremiumRate * 100).toFixed(2)}%`;
 
   doc.setFont("helvetica", "normal");
   doc.setFontSize(10);
   doc.text(
-    `Subtotal: ${formatCurrency(input.subtotal, sym)}`,
+    `Hammer subtotal: ${formatCurrency(input.hammerSubtotal, sym)}`,
     doc.internal.pageSize.getWidth() - 14,
     ty,
     { align: "right" }
   );
   ty += 5;
+  if (input.buyersPremiumAmount > 0 || input.buyersPremiumRate > 0) {
+    doc.text(
+      `Buyer's premium (${bpPct}): ${formatCurrency(input.buyersPremiumAmount, sym)}`,
+      doc.internal.pageSize.getWidth() - 14,
+      ty,
+      { align: "right" }
+    );
+    ty += 5;
+  }
   doc.text(
     `Tax (${taxPct}): ${formatCurrency(input.taxAmount, sym)}`,
     doc.internal.pageSize.getWidth() - 14,

@@ -32,7 +32,7 @@ export function InvoiceTable({
 
   return (
     <div className="overflow-x-auto rounded-xl border border-navy/10 bg-white dark:border-slate-700 dark:bg-slate-900">
-      <table className="w-full min-w-[880px] text-sm">
+      <table className="w-full min-w-[980px] text-sm">
         <thead className="border-b border-navy/10 bg-surface dark:border-slate-700 dark:bg-slate-800/80">
           <tr>
             <th className="px-3 py-2 text-left font-semibold text-navy dark:text-slate-200">
@@ -42,7 +42,10 @@ export function InvoiceTable({
               Bidder
             </th>
             <th className="px-3 py-2 text-right font-semibold text-navy dark:text-slate-200">
-              Subtotal
+              Hammer
+            </th>
+            <th className="px-3 py-2 text-right font-semibold text-navy dark:text-slate-200">
+              Buyer prem.
             </th>
             <th className="px-3 py-2 text-right font-semibold text-navy dark:text-slate-200">
               Tax
@@ -64,7 +67,7 @@ export function InvoiceTable({
         <tbody className="divide-y divide-navy/10 dark:divide-slate-700">
           {rows.length === 0 ? (
             <tr>
-              <td colSpan={8} className="px-3 py-8 text-center text-muted">
+              <td colSpan={9} className="px-3 py-8 text-center text-muted">
                 No invoices match this filter.
               </td>
             </tr>
@@ -94,6 +97,9 @@ export function InvoiceTable({
                 </td>
                 <td className="px-3 py-2 text-right font-mono">
                   {formatCurrency(inv.subtotal, sym)}
+                </td>
+                <td className="px-3 py-2 text-right font-mono">
+                  {formatCurrency(inv.buyersPremiumAmount, sym)}
                 </td>
                 <td className="px-3 py-2 text-right font-mono">
                   {formatCurrency(inv.taxAmount, sym)}
