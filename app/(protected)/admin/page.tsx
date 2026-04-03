@@ -1,9 +1,11 @@
+import { unstable_noStore as noStore } from "next/cache";
 import { AdminDashboard } from "@/components/admin/AdminDashboard";
 import { fetchAdminUserList } from "@/lib/admin/userStats";
 
 export const dynamic = "force-dynamic";
 
 export default async function AdminPage() {
+  noStore();
   let loadError: string | null = null;
   let users: Awaited<ReturnType<typeof fetchAdminUserList>> = [];
 

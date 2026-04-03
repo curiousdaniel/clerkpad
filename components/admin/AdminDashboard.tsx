@@ -1,6 +1,6 @@
 "use client";
 
-import { startTransition, useState } from "react";
+import { useState } from "react";
 import { signIn } from "next-auth/react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
@@ -85,9 +85,9 @@ export function AdminDashboard({
         }, 0);
         return;
       }
-      startTransition(() => {
-        router.refresh();
-      });
+      // Await refresh so RSC picks up the new user list (startTransition deferred
+      // updates and left stale initialUsers until a full reload).
+      await router.refresh();
     } catch {
       window.setTimeout(() => {
         window.alert("Something went wrong.");
