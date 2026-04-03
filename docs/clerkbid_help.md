@@ -43,3 +43,7 @@ The same page includes **JSON backup** (current event or all events), optional *
 ## Invoice appearance
 
 Under Settings, **Invoice appearance** (account-wide) lets you upload a **default logo** and default **thank-you line** for PDF invoices (you can use `{org}` as a placeholder for the organization name). **Per-event** overrides (logo and footer) apply only to that event and override the account defaults. These assets are **not** included in cloud/JSON export.
+
+## Feedback
+
+If something is confusing, broken, or missing, we want to hear it. Use **[Feedback](/feedback/)** (also linked in the sidebar and app footer) to send questions, bug reports, and **requests for changes or new features**. The AuctionMethod team reads every submission and uses it to improve ClerkBid.

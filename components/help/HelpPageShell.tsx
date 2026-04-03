@@ -46,6 +46,26 @@ export function HelpPageShell({ markdown }: { markdown: string }) {
         description="How to use ClerkBid for your auction event—from setup to invoices and reports."
       />
 
+      <div
+        className="mb-8 rounded-xl border border-gold/35 bg-gradient-to-br from-amber-50/90 to-surface-muted/60 p-4 shadow-sm dark:border-amber-800/40 dark:from-amber-950/35 dark:to-slate-900/50"
+        role="region"
+        aria-label="Send feedback"
+      >
+        <p className="text-sm font-semibold text-navy dark:text-slate-100">
+          Want a change or have a problem?
+        </p>
+        <p className="mt-1 text-sm text-muted dark:text-slate-300">
+          We read every message and use it to fix bugs, clarify the product, and
+          prioritize new features.
+        </p>
+        <Link
+          href="/feedback/"
+          className="mt-3 inline-flex items-center rounded-lg bg-navy px-3 py-2 text-sm font-medium text-white transition hover:bg-navy/90 focus:outline-none focus:ring-2 focus:ring-navy focus:ring-offset-2 dark:bg-slate-100 dark:text-navy dark:hover:bg-white dark:focus:ring-slate-100 dark:focus:ring-offset-slate-950"
+        >
+          Send feedback &amp; requests
+        </Link>
+      </div>
+
       <div className="lg:grid lg:grid-cols-[minmax(0,220px)_minmax(0,1fr)] lg:gap-10 xl:grid-cols-[minmax(0,240px)_minmax(0,1fr)]">
         <div className="mb-6 lg:mb-0">
           <details className="rounded-lg border border-navy/10 bg-surface-muted/50 dark:border-slate-700 lg:hidden">

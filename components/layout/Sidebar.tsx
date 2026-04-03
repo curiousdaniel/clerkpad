@@ -11,6 +11,7 @@ import {
   FileText,
   BarChart3,
   CircleHelp,
+  MessageSquare,
   Settings,
   LogOut,
 } from "lucide-react";
@@ -28,6 +29,7 @@ const nav = [
   { href: "/invoices/", label: "Invoices", icon: FileText },
   { href: "/reports/", label: "Reports", icon: BarChart3 },
   { href: "/help/", label: "Help", icon: CircleHelp },
+  { href: "/feedback/", label: "Feedback", icon: MessageSquare },
   { href: "/settings/", label: "Settings", icon: Settings },
 ];
 

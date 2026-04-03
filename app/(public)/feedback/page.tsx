@@ -55,16 +55,19 @@ export default function FeedbackPage() {
   return (
     <AuthPageFrame>
       <Card className="w-full max-w-lg">
-        <h1 className="text-xl font-bold text-navy">Questions & feedback</h1>
+        <h1 className="text-xl font-bold text-navy">
+          Feedback &amp; change requests
+        </h1>
         <p className="mt-1 text-sm text-muted">
-          Send a note to{" "}
+          Ask questions, report problems, or describe features and workflow
+          changes you&apos;d like. Messages go to{" "}
           <a
             href="mailto:info@auctionmethod.com"
             className="font-medium text-navy underline"
           >
             info@auctionmethod.com
-          </a>
-          . We read every message.
+          </a>{" "}
+          and we read every one to plan improvements.
         </p>
 
         {done ? (
@@ -116,7 +119,7 @@ export default function FeedbackPage() {
                 required
                 minLength={10}
                 maxLength={8000}
-                placeholder="Questions, ideas, or issues using ClerkBid…"
+                placeholder="What would you like changed or added? What went wrong? Be as specific as you can…"
               />
               <p className="mt-1 text-xs text-muted">
                 {message.length.toLocaleString()} / 8,000 characters
@@ -140,9 +143,15 @@ export default function FeedbackPage() {
           </form>
         )}
 
-        <p className="mt-6 text-center text-sm text-muted">
+        <p className="mt-6 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-center text-sm text-muted">
+          <Link href="/dashboard/" className="font-medium text-navy underline">
+            Back to ClerkBid
+          </Link>
+          <span className="text-navy/25" aria-hidden>
+            ·
+          </span>
           <Link href="/" className="font-medium text-navy underline">
-            Back to home
+            Home
           </Link>
         </p>
       </Card>

@@ -3,7 +3,7 @@ import type { Metadata } from "next";
 export const metadata: Metadata = {
   title: "Feedback | ClerkBid",
   description:
-    "Send questions or feedback about ClerkBid to the AuctionMethod team.",
+    "Send feedback, bug reports, and feature or workflow change requests for ClerkBid to the AuctionMethod team.",
 };
 
 export default function FeedbackLayout({

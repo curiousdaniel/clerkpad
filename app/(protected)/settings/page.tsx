@@ -444,6 +444,19 @@ export default function SettingsPage() {
             spotty. You can install it like an app; optional cloud backup is
             available when you&apos;re signed in.
           </p>
+          <p className="rounded-lg border border-gold/30 bg-amber-50/60 px-3 py-2.5 text-muted dark:border-amber-900/40 dark:bg-amber-950/25 dark:text-slate-300">
+            <span className="font-medium text-navy dark:text-slate-100">
+              Your input shapes the product.
+            </span>{" "}
+            Use{" "}
+            <Link
+              href="/feedback/"
+              className="font-medium text-navy underline underline-offset-2 dark:text-sky-300"
+            >
+              Feedback &amp; requests
+            </Link>{" "}
+            for bugs, ideas, and changes you need—we read everything.
+          </p>
           <p className="text-muted">
             Version <span className="font-mono text-ink">{APP_VERSION}</span>
           </p>
@@ -466,7 +479,7 @@ export default function SettingsPage() {
               href="/feedback/"
               className="font-medium text-navy underline underline-offset-2"
             >
-              Feedback
+              Feedback form
             </Link>
           </p>
           <p className="text-muted">

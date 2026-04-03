@@ -9,4 +9,5 @@ export const helpTableOfContents: { id: string; label: string }[] = [
   { id: "reports", label: "Reports" },
   { id: "settings-backups-and-data", label: "Settings backups and data" },
   { id: "invoice-appearance", label: "Invoice appearance" },
+  { id: "feedback", label: "Feedback and change requests" },
 ];
