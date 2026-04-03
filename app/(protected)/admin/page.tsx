@@ -14,6 +14,13 @@ export default async function AdminPage() {
     if (msg.includes("event_cloud_snapshots") && msg.includes("does not exist")) {
       loadError =
         "Database is missing cloud sync tables. Run db/migrate_cloud_sync.sql in Neon, then reload.";
+    } else if (
+      /user_id/i.test(msg) &&
+      /event_cloud_snapshots/i.test(msg) &&
+      (/does not exist/i.test(msg) || /42703/i.test(msg))
+    ) {
+      loadError =
+        "This database uses organization-scoped cloud snapshots, but the app was out of date: it queried event_cloud_snapshots.user_id (removed after migrate_multi_user_org.sql). Deploy the latest build from main; the admin list joins on vendor_id.";
     } else {
       loadError = "Could not load user list. Check database configuration.";
     }

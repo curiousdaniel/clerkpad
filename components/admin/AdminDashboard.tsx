@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { signIn } from "next-auth/react";
 import { useSession } from "next-auth/react";
+import { useRouter } from "next/navigation";
 import { Header } from "@/components/layout/Header";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
@@ -18,7 +19,9 @@ export function AdminDashboard({
   loadError: string | null;
 }) {
   const { data: session, status } = useSession();
+  const router = useRouter();
   const [pendingId, setPendingId] = useState<number | null>(null);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
 
   const showAdmin =
     status === "authenticated" &&
@@ -51,6 +54,33 @@ export function AdminDashboard({
       window.alert("Something went wrong.");
     } finally {
       setPendingId(null);
+    }
+  }
+
+  async function deleteUser(target: AdminUserRow) {
+    const ok = window.confirm(
+      `Permanently delete user ${target.email} (ID ${target.id})?\n\n` +
+        `This cannot be undone. If they are the last member of “${target.vendor_name}”, the organization and its cloud backups will be removed.`
+    );
+    if (!ok) return;
+
+    setDeletingId(target.id);
+    try {
+      const res = await fetch("/api/admin/delete-user/", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: target.id }),
+      });
+      const data = (await res.json()) as { error?: string };
+      if (!res.ok) {
+        window.alert(data.error ?? "Could not delete user.");
+        return;
+      }
+      router.refresh();
+    } catch {
+      window.alert("Something went wrong.");
+    } finally {
+      setDeletingId(null);
     }
   }
 
@@ -96,7 +126,7 @@ export function AdminDashboard({
               <th className="px-4 py-3 text-right">Bidders</th>
               <th className="px-4 py-3 text-right">Sales</th>
               <th className="px-4 py-3">Last sync</th>
-              <th className="px-4 py-3">Action</th>
+              <th className="px-4 py-3">Actions</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-navy/10 dark:divide-slate-700">
@@ -138,14 +168,34 @@ export function AdminDashboard({
                     {isSelf ? (
                       <span className="text-xs text-muted">You</span>
                     ) : (
-                      <Button
-                        type="button"
-                        variant="secondary"
-                        disabled={pendingId != null}
-                        onClick={() => void signInAs(u.id)}
-                      >
-                        {pendingId === u.id ? "Signing in…" : "Sign in as"}
-                      </Button>
+                      <div className="flex flex-col gap-2">
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          disabled={pendingId != null || deletingId != null}
+                          onClick={() => void signInAs(u.id)}
+                        >
+                          {pendingId === u.id ? "Signing in…" : "Sign in as"}
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          disabled={
+                            pendingId != null ||
+                            deletingId != null ||
+                            isSuperAdminUserIdAndEmail(String(u.id), u.email)
+                          }
+                          className="border-red-200 text-red-800 hover:bg-red-50 dark:border-red-900/50 dark:text-red-200 dark:hover:bg-red-950/40"
+                          onClick={() => void deleteUser(u)}
+                          title={
+                            isSuperAdminUserIdAndEmail(String(u.id), u.email)
+                              ? "Super-admin accounts cannot be deleted here."
+                              : undefined
+                          }
+                        >
+                          {deletingId === u.id ? "Deleting…" : "Delete user"}
+                        </Button>
+                      </div>
                     )}
                   </td>
                 </tr>
@@ -159,8 +209,9 @@ export function AdminDashboard({
       </Card>
 
       <p className="mt-6 text-xs text-muted">
-        Impersonation is audited in your server logs. Use only to support
-        customers who expect you to access their account context.
+        Impersonation and user deletion are audited in your server logs. Use
+        only to support customers who expect you to access or manage their
+        account.
       </p>
     </div>
   );

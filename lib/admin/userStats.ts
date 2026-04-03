@@ -86,7 +86,7 @@ export async function fetchAdminUserList(): Promise<AdminUserRow[]> {
       MAX(ecs.updated_at) AS last_cloud_sync
     FROM users u
     INNER JOIN vendors v ON v.id = u.vendor_id
-    LEFT JOIN event_cloud_snapshots ecs ON ecs.user_id = u.id
+    LEFT JOIN event_cloud_snapshots ecs ON ecs.vendor_id = u.vendor_id
     GROUP BY
       u.id,
       u.email,
