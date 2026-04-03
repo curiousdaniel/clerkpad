@@ -12,10 +12,18 @@ export function ImpersonationBanner() {
   async function revert() {
     try {
       const res = await fetch("/api/admin/revert/", { method: "POST" });
-      const data = (await res.json()) as {
-        impersonationToken?: string;
-        error?: string;
-      };
+      const text = await res.text();
+      let data: { impersonationToken?: string; error?: string } = {};
+      try {
+        data = JSON.parse(text) as typeof data;
+      } catch {
+        window.alert(
+          res.ok
+            ? "Invalid response from server."
+            : "Could not return to admin session. Try signing out and back in."
+        );
+        return;
+      }
       if (!res.ok || !data.impersonationToken) {
         window.alert(data.error ?? "Could not return to admin session.");
         return;

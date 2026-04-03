@@ -29,6 +29,15 @@ export function canAccessAdminArea(token: JWT | null | undefined): boolean {
   return isSuperAdminJwt(token);
 }
 
+/**
+ * Revert-to-admin API: only valid while JWT has impersonatedBy (proves an admin
+ * started this session). Must be allowed through middleware separately from
+ * {@link canAccessAdminArea}.
+ */
+export function canAccessAdminRevertApi(token: JWT | null | undefined): boolean {
+  return Boolean(token?.sub && token.impersonatedBy);
+}
+
 export function isSuperAdminSession(session: Session | null): boolean {
   if (!session?.user) return false;
   return isSuperAdminUserIdAndEmail(session.user.id, session.user.email);

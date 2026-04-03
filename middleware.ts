@@ -1,6 +1,9 @@
 import { withAuth } from "next-auth/middleware";
 import { resolveAuthSecret } from "@/lib/auth/secret";
-import { canAccessAdminArea } from "@/lib/auth/superAdmin";
+import {
+  canAccessAdminArea,
+  canAccessAdminRevertApi,
+} from "@/lib/auth/superAdmin";
 
 export default withAuth({
   secret: resolveAuthSecret(),
@@ -19,6 +22,9 @@ export default withAuth({
         return true;
       }
       if (path === "/admin" || path.startsWith("/api/admin")) {
+        if (path === "/api/admin/revert" || path.startsWith("/api/admin/revert/")) {
+          return canAccessAdminRevertApi(token);
+        }
         return canAccessAdminArea(token);
       }
       return !!token;
