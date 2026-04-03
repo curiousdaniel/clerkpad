@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { signIn } from "next-auth/react";
@@ -9,7 +9,18 @@ import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 
-export default function RegisterJoinPage() {
+function RegisterJoinFallback() {
+  return (
+    <AuthPageFrame>
+      <Card className="w-full max-w-md">
+        <h1 className="text-xl font-bold text-navy">Join your organization</h1>
+        <p className="mt-2 text-sm text-muted">Loading…</p>
+      </Card>
+    </AuthPageFrame>
+  );
+}
+
+function RegisterJoinContent() {
   const searchParams = useSearchParams();
   const token = searchParams.get("token")?.trim() ?? "";
 
@@ -199,5 +210,13 @@ export default function RegisterJoinPage() {
         </p>
       </Card>
     </AuthPageFrame>
+  );
+}
+
+export default function RegisterJoinPage() {
+  return (
+    <Suspense fallback={<RegisterJoinFallback />}>
+      <RegisterJoinContent />
+    </Suspense>
   );
 }
