@@ -122,7 +122,7 @@ export function RecentSales({
                         <ChevronRight className="mt-0.5 h-4 w-4 shrink-0 text-muted" />
                       )}
                       <span className="min-w-0 flex-1 font-mono text-xs leading-relaxed text-ink">
-                        <span className="font-semibold text-navy">
+                        <span className="font-semibold text-navy dark:text-slate-200">
                           Lot {s.displayLotNumber}
                         </span>
                         {" — "}

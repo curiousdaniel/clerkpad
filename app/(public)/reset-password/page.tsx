@@ -66,7 +66,10 @@ function ResetPasswordForm() {
           This page needs a valid reset link from your email.
         </p>
         <p className="mt-6 text-center text-sm">
-          <Link href="/forgot-password/" className="font-medium text-navy underline">
+          <Link
+            href="/forgot-password/"
+            className="font-medium text-navy underline dark:text-slate-200"
+          >
             Request a new link
           </Link>
         </p>
@@ -122,7 +125,10 @@ function ResetPasswordForm() {
         </Button>
       </form>
       <p className="mt-6 text-center text-sm text-muted">
-        <Link href="/login/" className="font-medium text-navy underline">
+        <Link
+          href="/login/"
+          className="font-medium text-navy underline dark:text-slate-200"
+        >
           Back to sign in
         </Link>
       </p>

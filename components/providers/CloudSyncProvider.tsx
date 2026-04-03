@@ -12,27 +12,45 @@ import {
 } from "react";
 import { useSession } from "next-auth/react";
 import { ImpersonationBanner } from "@/components/admin/ImpersonationBanner";
-import { useUserDb } from "@/components/providers/UserDbProvider";
+import { AppShell } from "@/components/layout/AppShell";
+import { SyncStatusBar } from "@/components/layout/SyncStatusBar";
+import { Button } from "@/components/ui/Button";
 import { useEventContext } from "@/components/providers/EventProvider";
 import { useToast } from "@/components/providers/ToastProvider";
-import { AppShell } from "@/components/layout/AppShell";
-import { Button } from "@/components/ui/Button";
+import { useUserDb } from "@/components/providers/UserDbProvider";
 import {
   fetchSyncList,
+  pushAllLocalEvents,
   pushCurrentEvent,
+  pullCloudEventsMissingLocally,
   recordSuccessfulPush,
   restoreEventFromCloud,
 } from "@/lib/services/cloudSync";
 import { ensureSettingsRow } from "@/lib/settings";
 import { dateGetTime } from "@/lib/utils/coerceDate";
 
+/** Background pull uses this minimum gap between list fetches (see plan: ~30–60s). */
+const PULL_LIST_THROTTLE_MS = 45_000;
+/** Push all local events on this interval while online (plan: ~20–30s). */
+const PUSH_ALL_INTERVAL_MS = 25_000;
+/** How often to check if the server has a newer backup for the current event. */
+const REMOTE_NEWER_CHECK_MS = 50_000;
+
+type SyncPhase = "idle" | "pushing" | "pulling";
+
 type PushResult = { ok: true } | { ok: false; message: string };
 
-type CloudSyncContextValue = {
+export type CloudSyncContextValue = {
   pushNow: (options?: { force?: boolean }) => Promise<boolean>;
   restoreFromCloud: () => Promise<boolean>;
   lastPushAt: Date | null;
+  lastPullAt: Date | null;
   checking: boolean;
+  online: boolean;
+  syncPhase: SyncPhase;
+  lastSyncError: string | null;
+  /** False when the server reports cloud sync tables missing (503). */
+  cloudSyncAvailable: boolean;
 };
 
 const CloudSyncContext = createContext<CloudSyncContextValue | null>(null);
@@ -48,7 +66,8 @@ export function useCloudSync(): CloudSyncContextValue {
 export function CloudSyncProvider({ children }: { children: ReactNode }) {
   const { status, data: session } = useSession();
   const { db, ready: dbReady } = useUserDb();
-  const { currentEventId, currentEvent, refresh } = useEventContext();
+  const { currentEventId, currentEvent, refresh, switchEvent } =
+    useEventContext();
   const { showToast } = useToast();
 
   const [online, setOnline] = useState(
@@ -58,8 +77,25 @@ export function CloudSyncProvider({ children }: { children: ReactNode }) {
     serverUpdatedAt: string;
   } | null>(null);
   const [lastPushAt, setLastPushAt] = useState<Date | null>(null);
+  const [lastPullAt, setLastPullAt] = useState<Date | null>(null);
   const [checking, setChecking] = useState(false);
-  const pushTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [syncPhase, setSyncPhase] = useState<SyncPhase>("idle");
+  const [lastSyncError, setLastSyncError] = useState<string | null>(null);
+  const [cloudSyncAvailable, setCloudSyncAvailable] = useState(true);
+
+  const lastPullListAttemptRef = useRef(0);
+  const syncCycleLockRef = useRef(false);
+  const syncIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  useEffect(() => {
+    if (!dbReady || !db) return;
+    void (async () => {
+      await ensureSettingsRow(db);
+      const s = await db.settings.get(1);
+      if (s?.lastCloudPushAt) setLastPushAt(new Date(s.lastCloudPushAt));
+      if (s?.lastCloudPullAt) setLastPullAt(new Date(s.lastCloudPullAt));
+    })();
+  }, [db, dbReady]);
 
   const checkRemoteNewer = useCallback(async () => {
     if (
@@ -78,8 +114,10 @@ export function CloudSyncProvider({ children }: { children: ReactNode }) {
       const list = await fetchSyncList();
       if (!list.ok) {
         setRemoteBanner(null);
+        if (list.status === 503) setCloudSyncAvailable(false);
         return;
       }
+      setCloudSyncAvailable(true);
       const mine = list.events.find(
         (e) => e.eventSyncId === currentEvent.syncId
       );
@@ -107,6 +145,98 @@ export function CloudSyncProvider({ children }: { children: ReactNode }) {
     online,
   ]);
 
+  const runPullAndMaybeSwitchEvent = useCallback(async () => {
+    if (status !== "authenticated" || !db || !online) return;
+    const now = Date.now();
+    if (now - lastPullListAttemptRef.current < PULL_LIST_THROTTLE_MS) return;
+    lastPullListAttemptRef.current = now;
+
+    const list = await fetchSyncList();
+    if (!list.ok) {
+      if (list.status === 503) setCloudSyncAvailable(false);
+      return;
+    }
+    setCloudSyncAvailable(true);
+
+    setSyncPhase("pulling");
+    try {
+      const r = await pullCloudEventsMissingLocally(db, list.events);
+      setLastPullAt(new Date());
+      setLastSyncError(null);
+      if (r.imported > 0) {
+        refresh();
+        await ensureSettingsRow(db);
+        const settings = await db.settings.get(1);
+        if (settings?.currentEventId == null) {
+          const all = await db.events.toArray();
+          all.sort(
+            (a, b) => b.updatedAt.getTime() - a.updatedAt.getTime()
+          );
+          const newest = all[0];
+          if (newest?.id != null) await switchEvent(newest.id);
+        }
+      }
+      if (r.fetchFailures > 0 && r.imported === 0) {
+        setLastSyncError("Some cloud events could not be downloaded.");
+      }
+    } catch {
+      setLastSyncError("Could not merge events from cloud.");
+    } finally {
+      setSyncPhase("idle");
+    }
+  }, [status, db, online, refresh, switchEvent]);
+
+  const runPushAllSilent = useCallback(async () => {
+    if (status !== "authenticated" || !db || !online) return;
+    const count = await db.events.count();
+    if (count === 0) return;
+
+    setSyncPhase("pushing");
+    try {
+      const summary = await pushAllLocalEvents(db);
+      if (summary.serverUnavailable) setCloudSyncAvailable(false);
+      if (summary.lastUpdatedAt) {
+        setLastPushAt(new Date(summary.lastUpdatedAt));
+        refresh();
+        setRemoteBanner(null);
+        setLastSyncError(null);
+      }
+      if (
+        summary.failCount > 0 &&
+        summary.okCount === 0 &&
+        !summary.serverUnavailable
+      ) {
+        setLastSyncError("Cloud backup failed. Try again when online.");
+      }
+      if (summary.conflictCount > 0) {
+        await checkRemoteNewer();
+      }
+    } catch {
+      setLastSyncError("Cloud backup failed. Try again.");
+    } finally {
+      setSyncPhase("idle");
+    }
+  }, [status, db, online, refresh, checkRemoteNewer]);
+
+  const runBackgroundSyncCycle = useCallback(async () => {
+    if (syncCycleLockRef.current) return;
+    if (status !== "authenticated" || !dbReady || !db || !online) return;
+    syncCycleLockRef.current = true;
+    try {
+      await runPullAndMaybeSwitchEvent();
+      await runPushAllSilent();
+    } finally {
+      syncCycleLockRef.current = false;
+    }
+  }, [
+    status,
+    dbReady,
+    db,
+    online,
+    runPullAndMaybeSwitchEvent,
+    runPushAllSilent,
+  ]);
+
   useEffect(() => {
     const fn = () => setOnline(navigator.onLine);
     window.addEventListener("online", fn);
@@ -123,18 +253,46 @@ export function CloudSyncProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const onVis = () => {
-      if (document.visibilityState === "visible") void checkRemoteNewer();
+      if (document.visibilityState !== "visible") return;
+      void checkRemoteNewer();
+      void runBackgroundSyncCycle();
     };
     document.addEventListener("visibilitychange", onVis);
     return () => document.removeEventListener("visibilitychange", onVis);
-  }, [checkRemoteNewer]);
+  }, [checkRemoteNewer, runBackgroundSyncCycle]);
 
   useEffect(() => {
-    const id = setInterval(() => void checkRemoteNewer(), 90_000);
+    const onOnline = () => {
+      void runBackgroundSyncCycle();
+    };
+    window.addEventListener("online", onOnline);
+    return () => window.removeEventListener("online", onOnline);
+  }, [runBackgroundSyncCycle]);
+
+  useEffect(() => {
+    const id = setInterval(() => void checkRemoteNewer(), REMOTE_NEWER_CHECK_MS);
     return () => clearInterval(id);
   }, [checkRemoteNewer]);
 
-  const runPush = useCallback(
+  useEffect(() => {
+    if (syncIntervalRef.current) {
+      clearInterval(syncIntervalRef.current);
+      syncIntervalRef.current = null;
+    }
+    if (status !== "authenticated" || !dbReady || !db || !online) {
+      return;
+    }
+    syncIntervalRef.current = setInterval(() => {
+      void runBackgroundSyncCycle();
+    }, PUSH_ALL_INTERVAL_MS);
+    const t = setTimeout(() => void runBackgroundSyncCycle(), 3_000);
+    return () => {
+      if (syncIntervalRef.current) clearInterval(syncIntervalRef.current);
+      clearTimeout(t);
+    };
+  }, [status, db, dbReady, online, runBackgroundSyncCycle]);
+
+  const runPushCurrent = useCallback(
     async (options?: { force?: boolean }): Promise<PushResult> => {
       if (
         status !== "authenticated" ||
@@ -155,6 +313,7 @@ export function CloudSyncProvider({ children }: { children: ReactNode }) {
           });
           refresh();
           setRemoteBanner(null);
+          setLastSyncError(null);
           return { ok: true };
         }
         if (result.conflict) {
@@ -165,6 +324,7 @@ export function CloudSyncProvider({ children }: { children: ReactNode }) {
               "A newer backup exists on the server. Restore from cloud or push to overwrite.",
           };
         }
+        if (result.status === 503) setCloudSyncAvailable(false);
         return {
           ok: false,
           message:
@@ -179,55 +339,99 @@ export function CloudSyncProvider({ children }: { children: ReactNode }) {
     [status, db, currentEventId, online, refresh, checkRemoteNewer]
   );
 
-  useEffect(() => {
-    if (pushTimerRef.current) {
-      clearInterval(pushTimerRef.current);
-      pushTimerRef.current = null;
-    }
-    if (
-      status !== "authenticated" ||
-      !db ||
-      currentEventId == null ||
-      !online
-    ) {
-      return;
-    }
-    pushTimerRef.current = setInterval(() => {
-      void runPush();
-    }, 45_000);
-    const t = setTimeout(() => void runPush(), 3_000);
-    return () => {
-      if (pushTimerRef.current) clearInterval(pushTimerRef.current);
-      clearTimeout(t);
-    };
-  }, [status, db, currentEventId, online, runPush]);
-
   const pushNow = useCallback(
     async (options?: { force?: boolean }) => {
-      const r = await runPush(options);
-      if (r.ok) {
-        showToast({ kind: "success", message: "Saved to cloud backup." });
-        return true;
+      if (status !== "authenticated" || !db || !online) {
+        showToast({
+          kind: "error",
+          message: "You must be online to back up to the cloud.",
+        });
+        return false;
       }
-      showToast({ kind: "error", message: r.message });
-      return false;
+      const count = await db.events.count();
+      if (count === 0) {
+        showToast({
+          kind: "error",
+          message: "Create an event before backing up to the cloud.",
+        });
+        return false;
+      }
+      setSyncPhase("pushing");
+      try {
+        const summary = await pushAllLocalEvents(db, options);
+        if (summary.serverUnavailable) setCloudSyncAvailable(false);
+        if (summary.lastUpdatedAt) {
+          setLastPushAt(new Date(summary.lastUpdatedAt));
+          refresh();
+          setRemoteBanner(null);
+        }
+        if (summary.serverUnavailable) {
+          showToast({
+            kind: "error",
+            message: "Cloud backup is not set up on the server yet.",
+          });
+          return false;
+        }
+        if (summary.failCount === 0) {
+          if (summary.conflictCount > 0) {
+            showToast({
+              kind: "success",
+              message: `${summary.okCount} event(s) saved. ${summary.conflictCount} have a newer server backup — use the banner or Settings to resolve.`,
+            });
+          } else {
+            showToast({
+              kind: "success",
+              message: `Saved ${summary.okCount} event(s) to cloud backup.`,
+            });
+          }
+          setLastSyncError(null);
+          return true;
+        }
+        if (summary.okCount > 0) {
+          showToast({
+            kind: "success",
+            message: `Partial backup: ${summary.okCount} saved, ${summary.failCount} failed.`,
+          });
+          setLastSyncError(null);
+          return true;
+        }
+        showToast({
+          kind: "error",
+          message: "Cloud backup failed. Try again.",
+        });
+        return false;
+      } catch {
+        showToast({ kind: "error", message: "Cloud backup failed. Try again." });
+        return false;
+      } finally {
+        setSyncPhase("idle");
+      }
     },
-    [runPush, showToast]
+    [status, db, online, refresh, showToast]
   );
 
   const restoreFromCloud = useCallback(async () => {
     if (!db || currentEventId == null || !currentEvent?.syncId) return false;
     try {
-      const r = await restoreEventFromCloud(db, currentEventId, currentEvent.syncId);
+      const r = await restoreEventFromCloud(
+        db,
+        currentEventId,
+        currentEvent.syncId
+      );
       if (!r.ok) {
         showToast({ kind: "error", message: "Could not restore from cloud." });
         return false;
       }
       await ensureSettingsRow(db);
       await db.settings.update(1, { lastCloudPullAt: new Date(r.updatedAt) });
+      setLastPullAt(new Date(r.updatedAt));
       refresh();
       setRemoteBanner(null);
-      showToast({ kind: "success", message: "Restored event from cloud backup." });
+      setLastSyncError(null);
+      showToast({
+        kind: "success",
+        message: "Restored event from cloud backup.",
+      });
       return true;
     } catch {
       showToast({ kind: "error", message: "Restore failed." });
@@ -238,22 +442,40 @@ export function CloudSyncProvider({ children }: { children: ReactNode }) {
   const dismissBanner = useCallback(() => setRemoteBanner(null), []);
 
   const forcePush = useCallback(async () => {
-    const r = await runPush({ force: true });
+    const r = await runPushCurrent({ force: true });
     if (r.ok) {
-      showToast({ kind: "success", message: "Cloud backup updated from this device." });
+      showToast({
+        kind: "success",
+        message: "Cloud backup updated from this device.",
+      });
     } else {
       showToast({ kind: "error", message: r.message });
     }
-  }, [runPush, showToast]);
+  }, [runPushCurrent, showToast]);
 
   const ctxValue = useMemo<CloudSyncContextValue>(
     () => ({
       pushNow,
       restoreFromCloud,
       lastPushAt,
+      lastPullAt,
       checking,
+      online,
+      syncPhase,
+      lastSyncError,
+      cloudSyncAvailable,
     }),
-    [pushNow, restoreFromCloud, lastPushAt, checking]
+    [
+      pushNow,
+      restoreFromCloud,
+      lastPushAt,
+      lastPullAt,
+      checking,
+      online,
+      syncPhase,
+      lastSyncError,
+      cloudSyncAvailable,
+    ]
   );
 
   const impersonationBanner =
@@ -266,7 +488,9 @@ export function CloudSyncProvider({ children }: { children: ReactNode }) {
         role="status"
       >
         <p>
-          <span className="font-semibold text-navy">Newer cloud backup</span>{" "}
+          <span className="font-semibold text-navy dark:text-slate-100">
+            Newer cloud backup
+          </span>{" "}
           for this event (server{" "}
           {new Date(remoteBanner.serverUpdatedAt).toLocaleString()}). Restore to
           use it, or push to replace the server copy.
@@ -295,7 +519,9 @@ export function CloudSyncProvider({ children }: { children: ReactNode }) {
 
   return (
     <CloudSyncContext.Provider value={ctxValue}>
-      <AppShell topBanner={topBanner}>{children}</AppShell>
+      <AppShell topBanner={topBanner} syncStatusBar={<SyncStatusBar />}>
+        {children}
+      </AppShell>
     </CloudSyncContext.Provider>
   );
 }

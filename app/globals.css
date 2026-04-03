@@ -54,3 +54,44 @@ html.dark[data-high-contrast="true"] .border-navy\/15,
 html.dark[data-high-contrast="true"] .border-navy\/20 {
   border-color: rgb(248 250 252 / 0.5) !important;
 }
+
+/*
+ * Dark / high-contrast: Tailwind `text-ink` is near-black and overrides
+ * inherited body text, so labels and body copy stayed illegible on dark UI.
+ */
+html.dark .text-ink {
+  color: rgb(226 232 240);
+}
+
+html.dark .text-ink\/90 {
+  color: rgb(226 232 240 / 0.9);
+}
+
+html.dark .hover\:text-ink:hover {
+  color: rgb(226 232 240);
+}
+
+html.dark[data-high-contrast="true"] .text-ink,
+html.dark[data-high-contrast="true"] .text-ink\/90 {
+  color: #ffffff !important;
+}
+
+html.dark[data-high-contrast="true"] .hover\:text-ink:hover {
+  color: #ffffff !important;
+}
+
+/*
+ * Headings that use `text-navy` without a `dark:text-*` pair read as very dark
+ * on slate backgrounds (not quite black, but low contrast).
+ */
+html.dark h1.text-navy:not([class*="dark:text-"]),
+html.dark h2.text-navy:not([class*="dark:text-"]),
+html.dark h3.text-navy:not([class*="dark:text-"]) {
+  color: rgb(241 245 249);
+}
+
+html.dark[data-high-contrast="true"] h1.text-navy:not([class*="dark:text-"]),
+html.dark[data-high-contrast="true"] h2.text-navy:not([class*="dark:text-"]),
+html.dark[data-high-contrast="true"] h3.text-navy:not([class*="dark:text-"]) {
+  color: #ffffff !important;
+}

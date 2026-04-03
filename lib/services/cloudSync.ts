@@ -2,6 +2,7 @@ import type { AuctionDB } from "@/lib/db";
 import { ensureSettingsRow } from "@/lib/settings";
 import {
   buildEventExport,
+  importEventFromPayload,
   parseEventExportPayload,
   replaceEventFromPayload,
   type EventExportPayload,
@@ -113,4 +114,107 @@ export async function recordSuccessfulPush(
   await db.events.update(eventId, { lastCloudPushAt: t });
   await ensureSettingsRow(db);
   await db.settings.update(1, { lastCloudPushAt: t });
+}
+
+/**
+ * Import every cloud snapshot whose syncId is not already present locally.
+ * Used so a second device/browser can hydrate from the server after login.
+ * Pass the result of `fetchSyncList()` (when `ok`) so the list is not fetched twice.
+ */
+export async function pullCloudEventsMissingLocally(
+  db: AuctionDB,
+  listEntries: SyncListEntry[]
+): Promise<{
+  imported: number;
+  alreadyLocal: number;
+  fetchFailures: number;
+}> {
+  let imported = 0;
+  let alreadyLocal = 0;
+  let fetchFailures = 0;
+  let latestPullAt: Date | null = null;
+
+  for (const entry of listEntries) {
+    const existing = await db.events
+      .where("syncId")
+      .equals(entry.eventSyncId)
+      .first();
+    if (existing) {
+      alreadyLocal += 1;
+      continue;
+    }
+
+    const snap = await fetchEventSnapshot(entry.eventSyncId);
+    if (!snap.ok) {
+      fetchFailures += 1;
+      continue;
+    }
+
+    const summary = await importEventFromPayload(db, snap.payload);
+    const serverTime = new Date(snap.updatedAt);
+    await db.events.update(summary.eventId, {
+      lastCloudPullAt: serverTime,
+      updatedAt: new Date(),
+    });
+    latestPullAt = serverTime;
+    imported += 1;
+  }
+
+  if (latestPullAt != null) {
+    await ensureSettingsRow(db);
+    await db.settings.update(1, { lastCloudPullAt: latestPullAt });
+  }
+
+  return { imported, alreadyLocal, fetchFailures };
+}
+
+export type PushAllSummary = {
+  okCount: number;
+  conflictCount: number;
+  failCount: number;
+  /** True if any failure was HTTP 503 (cloud tables / not configured). */
+  serverUnavailable: boolean;
+  /** Latest server updatedAt from any successful push, for UI. */
+  lastUpdatedAt: string | null;
+};
+
+/**
+ * Push a snapshot for every local event. Continues on per-event failure.
+ * On 409 conflict, skips that event (caller may run restore for current event separately).
+ */
+export async function pushAllLocalEvents(
+  db: AuctionDB,
+  options?: { force?: boolean }
+): Promise<PushAllSummary> {
+  const rows = await db.events.toArray();
+  let okCount = 0;
+  let conflictCount = 0;
+  let failCount = 0;
+  let serverUnavailable = false;
+  let lastUpdatedAt: string | null = null;
+
+  for (const ev of rows) {
+    const id = ev.id;
+    if (id == null) continue;
+
+    const result = await pushCurrentEvent(db, id, options);
+    if (result.ok) {
+      okCount += 1;
+      await recordSuccessfulPush(db, id, result.updatedAt);
+      lastUpdatedAt = result.updatedAt;
+    } else if (result.conflict) {
+      conflictCount += 1;
+    } else {
+      failCount += 1;
+      if (result.status === 503) serverUnavailable = true;
+    }
+  }
+
+  return {
+    okCount,
+    conflictCount,
+    failCount,
+    serverUnavailable,
+    lastUpdatedAt,
+  };
 }

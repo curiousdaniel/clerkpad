@@ -72,7 +72,9 @@ export function LotLookup({ eventId }: { eventId: number }) {
 
   return (
     <Card className="!p-4">
-      <h3 className="text-sm font-semibold text-navy">Lot lookup</h3>
+      <h3 className="text-sm font-semibold text-navy dark:text-slate-100">
+        Lot lookup
+      </h3>
       <p className="mt-1 text-xs text-muted">
         Enter lot # (e.g. 12 or 12A) to see status and description.
       </p>
@@ -101,7 +103,9 @@ export function LotLookup({ eventId }: { eventId: number }) {
       </div>
       {result ? (
         <div className="mt-4 rounded-lg border border-navy/10 bg-surface/50 p-3 text-sm dark:border-slate-700 dark:bg-slate-800/40">
-          <p className="font-mono font-semibold text-navy">{result.display}</p>
+          <p className="font-mono font-semibold text-navy dark:text-slate-100">
+            {result.display}
+          </p>
           {result.lot ? (
             <>
               <p className="mt-1 text-ink">{result.lot.description}</p>
@@ -159,7 +163,7 @@ export function LotLookup({ eventId }: { eventId: number }) {
                           <ChevronRight className="h-4 w-4" />
                         )}
                       </span>
-                      <span className="shrink-0 font-mono text-sm font-semibold text-navy">
+                      <span className="shrink-0 font-mono text-sm font-semibold text-navy dark:text-slate-100">
                         {lot.displayLotNumber}
                       </span>
                       <span className="shrink-0">

@@ -69,7 +69,7 @@ export default function LoginPage() {
               </label>
               <Link
                 href="/forgot-password/"
-                className="text-xs font-medium text-navy underline"
+                className="text-xs font-medium text-navy underline dark:text-slate-200"
               >
                 Forgot password?
               </Link>
@@ -90,28 +90,31 @@ export default function LoginPage() {
         </form>
         <p className="mt-6 text-center text-sm text-muted">
           No account?{" "}
-          <Link href="/register/" className="font-medium text-navy underline">
+          <Link
+            href="/register/"
+            className="font-medium text-navy underline dark:text-slate-200"
+          >
             Register your organization
           </Link>
         </p>
         <p className="mt-4 text-center text-xs text-muted">
           <Link
             href="/user-agreement/"
-            className="underline underline-offset-2 hover:text-ink"
+            className="underline underline-offset-2 hover:text-ink dark:text-slate-300 dark:hover:text-slate-100"
           >
             User agreement
           </Link>
-          <span className="mx-2 text-navy/20">·</span>
+          <span className="mx-2 text-navy/20 dark:text-slate-600">·</span>
           <Link
             href="/privacy-policy/"
-            className="underline underline-offset-2 hover:text-ink"
+            className="underline underline-offset-2 hover:text-ink dark:text-slate-300 dark:hover:text-slate-100"
           >
             Privacy policy
           </Link>
-          <span className="mx-2 text-navy/20">·</span>
+          <span className="mx-2 text-navy/20 dark:text-slate-600">·</span>
           <Link
             href="/feedback/"
-            className="underline underline-offset-2 hover:text-ink"
+            className="underline underline-offset-2 hover:text-ink dark:text-slate-300 dark:hover:text-slate-100"
           >
             Feedback
           </Link>

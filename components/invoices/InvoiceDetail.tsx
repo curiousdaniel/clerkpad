@@ -174,7 +174,7 @@ export function InvoiceDetailModal({
             <dt className="text-muted">{taxLineLabel(taxRate)}</dt>
             <dd>{formatCurrency(invoice.taxAmount, sym)}</dd>
           </div>
-          <div className="flex justify-between gap-4 text-base font-semibold text-navy">
+          <div className="flex justify-between gap-4 text-base font-semibold text-navy dark:text-slate-100">
             <dt>Total</dt>
             <dd>{formatCurrency(invoice.total, sym)}</dd>
           </div>

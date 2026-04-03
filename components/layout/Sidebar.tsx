@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect } from "react";
 import { usePathname } from "next/navigation";
 import {
   LayoutDashboard,
@@ -15,6 +16,7 @@ import {
   Settings,
   Shield,
   LogOut,
+  X,
 } from "lucide-react";
 import { signOut, useSession } from "next-auth/react";
 import { isSuperAdminUserIdAndEmail } from "@/lib/auth/superAdmin";
@@ -35,9 +37,25 @@ const nav = [
   { href: "/settings/", label: "Settings", icon: Settings },
 ];
 
-export function Sidebar() {
+type SidebarProps = {
+  id?: string;
+  /** When false on viewports below `md`, sidebar is off-canvas. Desktop ignores this. */
+  mobileOpen?: boolean;
+  /** Called after navigation on mobile and from the close control. */
+  onClose?: () => void;
+};
+
+export function Sidebar({
+  id = "app-sidebar",
+  mobileOpen = false,
+  onClose,
+}: SidebarProps) {
   const pathname = usePathname();
   const { data: session, status } = useSession();
+
+  useEffect(() => {
+    onClose?.();
+  }, [pathname, onClose]);
 
   const showAdminLink =
     status === "authenticated" &&
@@ -55,22 +73,47 @@ export function Sidebar() {
     nav[nav.length - 1]!,
   ];
 
+  const handleNavClick = () => {
+    onClose?.();
+  };
+
   return (
-    <aside className="flex h-full w-60 shrink-0 flex-col border-r border-navy/10 bg-surface dark:border-slate-700 dark:bg-slate-900">
+    <aside
+      id={id}
+      className={`fixed inset-y-0 left-0 z-40 flex h-full w-[min(100vw-3rem,15rem)] max-w-[15rem] shrink-0 flex-col border-r border-navy/10 bg-surface transition-transform duration-200 ease-out dark:border-slate-700 dark:bg-slate-900 md:relative md:z-0 md:h-full md:w-60 md:max-w-none md:translate-x-0 ${
+        mobileOpen
+          ? "translate-x-0"
+          : "-translate-x-full pointer-events-none md:pointer-events-auto"
+      }`}
+    >
       <div className="border-b border-navy/10 p-4 dark:border-slate-700">
-        <Link href="/dashboard/" className="block">
-          <span className="text-lg font-bold tracking-tight text-navy dark:text-slate-100">
-            Clerk<span className="text-gold">Bid</span>
-          </span>
-          <span className="mt-0.5 block text-xs text-muted dark:text-slate-400">
-            Auction clerking
-          </span>
-        </Link>
+        <div className="flex items-start justify-between gap-2">
+          <Link
+            href="/dashboard/"
+            className="block min-w-0 flex-1"
+            onClick={handleNavClick}
+          >
+            <span className="text-lg font-bold tracking-tight text-navy dark:text-slate-100">
+              Clerk<span className="text-gold">Bid</span>
+            </span>
+            <span className="mt-0.5 block text-xs text-muted dark:text-slate-400">
+              Auction clerking
+            </span>
+          </Link>
+          <button
+            type="button"
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-muted hover:bg-white/80 hover:text-ink dark:hover:bg-slate-800 dark:hover:text-slate-100 md:hidden"
+            aria-label="Close menu"
+            onClick={onClose}
+          >
+            <X className="h-5 w-5" aria-hidden />
+          </button>
+        </div>
         <div className="mt-4">
           <EventSwitcher />
         </div>
       </div>
-      <nav className="flex-1 space-y-0.5 p-3" aria-label="Main">
+      <nav className="flex-1 space-y-0.5 overflow-y-auto p-3" aria-label="Main">
         {mainNav.map(({ href, label, icon: Icon }) => {
           const p = (pathname ?? "/").replace(/\/$/, "") || "/";
           const h = href.replace(/\/$/, "") || "/";
@@ -79,6 +122,7 @@ export function Sidebar() {
             <Link
               key={href}
               href={href}
+              onClick={handleNavClick}
               className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition ${
                 active
                   ? "bg-white text-navy shadow-sm ring-1 ring-navy/10 dark:bg-slate-800 dark:text-slate-100 dark:ring-slate-600"

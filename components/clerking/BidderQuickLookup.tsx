@@ -26,7 +26,9 @@ export function BidderQuickLookup({ eventId }: { eventId: number }) {
 
   return (
     <div className="space-y-3">
-      <h3 className="text-sm font-semibold text-navy">Bidder lookup</h3>
+      <h3 className="text-sm font-semibold text-navy dark:text-slate-100">
+        Bidder lookup
+      </h3>
       <Input
         id="bidder-lookup-paddle"
         label="Paddle #"
@@ -38,7 +40,7 @@ export function BidderQuickLookup({ eventId }: { eventId: number }) {
       />
       {match ? (
         <div className="rounded-lg border border-navy/15 bg-surface px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-800/60">
-          <p className="font-medium text-navy">
+          <p className="font-medium text-navy dark:text-slate-100">
             {match.firstName} {match.lastName}
           </p>
           {match.phone ? (

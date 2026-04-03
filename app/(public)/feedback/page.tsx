@@ -63,7 +63,7 @@ export default function FeedbackPage() {
           changes you&apos;d like. Messages go to{" "}
           <a
             href="mailto:info@auctionmethod.com"
-            className="font-medium text-navy underline"
+            className="font-medium text-navy underline dark:text-slate-200"
           >
             info@auctionmethod.com
           </a>{" "}
@@ -144,13 +144,19 @@ export default function FeedbackPage() {
         )}
 
         <p className="mt-6 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-center text-sm text-muted">
-          <Link href="/dashboard/" className="font-medium text-navy underline">
+          <Link
+            href="/dashboard/"
+            className="font-medium text-navy underline dark:text-slate-200"
+          >
             Back to ClerkBid
           </Link>
-          <span className="text-navy/25" aria-hidden>
+          <span className="text-navy/25 dark:text-slate-600" aria-hidden>
             ·
           </span>
-          <Link href="/" className="font-medium text-navy underline">
+          <Link
+            href="/"
+            className="font-medium text-navy underline dark:text-slate-200"
+          >
             Home
           </Link>
         </p>

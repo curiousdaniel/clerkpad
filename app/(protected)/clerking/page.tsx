@@ -56,7 +56,7 @@ export default function ClerkingPage() {
           </Card>
           <div className="mt-6">
             <Card>
-              <h2 className="mb-4 text-lg font-semibold text-navy">
+              <h2 className="mb-4 text-lg font-semibold text-navy dark:text-slate-100">
                 Recent sales
               </h2>
               <RecentSales

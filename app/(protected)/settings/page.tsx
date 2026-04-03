@@ -336,7 +336,7 @@ export default function SettingsPage() {
                 }}
               />
               <span>
-                <span className="font-medium text-navy">
+                <span className="font-medium text-navy dark:text-slate-100">
                   Email me a monthly JSON backup
                 </span>
                 <span className="mt-0.5 block text-xs text-muted">
@@ -439,7 +439,10 @@ export default function SettingsPage() {
         <h2 className="mb-3 text-lg font-semibold text-navy dark:text-slate-100">About</h2>
         <Card className="space-y-3 text-sm">
           <p>
-            <span className="font-semibold text-navy">ClerkBid</span> — auction
+            <span className="font-semibold text-navy dark:text-slate-100">
+              ClerkBid
+            </span>{" "}
+            — auction
             clerking for live sales, designed to work even when the network is
             spotty. You can install it like an app; optional cloud backup is
             available when you&apos;re signed in.
@@ -463,21 +466,21 @@ export default function SettingsPage() {
           <p className="text-muted">
             <Link
               href="/user-agreement/"
-              className="font-medium text-navy underline underline-offset-2"
+              className="font-medium text-navy underline underline-offset-2 dark:text-sky-300"
             >
               User agreement
             </Link>
-            <span className="mx-2 text-navy/25">·</span>
+            <span className="mx-2 text-navy/25 dark:text-slate-600">·</span>
             <Link
               href="/privacy-policy/"
-              className="font-medium text-navy underline underline-offset-2"
+              className="font-medium text-navy underline underline-offset-2 dark:text-sky-300"
             >
               Privacy policy
             </Link>
-            <span className="mx-2 text-navy/25">·</span>
+            <span className="mx-2 text-navy/25 dark:text-slate-600">·</span>
             <Link
               href="/feedback/"
-              className="font-medium text-navy underline underline-offset-2"
+              className="font-medium text-navy underline underline-offset-2 dark:text-sky-300"
             >
               Feedback form
             </Link>

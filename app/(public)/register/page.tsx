@@ -119,14 +119,14 @@ export default function RegisterPage() {
           By creating an account, you agree to the{" "}
           <Link
             href="/user-agreement/"
-            className="font-medium text-navy underline underline-offset-2"
+            className="font-medium text-navy underline underline-offset-2 dark:text-sky-300"
           >
             User agreement
           </Link>{" "}
           and{" "}
           <Link
             href="/privacy-policy/"
-            className="font-medium text-navy underline underline-offset-2"
+            className="font-medium text-navy underline underline-offset-2 dark:text-sky-300"
           >
             Privacy policy
           </Link>
@@ -138,7 +138,10 @@ export default function RegisterPage() {
       </form>
         <p className="mt-6 text-center text-sm text-muted">
           Already have an account?{" "}
-          <Link href="/login/" className="font-medium text-navy underline">
+          <Link
+            href="/login/"
+            className="font-medium text-navy underline dark:text-slate-200"
+          >
             Sign in
           </Link>
         </p>

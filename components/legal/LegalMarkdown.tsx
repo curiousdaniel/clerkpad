@@ -2,8 +2,10 @@
 
 import ReactMarkdown from "react-markdown";
 
-const h1 = "text-3xl font-bold tracking-tight text-navy first:mt-0 mt-10 mb-4";
-const h2 = "text-xl font-semibold text-navy mt-8 mb-3 border-b border-navy/10 pb-2";
+const h1 =
+  "text-3xl font-bold tracking-tight text-navy first:mt-0 mt-10 mb-4 dark:text-slate-100";
+const h2 =
+  "text-xl font-semibold text-navy mt-8 mb-3 border-b border-navy/10 pb-2 dark:border-slate-700 dark:text-slate-100";
 const p = "text-sm leading-relaxed text-ink mb-4";
 const ul = "mb-4 list-disc space-y-2 pl-5 text-sm text-ink";
 const ol = "mb-4 list-decimal space-y-2 pl-5 text-sm text-ink";
@@ -28,7 +30,7 @@ export function LegalMarkdown({ content }: { content: string }) {
             return (
               <a
                 href={href}
-                className="font-medium text-navy underline decoration-navy/30 underline-offset-2 hover:decoration-navy"
+                className="font-medium text-navy underline decoration-navy/30 underline-offset-2 hover:decoration-navy dark:text-sky-300 dark:decoration-sky-400/50 dark:hover:decoration-sky-300"
                 {...(external
                   ? { target: "_blank", rel: "noopener noreferrer" }
                   : {})}
