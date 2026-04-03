@@ -35,12 +35,20 @@ describe("compareLotsCatalogOrder", () => {
 });
 
 describe("pickNextSuggestedLotDisplay", () => {
-  it("returns first unsold or passed when no after-sale hint", () => {
+  it("returns first unsold when no after-sale hint", () => {
     const sorted = [
       mk(1, "", "sold"),
       mk(2, "", "unsold"),
       mk(3, "", "sold"),
       mk(5, "", "unsold"),
+    ].sort(compareLotsCatalogOrder);
+    expect(pickNextSuggestedLotDisplay(sorted, null)).toBe("2");
+  });
+
+  it("does not suggest passed lots", () => {
+    const sorted = [
+      mk(1, "", "passed"),
+      mk(2, "", "unsold"),
     ].sort(compareLotsCatalogOrder);
     expect(pickNextSuggestedLotDisplay(sorted, null)).toBe("2");
   });
@@ -81,10 +89,12 @@ describe("pickNextSuggestedLotDisplay", () => {
     expect(pickNextSuggestedLotDisplay(sorted, "2")).toBeNull();
   });
 
-  it("includes passed as a suggestion candidate", () => {
-    const sorted = [mk(1, "", "sold"), mk(2, "", "passed")].sort(
-      compareLotsCatalogOrder
-    );
-    expect(pickNextSuggestedLotDisplay(sorted, "1")).toBe("2");
+  it("skips passed lots when walking after a sale", () => {
+    const sorted = [
+      mk(1, "", "sold"),
+      mk(2, "", "passed"),
+      mk(3, "", "unsold"),
+    ].sort(compareLotsCatalogOrder);
+    expect(pickNextSuggestedLotDisplay(sorted, "1")).toBe("3");
   });
 });

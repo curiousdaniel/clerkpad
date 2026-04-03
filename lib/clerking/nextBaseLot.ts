@@ -12,7 +12,7 @@ export function compareLotsCatalogOrder(a: Lot, b: Lot): number {
 }
 
 function isNextSuggestionCandidate(lot: Lot): boolean {
-  return lot.status === "unsold" || lot.status === "passed";
+  return lot.status === "unsold";
 }
 
 function lotMatchesParsedDisplay(

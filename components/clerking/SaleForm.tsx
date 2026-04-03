@@ -285,6 +285,96 @@ export function SaleForm({
     }
   }
 
+  async function passLotNoSale() {
+    if (!db) return;
+    setFormError(null);
+    setUndoState(null);
+
+    const parsed = parseLotDisplay(lotNumber);
+    if (!parsed) {
+      setFormError("Enter a valid lot number to pass (e.g. 1 or 1A).");
+      return;
+    }
+
+    const initials = clerkInitials.trim().toUpperCase().slice(0, 3);
+    if (initials.length < 2) {
+      setFormError("Clerk initials are required (2–3 characters).");
+      return;
+    }
+
+    const existingLot = await findLotByEventBaseAndSuffix(
+      db,
+      eventId,
+      parsed.base,
+      parsed.suffix
+    );
+
+    if (existingLot?.id == null) {
+      setFormError(
+        "No catalog lot matches that number. Import or add the lot first."
+      );
+      return;
+    }
+
+    if (existingLot.status === "withdrawn") {
+      setFormError("Cannot pass — lot is withdrawn.");
+      return;
+    }
+
+    if (existingLot.status === "sold") {
+      setFormError("Cannot pass — lot is already marked sold.");
+      return;
+    }
+
+    const salesCount = await db.sales
+      .where("lotId")
+      .equals(existingLot.id)
+      .count();
+    if (salesCount > 0) {
+      setFormError("Cannot pass — this lot has a sale recorded.");
+      return;
+    }
+
+    const displayStr =
+      formatLotDisplayFromInput(lotNumber) ?? existingLot.displayLotNumber;
+    const titleTrim = title.trim();
+    const notesTrim = lotNotes.trim();
+    const consignorTrim = consignor.trim();
+    const qty = Math.max(1, parseInt(quantity.trim(), 10) || 1);
+    const now = new Date();
+
+    await db.lots.update(existingLot.id, {
+      status: "passed",
+      description: titleTrim || existingLot.description,
+      consignor: consignorTrim || undefined,
+      notes: notesTrim || undefined,
+      quantity: qty,
+      updatedAt: now,
+    });
+
+    try {
+      sessionStorage.setItem(CLERK_KEY, initials);
+    } catch {
+      /* ignore */
+    }
+
+    showToast({
+      kind: "success",
+      message: `Lot ${displayStr} marked passed (no sale).`,
+    });
+
+    setPassOutEnabled(false);
+    setTitle("");
+    setConsignor("");
+    setLotNotes("");
+    setQuantity("1");
+    setSellPrice("");
+    setPaddleNumber("");
+
+    await refreshLotSuggestion(displayStr);
+    focusField("lot");
+  }
+
   async function submitSale(shiftEnter: boolean) {
     if (!db) return;
     setFormError(null);
@@ -783,6 +873,17 @@ export function SaleForm({
         onChange={setPassOutEnabled}
       />
 
+      <div className="flex flex-wrap items-end gap-3">
+        <Button type="button" variant="secondary" onClick={() => void passLotNoSale()}>
+          Pass lot (no sale)
+        </Button>
+        <p className="max-w-xl text-xs text-muted">
+          Marks this catalog lot as passed when it does not sell. Passed lots are
+          skipped by the next-lot suggestion. Requires clerk initials; does not
+          record a sale or use hammer price / paddle.
+        </p>
+      </div>
+
       {undoState && undoSecondsLeft > 0 ? (
         <div className="flex flex-wrap items-center gap-2 rounded-lg border border-navy/15 bg-surface px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-800/60">
           <span className="text-muted">
@@ -797,7 +898,7 @@ export function SaleForm({
       <p className="text-xs text-muted">
         Enter records the sale (normal or pass-out per checkbox). Tab order:{" "}
         {tabOrderHelpFragment(fieldOrder)}, then next-lot suggestion, pass out,
-        undo (when shown), then Enter to submit.
+        pass lot (no sale), undo (when shown), then Enter to submit.
       </p>
 
       <button type="submit" className="sr-only">
