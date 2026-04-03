@@ -2,7 +2,11 @@
 
 ClerkBid runs in your browser and stores auction data on **this device** (IndexedDB) for your signed-in account. Pick an **event** in the sidebar to work with bidders, lots, clerking, invoices, and reports. Switch events anytime; each event has its own catalog and sales.
 
-If you use **cloud backup/sync** (optional, from [Settings](/settings/)), event data can be pushed to your account on the server. Invoice **logo images** and some branding fields stay **local only** and are not included in JSON export.
+If you use **cloud backup/sync** (optional, from [Settings](/settings/)), event snapshots are stored on the server **for your whole organization**—everyone who signs in under the same vendor shares the same cloud copies, so clerk and cashier can use different logins and devices. Invoice **logo images** and some branding fields stay **local only** and are not included in JSON export.
+
+**Organization & team** (Settings): an **admin** can invite teammates with a secure link (clerk or cashier role). Invited people complete sign-up on the join page; they do not create a separate organization.
+
+**Offline and multiple devices:** while offline, each device keeps its own copy; changes are not visible to teammates until you reconnect and sync. If two devices both change data offline, you may need **Restore from cloud** or **Overwrite cloud copy** in Settings after reconnect. At a venue with poor connectivity, a **phone hotspot** or local Wi‑Fi with internet often works better than expecting devices to sync without any shared network path to the server.
 
 ## Events
 

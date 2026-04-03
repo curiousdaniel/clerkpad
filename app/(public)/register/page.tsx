@@ -61,9 +61,11 @@ export default function RegisterPage() {
       <Card className="w-full max-w-md">
         <h1 className="text-xl font-bold text-navy">Register your organization</h1>
         <p className="mt-1 text-sm text-muted">
-          Creates your vendor workspace. You can invite others later using the
-          same registration flow with a new email (each organization registers
-          once).
+          Creates your organization workspace. After you sign in, an admin can
+          invite teammates from{" "}
+          <strong className="text-navy dark:text-slate-200">Settings → Organization &amp; team</strong>{" "}
+          so clerk and cashier each use their own login while sharing cloud
+          backups.
         </p>
         <form className="mt-6 space-y-4" onSubmit={handleSubmit}>
           {error ? (

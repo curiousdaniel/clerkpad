@@ -34,10 +34,10 @@ export async function GET(req: Request) {
 
     for (const u of users) {
       const { rows: snaps } = await sql<{ payload: unknown }>`
-        SELECT payload
+        SELECT DISTINCT ON (event_sync_id) payload
         FROM event_cloud_snapshots
-        WHERE user_id = ${u.id}
-        ORDER BY updated_at DESC
+        WHERE vendor_id = (SELECT vendor_id FROM users WHERE id = ${u.id})
+        ORDER BY event_sync_id, updated_at DESC
       `;
 
       if (snaps.length === 0) {

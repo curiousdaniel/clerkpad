@@ -20,10 +20,29 @@ CREATE TABLE IF NOT EXISTS users (
   first_name VARCHAR(255) NOT NULL,
   last_name VARCHAR(255) NOT NULL,
   vendor_id INTEGER NOT NULL REFERENCES vendors (id) ON DELETE CASCADE,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  org_role VARCHAR(20) NOT NULL DEFAULT 'admin',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CONSTRAINT users_org_role_check CHECK (org_role IN ('admin', 'clerk', 'cashier'))
 );
 
 CREATE INDEX IF NOT EXISTS idx_users_vendor_id ON users (vendor_id);
+
+CREATE TABLE IF NOT EXISTS vendor_invites (
+  id SERIAL PRIMARY KEY,
+  vendor_id INTEGER NOT NULL REFERENCES vendors (id) ON DELETE CASCADE,
+  email VARCHAR(255) NOT NULL,
+  org_role VARCHAR(20) NOT NULL,
+  token_hash VARCHAR(64) NOT NULL,
+  expires_at TIMESTAMPTZ NOT NULL,
+  created_by_user_id INTEGER REFERENCES users (id) ON DELETE SET NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  consumed_at TIMESTAMPTZ,
+  CONSTRAINT vendor_invites_org_role_check CHECK (org_role IN ('admin', 'clerk', 'cashier')),
+  CONSTRAINT vendor_invites_token_hash_unique UNIQUE (token_hash)
+);
+
+CREATE INDEX IF NOT EXISTS idx_vendor_invites_vendor_id ON vendor_invites (vendor_id);
+CREATE INDEX IF NOT EXISTS idx_vendor_invites_email_lower ON vendor_invites (lower(email));
 
 CREATE TABLE IF NOT EXISTS password_reset_tokens (
   id SERIAL PRIMARY KEY,
@@ -38,15 +57,16 @@ CREATE INDEX IF NOT EXISTS idx_password_reset_user_id ON password_reset_tokens (
 
 CREATE TABLE IF NOT EXISTS event_cloud_snapshots (
   id SERIAL PRIMARY KEY,
-  user_id INTEGER NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+  vendor_id INTEGER NOT NULL REFERENCES vendors (id) ON DELETE CASCADE,
   event_sync_id UUID NOT NULL,
+  last_push_user_id INTEGER REFERENCES users (id) ON DELETE SET NULL,
   payload JSONB NOT NULL,
   payload_version INTEGER NOT NULL DEFAULT 2,
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  UNIQUE (user_id, event_sync_id)
+  UNIQUE (vendor_id, event_sync_id)
 );
 
-CREATE INDEX IF NOT EXISTS idx_event_cloud_snapshots_user_id ON event_cloud_snapshots (user_id);
+CREATE INDEX IF NOT EXISTS idx_event_cloud_snapshots_vendor_id ON event_cloud_snapshots (vendor_id);
 
 CREATE TABLE IF NOT EXISTS user_sync_preferences (
   user_id INTEGER PRIMARY KEY REFERENCES users (id) ON DELETE CASCADE,

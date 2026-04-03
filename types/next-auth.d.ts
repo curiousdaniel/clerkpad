@@ -8,6 +8,8 @@ declare module "next-auth" {
       email?: string | null;
       name?: string | null;
       vendorId: string;
+      /** admin | clerk | cashier */
+      orgRole: string;
     };
     expires: string;
     /** Present when super admin is signed in as another user. */
@@ -17,6 +19,7 @@ declare module "next-auth" {
   interface User {
     id: string;
     vendorId: string;
+    orgRole: string;
     /** Set by admin-impersonate provider when acting as a non-admin user. */
     impersonatedBy?: string;
   }
@@ -25,6 +28,7 @@ declare module "next-auth" {
 declare module "next-auth/jwt" {
   interface JWT extends DefaultJWT {
     vendorId?: string;
+    orgRole?: string;
     /** Super-admin user id who started impersonation. */
     impersonatedBy?: string;
   }

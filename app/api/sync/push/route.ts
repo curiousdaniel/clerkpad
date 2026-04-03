@@ -17,7 +17,8 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
     }
     const userId = parseInt(session.user.id, 10);
-    if (!Number.isFinite(userId)) {
+    const vendorId = parseInt(session.user.vendorId, 10);
+    if (!Number.isFinite(userId) || !Number.isFinite(vendorId)) {
       return NextResponse.json({ error: "Invalid session." }, { status: 401 });
     }
 
@@ -57,7 +58,7 @@ export async function POST(req: Request) {
     if (!body.force) {
       const { rows: existing } = await sql<{ updated_at: Date }>`
         SELECT updated_at FROM event_cloud_snapshots
-        WHERE user_id = ${userId} AND event_sync_id = ${eventSyncId}::uuid
+        WHERE vendor_id = ${vendorId} AND event_sync_id = ${eventSyncId}::uuid
         LIMIT 1
       `;
       const row = existing[0];
@@ -77,12 +78,13 @@ export async function POST(req: Request) {
 
     const { rows } = await sql<{ updated_at: Date }>`
       INSERT INTO event_cloud_snapshots
-        (user_id, event_sync_id, payload, payload_version, updated_at)
+        (vendor_id, event_sync_id, last_push_user_id, payload, payload_version, updated_at)
       VALUES
-        (${userId}, ${eventSyncId}::uuid, ${payloadJson}::jsonb, ${EXPORT_VERSION}, NOW())
-      ON CONFLICT (user_id, event_sync_id) DO UPDATE SET
+        (${vendorId}, ${eventSyncId}::uuid, ${userId}, ${payloadJson}::jsonb, ${EXPORT_VERSION}, NOW())
+      ON CONFLICT (vendor_id, event_sync_id) DO UPDATE SET
         payload = EXCLUDED.payload,
         payload_version = EXCLUDED.payload_version,
+        last_push_user_id = EXCLUDED.last_push_user_id,
         updated_at = NOW()
       RETURNING updated_at
     `;
@@ -102,6 +104,15 @@ export async function POST(req: Request) {
         {
           error:
             "Database is missing cloud sync tables. Run db/migrate_cloud_sync.sql in Neon.",
+        },
+        { status: 503 }
+      );
+    }
+    if (msg.includes("vendor_id") || msg.includes("unique")) {
+      return NextResponse.json(
+        {
+          error:
+            "Database needs migration for shared organization backups. Run db/migrate_multi_user_org.sql in Neon.",
         },
         { status: 503 }
       );

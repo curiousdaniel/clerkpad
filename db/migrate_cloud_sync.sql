@@ -1,4 +1,6 @@
 -- Run once in Neon SQL Editor for existing databases (after users table exists).
+-- For multi-user organizations and vendor-scoped shared backups, also run
+-- db/migrate_multi_user_org.sql after this (or use db/schema.sql on greenfield installs).
 
 CREATE TABLE IF NOT EXISTS event_cloud_snapshots (
   id SERIAL PRIMARY KEY,

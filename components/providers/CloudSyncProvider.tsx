@@ -221,7 +221,7 @@ export function CloudSyncProvider({ children }: { children: ReactNode }) {
       } else if (count > 0 && !summary.serverUnavailable) {
         if (summary.conflictCount > 0 && summary.okCount === 0) {
           setLastSyncError(
-            "Cloud backup blocked (server has newer data). Open Settings → Sync now or Restore from cloud."
+            "Cloud backup blocked — another device or teammate saved a newer backup. Settings → Restore from cloud, or Overwrite cloud copy if this device should win."
           );
         } else if (summary.failCount > 0 && summary.okCount === 0) {
           setLastSyncError("Cloud backup failed. Try Settings → Sync now.");
@@ -309,7 +309,7 @@ export function CloudSyncProvider({ children }: { children: ReactNode }) {
         showToast({
           kind: "error",
           message:
-            "Cloud backup conflict: open Settings and use Restore from cloud or Overwrite cloud copy, then sign out again.",
+            "Cloud conflict (someone else may have saved newer data). Open Settings → Restore from cloud or Overwrite cloud copy, then sign out again.",
         });
       } else {
         showToast({
@@ -481,7 +481,7 @@ export function CloudSyncProvider({ children }: { children: ReactNode }) {
           return {
             ok: false,
             message:
-              "A newer backup exists on the server. Restore from cloud or push to overwrite.",
+              "A newer backup is on the server (another device or teammate). Restore from cloud or push to overwrite.",
           };
         }
         if (result.status === 503) setCloudSyncAvailable(false);
@@ -536,7 +536,7 @@ export function CloudSyncProvider({ children }: { children: ReactNode }) {
           if (summary.conflictCount > 0) {
             showToast({
               kind: "success",
-              message: `${summary.okCount} event(s) saved. ${summary.conflictCount} have a newer server backup — use the banner or Settings to resolve.`,
+              message: `${summary.okCount} event(s) saved. ${summary.conflictCount} conflict(s): another copy on the server is newer — use the banner or Settings (Restore / Overwrite).`,
             });
           } else {
             showToast({

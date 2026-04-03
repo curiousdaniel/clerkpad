@@ -75,8 +75,8 @@ export async function POST(req: Request) {
 
     try {
       await sql`
-        INSERT INTO users (email, password_hash, first_name, last_name, vendor_id)
-        VALUES (${email}, ${passwordHash}, ${firstName}, ${lastName}, ${vendorId})
+        INSERT INTO users (email, password_hash, first_name, last_name, vendor_id, org_role)
+        VALUES (${email}, ${passwordHash}, ${firstName}, ${lastName}, ${vendorId}, 'admin')
       `;
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
@@ -119,13 +119,14 @@ export async function POST(req: Request) {
     }
     if (
       code === "42703" ||
+      /column "org_role"/i.test(msg) ||
       /column "first_name"/i.test(msg) ||
       /column "last_name"/i.test(msg)
     ) {
       return NextResponse.json(
         {
           error:
-            "Database needs a one-time update. In Neon SQL Editor, run the script db/migrate_users_first_last.sql from the ClerkBid repo, then try again.",
+            "Database needs a one-time update. In Neon SQL Editor, run db/migrate_users_first_last.sql and db/migrate_multi_user_org.sql from the ClerkBid repo, then try again.",
         },
         { status: 503 }
       );

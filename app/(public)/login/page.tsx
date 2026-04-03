@@ -97,6 +97,10 @@ export default function LoginPage() {
             Register your organization
           </Link>
         </p>
+        <p className="mt-2 text-center text-xs text-muted">
+          Invited by a teammate? Open the join link your admin copied from
+          Settings (don&apos;t use &quot;Register your organization&quot;).
+        </p>
         <p className="mt-4 text-center text-xs text-muted">
           <Link
             href="/user-agreement/"

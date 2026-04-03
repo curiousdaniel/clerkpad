@@ -34,8 +34,10 @@ export const authOptions: NextAuthOptions = {
           first_name: string;
           last_name: string;
           vendor_id: number;
+          org_role: string;
         }>`
-          SELECT id, email, password_hash, first_name, last_name, vendor_id
+          SELECT id, email, password_hash, first_name, last_name, vendor_id,
+            COALESCE(org_role, 'admin') AS org_role
           FROM users
           WHERE email = ${email}
           LIMIT 1
@@ -55,6 +57,7 @@ export const authOptions: NextAuthOptions = {
           email: user.email,
           name: displayName,
           vendorId: String(user.vendor_id),
+          orgRole: user.org_role,
         };
       },
     }),
@@ -98,8 +101,10 @@ export const authOptions: NextAuthOptions = {
             first_name: string;
             last_name: string;
             vendor_id: number;
+            org_role: string;
           }>`
-            SELECT id, email, first_name, last_name, vendor_id
+            SELECT id, email, first_name, last_name, vendor_id,
+              COALESCE(org_role, 'admin') AS org_role
             FROM users
             WHERE id = ${row.subject_user_id}
             LIMIT 1
@@ -116,6 +121,7 @@ export const authOptions: NextAuthOptions = {
             email: subject.email,
             name: displayName,
             vendorId: String(subject.vendor_id),
+            orgRole: subject.org_role,
           };
 
           if (isSuperAdminUserRow(subject)) {
@@ -137,6 +143,7 @@ export const authOptions: NextAuthOptions = {
       if (user) {
         token.sub = user.id;
         token.vendorId = user.vendorId;
+        token.orgRole = user.orgRole;
         token.email = user.email;
         token.name = user.name;
         if (user.impersonatedBy) {
@@ -151,6 +158,7 @@ export const authOptions: NextAuthOptions = {
       if (session.user) {
         session.user.id = token.sub ?? "";
         session.user.vendorId = (token.vendorId as string) ?? "";
+        session.user.orgRole = (token.orgRole as string) || "admin";
         session.user.email = token.email as string;
         session.user.name = token.name as string | null;
       }

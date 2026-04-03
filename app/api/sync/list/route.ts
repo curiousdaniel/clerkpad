@@ -12,8 +12,8 @@ export async function GET() {
     if (!session?.user?.id) {
       return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
     }
-    const userId = parseInt(session.user.id, 10);
-    if (!Number.isFinite(userId)) {
+    const vendorId = parseInt(session.user.vendorId, 10);
+    if (!Number.isFinite(vendorId)) {
       return NextResponse.json({ error: "Invalid session." }, { status: 401 });
     }
 
@@ -23,7 +23,7 @@ export async function GET() {
     }>`
       SELECT event_sync_id::text AS event_sync_id, updated_at
       FROM event_cloud_snapshots
-      WHERE user_id = ${userId}
+      WHERE vendor_id = ${vendorId}
       ORDER BY updated_at DESC
     `;
 
@@ -36,6 +36,15 @@ export async function GET() {
   } catch (e) {
     console.error("[sync/list]", e);
     const msg = e instanceof Error ? e.message : String(e);
+    if (msg.includes("vendor_id")) {
+      return NextResponse.json(
+        {
+          error:
+            "Database needs migration for shared organization backups. Run db/migrate_multi_user_org.sql in Neon.",
+        },
+        { status: 503 }
+      );
+    }
     if (msg.includes("event_cloud_snapshots") || msg.includes("does not exist")) {
       return NextResponse.json(
         {

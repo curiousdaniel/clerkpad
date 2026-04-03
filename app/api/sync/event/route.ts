@@ -15,8 +15,8 @@ export async function GET(req: Request) {
     if (!session?.user?.id) {
       return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
     }
-    const userId = parseInt(session.user.id, 10);
-    if (!Number.isFinite(userId)) {
+    const vendorId = parseInt(session.user.vendorId, 10);
+    if (!Number.isFinite(vendorId)) {
       return NextResponse.json({ error: "Invalid session." }, { status: 401 });
     }
 
@@ -32,7 +32,7 @@ export async function GET(req: Request) {
     const { rows } = await sql<{ payload: unknown; updated_at: Date }>`
       SELECT payload, updated_at
       FROM event_cloud_snapshots
-      WHERE user_id = ${userId} AND event_sync_id = ${syncId}::uuid
+      WHERE vendor_id = ${vendorId} AND event_sync_id = ${syncId}::uuid
       LIMIT 1
     `;
 
@@ -53,6 +53,15 @@ export async function GET(req: Request) {
         {
           error:
             "Database is missing cloud sync tables. Run db/migrate_cloud_sync.sql in Neon.",
+        },
+        { status: 503 }
+      );
+    }
+    if (msg.includes("vendor_id")) {
+      return NextResponse.json(
+        {
+          error:
+            "Database needs migration for shared organization backups. Run db/migrate_multi_user_org.sql in Neon.",
         },
         { status: 503 }
       );

@@ -40,8 +40,10 @@ export function SyncStatusBar() {
         className="mx-auto max-w-6xl px-4 py-2 text-xs text-rose-900 dark:text-rose-200"
         role="status"
       >
-        You&apos;re offline — changes are saved on this device only; cloud sync
-        is paused until you reconnect.
+        You&apos;re offline — changes stay on this device only; cloud sync is
+        paused. If teammates are online, their devices won&apos;t see your edits
+        until you reconnect and sync. Two devices both offline can diverge; use
+        Restore from cloud or Overwrite in Settings after reconnect if needed.
       </div>
     );
   }

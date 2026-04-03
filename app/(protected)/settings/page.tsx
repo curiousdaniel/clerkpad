@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { EventSettingsForm } from "@/components/settings/EventSettingsForm";
 import { GlobalInvoiceBrandingCard } from "@/components/settings/GlobalInvoiceBrandingCard";
+import { OrganizationTeamCard } from "@/components/settings/OrganizationTeamCard";
 import { ClearEventDataDialog } from "@/components/settings/ClearEventDataDialog";
 import { useCurrentEvent } from "@/lib/hooks/useCurrentEvent";
 import { usePwaInstall } from "@/lib/hooks/usePwaInstall";
@@ -206,6 +207,8 @@ export default function SettingsPage() {
         }}
       />
 
+      <OrganizationTeamCard />
+
       {currentEvent && currentEventId != null ? (
         <EventSettingsForm
           event={currentEvent}
@@ -227,10 +230,11 @@ export default function SettingsPage() {
         <h2 className="mb-3 text-lg font-semibold text-navy dark:text-slate-100">Cloud backup</h2>
         <Card className="space-y-4">
           <p className="text-sm text-muted">
-            While you&apos;re signed in, we can keep a copy of the current
-            event tied to your account so you can continue on another device or
-            recover if this browser is cleared. Use &quot;Sync now&quot; after
-            important changes.
+            While you&apos;re signed in, we keep a cloud copy of each event for
+            your <strong className="font-medium text-navy dark:text-slate-200">whole organization</strong>{" "}
+            (everyone with your vendor account sees the same backups). Use
+            &quot;Sync now&quot; after important changes, especially if multiple
+            people work the same sale.
           </p>
           {currentEvent ? (
             <p className="text-xs text-muted">

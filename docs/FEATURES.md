@@ -10,6 +10,7 @@ This document summarizes product-facing capabilities of **ClerkBid** (auction cl
 - **Progressive Web App (PWA)** — Installable from the browser; supports offline-oriented workflows and quick launch from the home screen or dock.
 - **Per-account local database** — Auction data for each signed-in user is stored in **IndexedDB** on the device (Dexie), scoped by user id.
 - **Multi-tenant by organization** — Each account belongs to an **organization (vendor)** with a name and slug; users are tied to one vendor.
+- **Team members (shared cloud)** — Organization **admins** invite additional users (clerk / cashier roles) by link from Settings. All users in the same vendor share **one cloud backup per event** so multiple devices can stay in sync when online.
 - **Multi-event workflow** — Operations are scoped to a **currently selected event**. The sidebar **event switcher** changes context for bidders, consignors, clerking, invoices, and reports.
 - **Dark and light UI** — Interface supports light/dark/system appearance and related display options (see Accessibility).
 - **Vercel Analytics** — Anonymous usage analytics may be collected when deployed on Vercel (project configuration).
@@ -18,7 +19,8 @@ This document summarizes product-facing capabilities of **ClerkBid** (auction cl
 
 ## Authentication and account
 
-- **Self-serve registration** — Create an account with email, password, name, and organization name; creates vendor + user records server-side.
+- **Self-serve registration** — Create an account with email, password, name, and organization name; creates vendor + user records server-side (first user is the organization **admin**).
+- **Invite-based join** — Admins generate a time-limited invite link so teammates register with their own email and password into the same organization (no duplicate vendor).
 - **Email + password sign-in** — Credentials-based sessions (JWT), with configurable session lifetime.
 - **Forgot password** — Request a reset flow delivered by email (when email is configured).
 - **Reset password** — Complete password change via token link from email.
@@ -129,12 +131,12 @@ This document summarizes product-facing capabilities of **ClerkBid** (auction cl
 
 ## Cloud sync (optional)
 
-- **Server-side snapshots** — Event payloads stored per user and event sync id (JSON matching export shape).
-- **Push** — Upload current event snapshot from the device (with conflict detection vs server timestamp).
+- **Server-side snapshots** — Event payloads stored **per organization (vendor)** and event sync id (JSON matching export shape), shared by every user in that vendor.
+- **Push** — Upload current event snapshot from the device (with conflict detection vs server timestamp; last write wins at the snapshot level when both sides edit while online).
 - **Pull / restore** — Replace local event data from the latest server snapshot when newer.
 - **Event list API** — Discover which events have cloud copies and timestamps.
-- **Conflict awareness** — UI banner when the server has a newer backup than the last local push; user can restore, push over, or dismiss.
-- **Offline awareness** — Sync actions respect online state; user messaging when offline or not ready.
+- **Conflict awareness** — UI banner when the server has a newer backup than the last local push; user can restore, push over, or dismiss. Copy explains when **another teammate or device** saved first.
+- **Offline awareness** — Sync actions respect online state; messaging covers **fork risk** when devices are offline or isolated. **Practical mitigation at venues:** use Wi‑Fi or a phone **hotspot** so devices share internet and can reach the same cloud backup. A dedicated **LAN sync hub** without the public internet is **not** part of the product today (would be a future add-on).
 - **User preferences** — Server-stored flags (e.g. opt-in for **monthly backup email** when cron and email are configured).
 - **Cron-based backup email** — Scheduled job (e.g. Vercel Cron) can email opted-in users with snapshot attachments when secrets and email are configured.
 
