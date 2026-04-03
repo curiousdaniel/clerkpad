@@ -9,6 +9,7 @@ import {
   type ReactNode,
 } from "react";
 import { useUserDb } from "@/components/providers/UserDbProvider";
+import type { Lot, Sale } from "@/lib/db";
 import { displayLotNumberFromParts } from "@/lib/utils/lotSuffix";
 import { parseLotDisplay } from "@/lib/clerking/lotParse";
 import {
@@ -33,7 +34,34 @@ import {
 
 const CLERK_KEY = "clerkbid:clerkInitials";
 
-type UndoState = { saleId: number; lotId: number; until: number };
+type UndoMode = "createdLot" | "reusedUnsold" | "resold";
+
+type LotUndoSlice = Pick<
+  Lot,
+  "description" | "consignor" | "notes" | "quantity" | "status"
+>;
+
+type SaleUndoSlice = Pick<
+  Sale,
+  | "bidderId"
+  | "displayLotNumber"
+  | "paddleNumber"
+  | "description"
+  | "consignor"
+  | "quantity"
+  | "amount"
+  | "clerkInitials"
+  | "createdAt"
+>;
+
+type UndoState = {
+  saleId: number;
+  lotId: number;
+  until: number;
+  mode: UndoMode;
+  restoredLot?: LotUndoSlice;
+  restoredSale?: SaleUndoSlice;
+};
 
 function subscribeSaleFieldOrder(onStoreChange: () => void) {
   const fn = () => onStoreChange();
@@ -168,7 +196,7 @@ export function SaleForm({
 
   async function undoLastSale() {
     if (!db || !undoState || Date.now() > undoState.until) return;
-    const { saleId, lotId } = undoState;
+    const { saleId, lotId, mode, restoredLot, restoredSale } = undoState;
     try {
       await db.transaction("rw", [db.sales, db.lots], async () => {
         const sale = await db.sales.get(saleId);
@@ -179,15 +207,44 @@ export function SaleForm({
         if (!lot || lot.eventId !== eventId) {
           throw new Error("Lot no longer available to undo.");
         }
-        const salesOnLot = await db.sales
-          .where("lotId")
-          .equals(lotId)
-          .count();
-        if (salesOnLot !== 1) {
-          throw new Error("Cannot undo — lot has multiple sales.");
+
+        if (mode === "createdLot") {
+          const salesOnLot = await db.sales
+            .where("lotId")
+            .equals(lotId)
+            .count();
+          if (salesOnLot !== 1) {
+            throw new Error("Cannot undo — lot has multiple sales.");
+          }
+          await db.sales.delete(saleId);
+          await db.lots.delete(lotId);
+          return;
         }
-        await db.sales.delete(saleId);
-        await db.lots.delete(lotId);
+
+        if (mode === "reusedUnsold") {
+          if (!restoredLot) {
+            throw new Error("Cannot undo — missing restore snapshot.");
+          }
+          await db.sales.delete(saleId);
+          await db.lots.update(lotId, {
+            ...restoredLot,
+            updatedAt: new Date(),
+          });
+          return;
+        }
+
+        if (mode === "resold") {
+          if (!restoredLot || !restoredSale) {
+            throw new Error("Cannot undo — missing restore snapshot.");
+          }
+          await db.sales.update(saleId, {
+            ...restoredSale,
+          });
+          await db.lots.update(lotId, {
+            ...restoredLot,
+            updatedAt: new Date(),
+          });
+        }
       });
       setUndoState(null);
       showToast({ kind: "success", message: "Last sale undone." });
@@ -263,51 +320,154 @@ export function SaleForm({
       : "";
     const displayStr = displayLotNumberFromParts(baseNum, newSuffix);
 
-    const dupe = await db.lots
+    const existingLot = await db.lots
       .where("[eventId+displayLotNumber]")
       .equals([eventId, displayStr])
-      .count();
-    if (dupe > 0) {
-      setFormError(`Lot ${displayStr} already exists for this event.`);
-      return;
-    }
+      .first();
 
     const qty = Math.max(1, parseInt(quantity.trim(), 10) || 1);
     const now = new Date();
     const notesTrim = lotNotes.trim();
+    const consignorTrim = consignor.trim() || undefined;
 
-    let newLotId = 0;
-    let newSaleId = 0;
+    const lotMarkSold = {
+      description: titleTrim,
+      consignor: consignorTrim,
+      notes: notesTrim || undefined,
+      quantity: qty,
+      status: "sold" as const,
+      updatedAt: now,
+    };
+
+    const bidderId = bidder.id!;
+
+    function buildSaleRow(lotId: number): Omit<Sale, "id"> {
+      return {
+        eventId,
+        lotId,
+        bidderId,
+        displayLotNumber: displayStr,
+        paddleNumber: paddle,
+        description: titleTrim,
+        consignor: consignorTrim,
+        quantity: qty,
+        amount,
+        clerkInitials: initials,
+        createdAt: now,
+      };
+    }
+
+    let nextUndo: UndoState;
 
     try {
-      await db.transaction("rw", [db.lots, db.sales], async () => {
-        newLotId = (await db.lots.add({
-          eventId,
-          baseLotNumber: baseNum,
-          lotSuffix: newSuffix,
-          displayLotNumber: displayStr,
-          description: titleTrim,
-          consignor: consignor.trim() || undefined,
-          notes: notesTrim || undefined,
-          quantity: qty,
-          status: "sold",
-          createdAt: now,
-          updatedAt: now,
-        })) as number;
-        newSaleId = (await db.sales.add({
-          eventId,
+      if (!existingLot) {
+        let newLotId = 0;
+        let newSaleId = 0;
+        await db.transaction("rw", [db.lots, db.sales], async () => {
+          newLotId = (await db.lots.add({
+            eventId,
+            baseLotNumber: baseNum,
+            lotSuffix: newSuffix,
+            displayLotNumber: displayStr,
+            ...lotMarkSold,
+            createdAt: now,
+          })) as number;
+          newSaleId = (await db.sales.add(buildSaleRow(newLotId))) as number;
+        });
+        nextUndo = {
+          mode: "createdLot",
+          saleId: newSaleId,
           lotId: newLotId,
-          bidderId: bidder.id!,
-          displayLotNumber: displayStr,
-          paddleNumber: paddle,
-          description: titleTrim,
-          consignor: consignor.trim() || undefined,
-          quantity: qty,
-          amount,
-          clerkInitials: initials,
-          createdAt: now,
-        })) as number;
-      });
+          until: Date.now() + 120_000,
+        };
+      } else {
+        const lotId = existingLot.id!;
+        const salesOnLot = await db.sales
+          .where("lotId")
+          .equals(lotId)
+          .toArray();
+
+        const openCatalog =
+          (existingLot.status === "unsold" || existingLot.status === "passed") &&
+          salesOnLot.length === 0;
+
+        if (!openCatalog) {
+          if (salesOnLot.length > 1) {
+            setFormError(
+              "This lot has multiple sales; resolve outside the clerk form before continuing."
+            );
+            return;
+          }
+          if (
+            !window.confirm(
+              `Lot ${displayStr} already has a sale or is not an open catalog lot. OK to replace the stored sale and lot details with this form?`
+            )
+          ) {
+            return;
+          }
+        }
+
+        const restoredLot: LotUndoSlice = {
+          description: existingLot.description,
+          consignor: existingLot.consignor,
+          notes: existingLot.notes,
+          quantity: existingLot.quantity,
+          status: existingLot.status,
+        };
+
+        if (openCatalog) {
+          let newSaleId = 0;
+          await db.transaction("rw", [db.lots, db.sales], async () => {
+            await db.lots.update(lotId, lotMarkSold);
+            newSaleId = (await db.sales.add(buildSaleRow(lotId))) as number;
+          });
+          nextUndo = {
+            mode: "reusedUnsold",
+            saleId: newSaleId,
+            lotId,
+            until: Date.now() + 120_000,
+            restoredLot,
+          };
+        } else if (salesOnLot.length === 1) {
+          const prevSale = salesOnLot[0]!;
+          const restoredSale: SaleUndoSlice = {
+            bidderId: prevSale.bidderId,
+            displayLotNumber: prevSale.displayLotNumber,
+            paddleNumber: prevSale.paddleNumber,
+            description: prevSale.description,
+            consignor: prevSale.consignor,
+            quantity: prevSale.quantity,
+            amount: prevSale.amount,
+            clerkInitials: prevSale.clerkInitials,
+            createdAt: prevSale.createdAt,
+          };
+          await db.transaction("rw", [db.lots, db.sales], async () => {
+            await db.lots.update(lotId, lotMarkSold);
+            await db.sales.update(prevSale.id!, buildSaleRow(lotId));
+          });
+          nextUndo = {
+            mode: "resold",
+            saleId: prevSale.id!,
+            lotId,
+            until: Date.now() + 120_000,
+            restoredLot,
+            restoredSale,
+          };
+        } else {
+          let newSaleId = 0;
+          await db.transaction("rw", [db.lots, db.sales], async () => {
+            await db.lots.update(lotId, lotMarkSold);
+            newSaleId = (await db.sales.add(buildSaleRow(lotId))) as number;
+          });
+          nextUndo = {
+            mode: "reusedUnsold",
+            saleId: newSaleId,
+            lotId,
+            until: Date.now() + 120_000,
+            restoredLot,
+          };
+        }
+      }
     } catch (e) {
       setFormError(
         e instanceof Error ? e.message : "Could not record sale (duplicate?)."
@@ -315,11 +475,7 @@ export function SaleForm({
       return;
     }
 
-    setUndoState({
-      saleId: newSaleId,
-      lotId: newLotId,
-      until: Date.now() + 120_000,
-    });
+    setUndoState(nextUndo);
 
     try {
       sessionStorage.setItem(CLERK_KEY, initials);
