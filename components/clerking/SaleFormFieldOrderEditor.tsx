@@ -45,7 +45,8 @@ export function SaleFormFieldOrderEditor() {
   }
 
   return (
-    <div className="mb-4 rounded-lg border border-navy/15 bg-surface/60 dark:border-slate-600 dark:bg-slate-800/50">
+    <div className="mt-6 border-t border-navy/10 pt-4 dark:border-slate-700">
+      <div className="rounded-lg border border-navy/15 bg-surface/60 dark:border-slate-600 dark:bg-slate-800/50">
       <button
         type="button"
         className="flex w-full items-center justify-between gap-2 px-3 py-2.5 text-left text-sm font-medium text-navy transition hover:bg-white/70 dark:text-slate-100 dark:hover:bg-slate-800"
@@ -109,6 +110,7 @@ export function SaleFormFieldOrderEditor() {
           ) : null}
         </div>
       ) : null}
+      </div>
     </div>
   );
 }

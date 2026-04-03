@@ -28,6 +28,11 @@ import { useToast } from "@/components/providers/ToastProvider";
 import { formatCurrency } from "@/lib/utils/formatCurrency";
 import { roundMoney } from "@/lib/services/invoiceLogic";
 import {
+  readSuggestNextLot,
+  subscribeSuggestNextLot,
+  writeSuggestNextLot,
+} from "@/lib/clerkFormPrefs";
+import {
   DEFAULT_SALE_FIELD_ORDER,
   isNarrowSaleField,
   readSaleFieldOrder,
@@ -113,12 +118,22 @@ export function SaleForm({
     () => DEFAULT_SALE_FIELD_ORDER
   );
 
+  const suggestNextLotEnabled = useSyncExternalStore(
+    subscribeSuggestNextLot,
+    readSuggestNextLot,
+    () => true
+  );
+
   const focusField = useCallback((id: SaleFieldId) => {
     const el = fieldRefs.current[id];
     requestAnimationFrame(() => el?.focus());
   }, []);
 
   const refreshLotSuggestion = useCallback(async () => {
+    if (!readSuggestNextLot()) {
+      setLotNumber("");
+      return;
+    }
     if (!db) return;
     const next = await getNextSuggestedLotDisplay(db, eventId);
     setLotNumber(next);
@@ -732,6 +747,30 @@ export function SaleForm({
 
       {renderLayoutGroups()}
 
+      <label className="flex cursor-pointer flex-wrap items-center gap-2 text-sm font-medium text-ink">
+        <input
+          type="checkbox"
+          checked={suggestNextLotEnabled}
+          onChange={(e) => {
+            const on = e.target.checked;
+            writeSuggestNextLot(on);
+            if (!on) {
+              setLotNumber("");
+              return;
+            }
+            if (db) {
+              void getNextSuggestedLotDisplay(db, eventId).then(setLotNumber);
+            }
+          }}
+          className="h-4 w-4 rounded border-navy/30 text-navy focus:ring-navy"
+        />
+        <span>Suggest next lot number after each sale</span>
+        <span className="text-xs font-normal text-muted">
+          When off, the lot field stays empty after reset, sale, or undo (pass-out
+          line still advances automatically).
+        </span>
+      </label>
+
       <PassOutCheckbox
         checked={passOutEnabled}
         onChange={setPassOutEnabled}
@@ -750,8 +789,8 @@ export function SaleForm({
 
       <p className="text-xs text-muted">
         Enter records the sale (normal or pass-out per checkbox). Tab order:{" "}
-        {tabOrderHelpFragment(fieldOrder)}, then pass out, undo (when shown),
-        then Enter to submit.
+        {tabOrderHelpFragment(fieldOrder)}, then next-lot suggestion, pass out,
+        undo (when shown), then Enter to submit.
       </p>
 
       <button type="submit" className="sr-only">

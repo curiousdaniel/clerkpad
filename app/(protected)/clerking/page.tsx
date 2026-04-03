@@ -49,13 +49,15 @@ export default function ClerkingPage() {
       <div className="grid gap-8 lg:grid-cols-5">
         <div className="lg:col-span-3">
           <Card>
-            <h2 className="mb-4 text-lg font-semibold text-navy">Sale entry</h2>
-            <SaleFormFieldOrderEditor />
+            <h2 className="mb-4 text-lg font-semibold text-navy dark:text-slate-100">
+              Sale entry
+            </h2>
             <SaleForm
               eventId={currentEventId}
               currencySymbol={sym}
               buyersPremiumRate={currentEvent.buyersPremiumRate ?? 0}
             />
+            <SaleFormFieldOrderEditor />
           </Card>
           <div className="mt-6">
             <Card>
