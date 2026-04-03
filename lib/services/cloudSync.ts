@@ -13,7 +13,10 @@ export type SyncListEntry = { eventSyncId: string; updatedAt: string };
 export async function fetchSyncList(): Promise<
   { ok: true; events: SyncListEntry[] } | { ok: false; status: number }
 > {
-  const res = await fetch("/api/sync/list/", { credentials: "include" });
+  const res = await fetch("/api/sync/list/", {
+    credentials: "include",
+    cache: "no-store",
+  });
   if (!res.ok) return { ok: false, status: res.status };
   const data = (await res.json()) as { events: SyncListEntry[] };
   return { ok: true, events: data.events ?? [] };
@@ -29,6 +32,7 @@ export async function pushEventSnapshot(
   const res = await fetch("/api/sync/push/", {
     method: "POST",
     credentials: "include",
+    cache: "no-store",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       eventSyncId: payload.event.syncId,
@@ -57,7 +61,7 @@ export async function fetchEventSnapshot(syncId: string): Promise<
 > {
   const res = await fetch(
     `/api/sync/event/?syncId=${encodeURIComponent(syncId)}`,
-    { credentials: "include" }
+    { credentials: "include", cache: "no-store" }
   );
   if (!res.ok) return { ok: false, status: res.status };
   const data = (await res.json()) as {

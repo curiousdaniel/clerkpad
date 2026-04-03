@@ -179,8 +179,10 @@ export function CloudSyncProvider({ children }: { children: ReactNode }) {
     try {
       const r = await pullCloudEventsMissingLocally(db, list.events);
       setLastPullAt(new Date());
-      if (r.imported > 0) {
+      if (r.imported > 0 || list.events.length > 0) {
         refresh();
+      }
+      if (r.imported > 0) {
         await ensureSettingsRow(db);
         const settings = await db.settings.get(1);
         if (settings?.currentEventId == null) {
@@ -374,6 +376,26 @@ export function CloudSyncProvider({ children }: { children: ReactNode }) {
     runPullAndMaybeSwitchEvent,
     runPushAllSilent,
   ]);
+
+  /**
+   * As soon as the signed-in user’s Dexie DB is ready, run one full sync cycle.
+   * Otherwise the first pull waited on a 3s timer and the UI could stay empty
+   * on a second device even though backups exist on the server.
+   */
+  const didImmediatePostDbReadySyncRef = useRef(false);
+  /** New login or different account must be allowed to run immediate sync again. */
+  useEffect(() => {
+    didImmediatePostDbReadySyncRef.current = false;
+  }, [session?.user?.id]);
+  useEffect(() => {
+    if (didImmediatePostDbReadySyncRef.current) return;
+    if (status !== "authenticated" || !dbReady || !db || !online) {
+      return;
+    }
+    didImmediatePostDbReadySyncRef.current = true;
+    lastSuccessfulPullListAtRef.current = 0;
+    void runBackgroundSyncCycle();
+  }, [status, dbReady, db, online, runBackgroundSyncCycle]);
 
   useEffect(() => {
     const fn = () => setOnline(navigator.onLine);
