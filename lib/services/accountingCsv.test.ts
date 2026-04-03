@@ -3,6 +3,7 @@ import type { AuctionEvent, Bidder, Invoice, Sale } from "@/lib/db";
 import { buildAccountingCsvRows } from "./accountingCsv";
 
 const baseEvent: AuctionEvent = {
+  defaultConsignorCommissionRate: 0,
   id: 1,
   name: "Sale",
   organizationName: "Org",

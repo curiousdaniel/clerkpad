@@ -9,7 +9,7 @@ import { EventCard } from "@/components/events/EventCard";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { useCurrentEvent } from "@/lib/hooks/useCurrentEvent";
 import { useToast } from "@/components/providers/ToastProvider";
-import type { AuctionEvent } from "@/lib/db";
+import type { AuctionEvent, Lot } from "@/lib/db";
 import { useUserDb } from "@/components/providers/UserDbProvider";
 import {
   buildEventExport,
@@ -20,6 +20,7 @@ import {
 import { deleteEventCascade } from "@/lib/services/eventService";
 import { downloadCsv } from "@/lib/services/csvExporter";
 import { parseLotCsv } from "@/lib/services/csvImportLots";
+import { formatConsignorDisplayLabel } from "@/lib/services/consignorCommission";
 import { liveQueryGuard } from "@/lib/dexie/liveQueryGuard";
 
 export default function EventsPage() {
@@ -71,7 +72,7 @@ export default function EventsPage() {
       const summary = await importEventFromPayload(db, payload);
       showToast({
         kind: "success",
-        message: `Imported: ${summary.bidders} bidders, ${summary.lots} lots, ${summary.sales} sales.`,
+        message: `Imported: ${summary.bidders} bidders, ${summary.consignors} consignors, ${summary.lots} lots, ${summary.sales} sales.`,
       });
       await switchEvent(summary.eventId);
       refresh();
@@ -131,21 +132,39 @@ export default function EventsPage() {
                     return true;
                   });
                   const now = new Date();
+                  const consignorRows = await db.consignors
+                    .where("eventId")
+                    .equals(currentEventId)
+                    .toArray();
+                  const consignorByNum = new Map(
+                    consignorRows.map((c) => [c.consignorNumber, c])
+                  );
                   await db.transaction("rw", db.lots, async () => {
                     for (const r of toAdd) {
-                      await db.lots.add({
+                      let consignorId: number | undefined;
+                      let consignorLabel = r.consignor;
+                      if (r.consignorNumber != null) {
+                        const c = consignorByNum.get(r.consignorNumber);
+                        if (c?.id != null) {
+                          consignorId = c.id;
+                          consignorLabel = formatConsignorDisplayLabel(c);
+                        }
+                      }
+                      const row: Omit<Lot, "id"> = {
                         eventId: currentEventId,
                         baseLotNumber: r.baseLotNumber,
                         lotSuffix: r.lotSuffix,
                         displayLotNumber: r.displayLotNumber,
                         description: r.description,
-                        consignor: r.consignor,
+                        consignor: consignorLabel,
                         quantity: r.quantity,
                         notes: r.notes,
                         status: "unsold",
                         createdAt: now,
                         updatedAt: now,
-                      });
+                      };
+                      if (consignorId != null) row.consignorId = consignorId;
+                      await db.lots.add(row);
                     }
                   });
                   const parts: string[] = [];
@@ -187,11 +206,12 @@ export default function EventsPage() {
                   "baseLotNumber",
                   "suffix",
                   "description",
+                  "consignorNumber",
                   "consignor",
                   "quantity",
                   "notes",
                 ], [
-                  [1, "", "Sample lot description", "Consignor LLC", 1, "Ring note"],
+                  [1, "", "Sample lot description", "", "Consignor LLC", 1, "Ring note"],
                 ])
               }
             >

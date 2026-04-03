@@ -1,5 +1,10 @@
 import type { AuctionDB, AuctionEvent, Bidder, Invoice, Sale } from "@/lib/db";
 import type { InvoicePdfInput } from "@/lib/services/invoicePdf";
+import {
+  resolveInvoiceBrandingForPdf,
+  resolveInvoiceFooterText,
+  type ResolvedInvoiceBranding,
+} from "@/lib/services/invoiceBranding";
 import { saleUnitHammer } from "@/lib/services/saleLineTotals";
 
 export function roundMoney(n: number): number {
@@ -168,8 +173,12 @@ export function toInvoicePdfInput(
   invoice: Invoice,
   event: AuctionEvent,
   bidder: Bidder,
-  sales: Sale[]
+  sales: Sale[],
+  branding?: ResolvedInvoiceBranding | null
 ): InvoicePdfInput {
+  const footerLine = branding
+    ? branding.footerLine
+    : resolveInvoiceFooterText(null, event.organizationName);
   return {
     organizationName: event.organizationName,
     eventName: event.name,
@@ -196,6 +205,10 @@ export function toInvoicePdfInput(
     buyersPremiumAmount: invoice.buyersPremiumAmount,
     taxAmount: invoice.taxAmount,
     total: invoice.total,
+    invoiceFooterLine: footerLine,
+    invoiceLogoDataUrl: branding?.logoDataUrl,
+    invoiceLogoWidthMm: branding?.logoWidthMm,
+    invoiceLogoHeightMm: branding?.logoHeightMm,
   };
 }
 
@@ -211,7 +224,12 @@ export async function loadInvoicePdfInput(
   ]);
   if (event?.id == null || bidder?.id == null) return null;
   const sales = await getSalesForBidderInvoice(db, inv.eventId, inv.bidderId);
-  return toInvoicePdfInput(inv, event, bidder, sales);
+  const branding = await resolveInvoiceBrandingForPdf(
+    db,
+    inv.eventId,
+    event.organizationName
+  );
+  return toInvoicePdfInput(inv, event, bidder, sales, branding);
 }
 
 /** Bidders who have sales but no invoice row yet for this event. */

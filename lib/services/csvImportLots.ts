@@ -6,6 +6,8 @@ export type LotCsvRow = {
   displayLotNumber: string;
   description: string;
   consignor?: string;
+  /** When set, links to registry consignor with this number for the event. */
+  consignorNumber?: number;
   quantity: number;
   notes?: string;
 };
@@ -21,6 +23,9 @@ const ALIASES: Record<string, keyof LotCsvRow> = {
   suffix: "lotSuffix",
   description: "description",
   consignor: "consignor",
+  consignor_number: "consignorNumber",
+  consignornumber: "consignorNumber",
+  consignor_no: "consignorNumber",
   quantity: "quantity",
   notes: "notes",
 };
@@ -49,6 +54,7 @@ export function parseLotCsv(text: string): {
   const iSuffix = colIndex(headers, "lotSuffix");
   const iDesc = colIndex(headers, "description");
   const iConsignor = colIndex(headers, "consignor");
+  const iConsignorNum = colIndex(headers, "consignorNumber");
   const iQty = colIndex(headers, "quantity");
   const iNotes = colIndex(headers, "notes");
 
@@ -56,7 +62,7 @@ export function parseLotCsv(text: string): {
     issues.push({
       rowIndex: 0,
       message:
-        "CSV must include baseLotNumber (or base) and description. Optional: suffix, consignor, quantity, notes.",
+        "CSV must include baseLotNumber (or base) and description. Optional: suffix, consignor, consignorNumber, quantity, notes.",
     });
     return { rows: [], issues };
   }
@@ -73,6 +79,8 @@ export function parseLotCsv(text: string): {
     const description = (line[iDesc] ?? "").trim();
     const consignor =
       iConsignor >= 0 ? (line[iConsignor] ?? "").trim() : "";
+    const consignorNumStr =
+      iConsignorNum >= 0 ? (line[iConsignorNum] ?? "").trim() : "";
     const qtyStr = iQty >= 0 ? (line[iQty] ?? "").trim() : "1";
     const notes = iNotes >= 0 ? (line[iNotes] ?? "").trim() : "";
 
@@ -112,12 +120,26 @@ export function parseLotCsv(text: string): {
       continue;
     }
 
+    let consignorNumber: number | undefined;
+    if (consignorNumStr) {
+      const cn = parseInt(consignorNumStr, 10);
+      if (!Number.isFinite(cn) || cn < 1) {
+        issues.push({
+          rowIndex: rowNum,
+          message: `Invalid consignorNumber: "${consignorNumStr}".`,
+        });
+        continue;
+      }
+      consignorNumber = cn;
+    }
+
     rows.push({
       baseLotNumber,
       lotSuffix,
       displayLotNumber,
       description,
       consignor: consignor || undefined,
+      ...(consignorNumber != null ? { consignorNumber } : {}),
       quantity,
       notes: notes || undefined,
     });

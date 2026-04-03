@@ -1,4 +1,9 @@
-import type { Bidder, Invoice, Lot, Sale } from "@/lib/db";
+import type { AuctionEvent, Bidder, Consignor, Invoice, Lot, Sale } from "@/lib/db";
+import { resolveConsignorForSale } from "@/lib/services/consignorAttribution";
+import {
+  effectiveCommissionRate,
+  lineCommission,
+} from "@/lib/services/consignorCommission";
 import { computeInvoiceFromSubtotal, roundMoney } from "@/lib/services/invoiceLogic";
 import { suffixRank } from "@/lib/utils/lotSuffix";
 import { PAYMENT_METHODS } from "@/lib/utils/constants";
@@ -179,6 +184,130 @@ export function buildLotReportRows(lots: Lot[], sales: Sale[]): LotReportRow[] {
       clerk: sold ? sale.clerkInitials : "",
     };
   });
+}
+
+export type ConsignorReportRow = {
+  /** Stable key for CSV / UI; "unassigned" when sales could not be matched uniquely. */
+  key: string;
+  consignorNumber: number | null;
+  name: string;
+  lotsSold: number;
+  grossHammer: number;
+  commission: number;
+  netToConsignor: number;
+  /** Effective rate used (0–1), volume-weighted for the row. */
+  effectiveRate: number;
+};
+
+export type ConsignorCommissionEventTotals = {
+  grossHammer: number;
+  totalCommission: number;
+  netToConsignors: number;
+  lotsSold: number;
+};
+
+export function buildConsignorReportRows(
+  event: AuctionEvent,
+  consignors: Consignor[],
+  lots: Lot[],
+  sales: Sale[]
+): ConsignorReportRow[] {
+  const lotById = new Map<number, Lot>();
+  for (const l of lots) {
+    if (l.id != null) lotById.set(l.id, l);
+  }
+
+  type Agg = {
+    key: string;
+    consignorNumber: number | null;
+    name: string;
+    lotsSold: number;
+    grossHammer: number;
+    commission: number;
+  };
+
+  const byKey = new Map<string, Agg>();
+
+  function bump(
+    key: string,
+    consignorNumber: number | null,
+    name: string,
+    hammer: number,
+    comm: number
+  ) {
+    const cur = byKey.get(key);
+    if (cur) {
+      cur.lotsSold += 1;
+      cur.grossHammer = roundMoney(cur.grossHammer + hammer);
+      cur.commission = roundMoney(cur.commission + comm);
+    } else {
+      byKey.set(key, {
+        key,
+        consignorNumber,
+        name,
+        lotsSold: 1,
+        grossHammer: roundMoney(hammer),
+        commission: roundMoney(comm),
+      });
+    }
+  }
+
+  for (const s of sales) {
+    const lot = lotById.get(s.lotId);
+    const resolved = resolveConsignorForSale(s, lot, consignors);
+    const rate = effectiveCommissionRate(event, resolved);
+    const comm = lineCommission(s.amount, rate);
+
+    if (resolved) {
+      const key = `c:${resolved.id ?? resolved.consignorNumber}`;
+      bump(
+        key,
+        resolved.consignorNumber,
+        resolved.name,
+        s.amount,
+        comm
+      );
+    } else {
+      bump("unassigned", null, "Unassigned / unmatched", s.amount, comm);
+    }
+  }
+
+  const rows: ConsignorReportRow[] = Array.from(byKey.values()).map((a) => {
+    const net = roundMoney(a.grossHammer - a.commission);
+    const effectiveRate =
+      a.grossHammer > 0 ? roundMoney(a.commission / a.grossHammer) : 0;
+    return {
+      key: a.key,
+      consignorNumber: a.consignorNumber,
+      name: a.name,
+      lotsSold: a.lotsSold,
+      grossHammer: a.grossHammer,
+      commission: a.commission,
+      netToConsignor: net,
+      effectiveRate,
+    };
+  });
+
+  rows.sort((a, b) => {
+    if (a.key === "unassigned") return 1;
+    if (b.key === "unassigned") return -1;
+    const an = a.consignorNumber ?? 0;
+    const bn = b.consignorNumber ?? 0;
+    return an - bn;
+  });
+
+  return rows;
+}
+
+export function computeConsignorCommissionEventTotals(
+  rows: ConsignorReportRow[]
+): ConsignorCommissionEventTotals {
+  return {
+    grossHammer: roundMoney(rows.reduce((a, r) => a + r.grossHammer, 0)),
+    totalCommission: roundMoney(rows.reduce((a, r) => a + r.commission, 0)),
+    netToConsignors: roundMoney(rows.reduce((a, r) => a + r.netToConsignor, 0)),
+    lotsSold: rows.reduce((a, r) => a + r.lotsSold, 0),
+  };
 }
 
 export type PaymentMethodBreakdownRow = {

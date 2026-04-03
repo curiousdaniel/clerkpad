@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { parseBidderCsv } from "./csvImportBidders";
+import { parseConsignorCsv } from "./csvImportConsignors";
 import { parseLotCsv } from "./csvImportLots";
 
 describe("parseBidderCsv", () => {
@@ -36,5 +37,23 @@ describe("parseLotCsv", () => {
     const { rows, issues } = parseLotCsv(csv);
     expect(issues).toHaveLength(0);
     expect(rows[0]?.displayLotNumber).toBe("12A");
+  });
+
+  it("parses optional consignorNumber", () => {
+    const csv = `base,suffix,description,consignorNumber,quantity
+5,,Chair,42,1`;
+    const { rows, issues } = parseLotCsv(csv);
+    expect(issues).toHaveLength(0);
+    expect(rows[0]?.consignorNumber).toBe(42);
+  });
+});
+
+describe("parseConsignorCsv", () => {
+  it("parses commission percent", () => {
+    const csv = `consignorNumber,name,commission
+7,Jane Doe,12.5`;
+    const { rows, issues } = parseConsignorCsv(csv);
+    expect(issues).toHaveLength(0);
+    expect(rows[0]?.commissionPct).toBe(12.5);
   });
 });

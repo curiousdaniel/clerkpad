@@ -85,6 +85,8 @@ export function EventForm({ open, onClose, onSaved, editing }: Props) {
         organizationName: org,
         taxRate,
         buyersPremiumRate,
+        defaultConsignorCommissionRate:
+          editing.defaultConsignorCommissionRate ?? 0,
         currencySymbol: currencySymbol.trim() || "$",
         updatedAt: now,
       });
@@ -95,6 +97,7 @@ export function EventForm({ open, onClose, onSaved, editing }: Props) {
         organizationName: org,
         taxRate,
         buyersPremiumRate,
+        defaultConsignorCommissionRate: 0,
         currencySymbol: currencySymbol.trim() || "$",
         syncId: newEventSyncId(),
         createdAt: now,

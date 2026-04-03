@@ -37,6 +37,11 @@ export type InvoicePdfInput = {
   buyersPremiumAmount: number;
   taxAmount: number;
   total: number;
+  /** Closing line on PDF (after payment block). */
+  invoiceFooterLine: string;
+  invoiceLogoDataUrl?: string;
+  invoiceLogoWidthMm?: number;
+  invoiceLogoHeightMm?: number;
 };
 
 function paymentLabel(value: string | undefined): string {
@@ -77,7 +82,27 @@ function drawPdfAttributionFooter(doc: jsPDF): void {
 /** Draw one invoice on the current page of `doc` (caller sets page). */
 export function renderInvoiceOnDoc(doc: jsPDF, input: InvoicePdfInput): void {
   const sym = input.currencySymbol;
-  let y = 16;
+  let y = 14;
+
+  if (
+    input.invoiceLogoDataUrl &&
+    input.invoiceLogoWidthMm != null &&
+    input.invoiceLogoHeightMm != null
+  ) {
+    try {
+      doc.addImage(
+        input.invoiceLogoDataUrl,
+        "PNG",
+        14,
+        y,
+        input.invoiceLogoWidthMm,
+        input.invoiceLogoHeightMm
+      );
+    } catch {
+      /* ignore broken image */
+    }
+    y += input.invoiceLogoHeightMm + 5;
+  }
 
   doc.setFont("helvetica", "bold");
   doc.setFontSize(18);
@@ -199,11 +224,12 @@ export function renderInvoiceOnDoc(doc: jsPDF, input: InvoicePdfInput): void {
   ty += 4;
   doc.setTextColor(80, 80, 80);
   doc.setFontSize(9);
-  doc.text(
-    `Thank you for supporting ${input.organizationName}!`,
-    14,
-    ty
-  );
+  const footerLines = doc.splitTextToSize(input.invoiceFooterLine, 180);
+  let fy = ty;
+  for (const line of footerLines) {
+    doc.text(line, 14, fy);
+    fy += 4.5;
+  }
   doc.setTextColor(0, 0, 0);
 
   const lastPage = doc.getNumberOfPages();

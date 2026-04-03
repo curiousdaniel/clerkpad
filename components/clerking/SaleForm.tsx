@@ -8,8 +8,11 @@ import {
   useSyncExternalStore,
   type ReactNode,
 } from "react";
+import { useLiveQuery } from "dexie-react-hooks";
 import { useUserDb } from "@/components/providers/UserDbProvider";
-import type { Lot, Sale } from "@/lib/db";
+import type { AuctionDB, Lot, Sale } from "@/lib/db";
+import { liveQueryGuard } from "@/lib/dexie/liveQueryGuard";
+import { formatConsignorDisplayLabel } from "@/lib/services/consignorCommission";
 import { findLotByEventBaseAndSuffix } from "@/lib/clerking/findLotByBaseSuffix";
 import {
   formatLotDisplayFromInput,
@@ -47,7 +50,7 @@ type UndoMode = "createdLot" | "reusedUnsold" | "resold";
 
 type LotUndoSlice = Pick<
   Lot,
-  "description" | "consignor" | "notes" | "quantity" | "status"
+  "description" | "consignor" | "consignorId" | "notes" | "quantity" | "status"
 >;
 
 type SaleUndoSlice = Pick<
@@ -57,6 +60,7 @@ type SaleUndoSlice = Pick<
   | "paddleNumber"
   | "description"
   | "consignor"
+  | "consignorId"
   | "quantity"
   | "amount"
   | "clerkInitials"
@@ -85,6 +89,23 @@ function subscribeSaleFieldOrder(onStoreChange: () => void) {
   return () => {};
 }
 
+async function patchLotWithConsignor(
+  db: AuctionDB,
+  lotId: number,
+  patch: Pick<
+    Lot,
+    "description" | "consignor" | "notes" | "quantity" | "status" | "updatedAt"
+  >,
+  consignorId: number | null
+): Promise<void> {
+  const cur = await db.lots.get(lotId);
+  if (!cur) return;
+  const next: Lot = { ...cur, ...patch };
+  if (consignorId != null) next.consignorId = consignorId;
+  else delete next.consignorId;
+  await db.lots.put(next);
+}
+
 export function SaleForm({
   eventId,
   currencySymbol,
@@ -99,6 +120,9 @@ export function SaleForm({
   const [lotNumber, setLotNumber] = useState("");
   const [title, setTitle] = useState("");
   const [consignor, setConsignor] = useState("");
+  const [linkedConsignorId, setLinkedConsignorId] = useState<number | null>(
+    null
+  );
   const [lotNotes, setLotNotes] = useState("");
   const [quantity, setQuantity] = useState("1");
   const [sellPrice, setSellPrice] = useState("");
@@ -122,6 +146,18 @@ export function SaleForm({
     subscribeSuggestNextLot,
     readSuggestNextLot,
     () => true
+  );
+
+  const consignors = useLiveQuery(
+    async () =>
+      liveQueryGuard("saleForm.consignors", async () => {
+        if (!db) return [];
+        return db.consignors
+          .where("eventId")
+          .equals(eventId)
+          .sortBy("consignorNumber");
+      }, []),
+    [db, eventId]
   );
 
   const focusField = useCallback((id: SaleFieldId) => {
@@ -160,6 +196,7 @@ export function SaleForm({
       await refreshLotSuggestion();
       setTitle("");
       setConsignor("");
+      setLinkedConsignorId(null);
       setLotNotes("");
       setQuantity("1");
       setSellPrice("");
@@ -207,9 +244,21 @@ export function SaleForm({
     );
     if (lot) {
       setTitle(lot.description);
-      setConsignor(lot.consignor ?? "");
       setQuantity(String(lot.quantity));
       setLotNotes(lot.notes ?? "");
+      if (lot.consignorId != null) {
+        const c = await db.consignors.get(lot.consignorId);
+        if (c) {
+          setLinkedConsignorId(c.id!);
+          setConsignor(formatConsignorDisplayLabel(c));
+        } else {
+          setLinkedConsignorId(null);
+          setConsignor(lot.consignor ?? "");
+        }
+      } else {
+        setLinkedConsignorId(null);
+        setConsignor(lot.consignor ?? "");
+      }
     }
   }
 
@@ -218,6 +267,7 @@ export function SaleForm({
     setFormError(null);
     setTitle("");
     setConsignor("");
+    setLinkedConsignorId(null);
     setLotNotes("");
     setQuantity("1");
     setSellPrice("");
@@ -258,10 +308,16 @@ export function SaleForm({
             throw new Error("Cannot undo — missing restore snapshot.");
           }
           await db.sales.delete(saleId);
-          await db.lots.update(lotId, {
-            ...restoredLot,
-            updatedAt: new Date(),
-          });
+          const curLot = await db.lots.get(lotId);
+          if (curLot) {
+            const next: Lot = {
+              ...curLot,
+              ...restoredLot,
+              updatedAt: new Date(),
+            };
+            if (restoredLot.consignorId == null) delete next.consignorId;
+            await db.lots.put(next);
+          }
           return;
         }
 
@@ -269,13 +325,22 @@ export function SaleForm({
           if (!restoredLot || !restoredSale) {
             throw new Error("Cannot undo — missing restore snapshot.");
           }
-          await db.sales.update(saleId, {
-            ...restoredSale,
-          });
-          await db.lots.update(lotId, {
-            ...restoredLot,
-            updatedAt: new Date(),
-          });
+          const curS = await db.sales.get(saleId);
+          if (curS) {
+            const nextS: Sale = { ...curS, ...restoredSale };
+            if (restoredSale.consignorId == null) delete nextS.consignorId;
+            await db.sales.put(nextS);
+          }
+          const curLot = await db.lots.get(lotId);
+          if (curLot) {
+            const next: Lot = {
+              ...curLot,
+              ...restoredLot,
+              updatedAt: new Date(),
+            };
+            if (restoredLot.consignorId == null) delete next.consignorId;
+            await db.lots.put(next);
+          }
         }
       });
       setUndoState(null);
@@ -348,14 +413,19 @@ export function SaleForm({
     const qty = Math.max(1, parseInt(quantity.trim(), 10) || 1);
     const now = new Date();
 
-    await db.lots.update(existingLot.id, {
-      status: "passed",
-      description: titleTrim || existingLot.description,
-      consignor: consignorTrim || undefined,
-      notes: notesTrim || undefined,
-      quantity: qty,
-      updatedAt: now,
-    });
+    await patchLotWithConsignor(
+      db,
+      existingLot.id,
+      {
+        status: "passed",
+        description: titleTrim || existingLot.description,
+        consignor: consignorTrim || undefined,
+        notes: notesTrim || undefined,
+        quantity: qty,
+        updatedAt: now,
+      },
+      linkedConsignorId
+    );
 
     try {
       sessionStorage.setItem(CLERK_KEY, initials);
@@ -371,6 +441,7 @@ export function SaleForm({
     setPassOutEnabled(false);
     setTitle("");
     setConsignor("");
+    setLinkedConsignorId(null);
     setLotNotes("");
     setQuantity("1");
     setSellPrice("");
@@ -457,7 +528,10 @@ export function SaleForm({
     const notesTrim = lotNotes.trim();
     const consignorTrim = consignor.trim() || undefined;
 
-    const lotMarkSold = {
+    const lotMarkSold: Pick<
+      Lot,
+      "description" | "consignor" | "notes" | "quantity" | "status" | "updatedAt"
+    > = {
       description: titleTrim,
       consignor: consignorTrim,
       notes: notesTrim || undefined,
@@ -471,7 +545,7 @@ export function SaleForm({
     const lineHammer = roundMoney(unitHammer * qty);
 
     function buildSaleRow(lotId: number): Omit<Sale, "id"> {
-      return {
+      const row: Omit<Sale, "id"> = {
         eventId,
         lotId,
         bidderId,
@@ -484,6 +558,8 @@ export function SaleForm({
         clerkInitials: initials,
         createdAt: now,
       };
+      if (linkedConsignorId != null) row.consignorId = linkedConsignorId;
+      return row;
     }
 
     let nextUndo: UndoState;
@@ -493,14 +569,16 @@ export function SaleForm({
         let newLotId = 0;
         let newSaleId = 0;
         await db.transaction("rw", [db.lots, db.sales], async () => {
-          newLotId = (await db.lots.add({
+          const newLotRow: Omit<Lot, "id"> = {
             eventId,
             baseLotNumber: baseNum,
             lotSuffix: newSuffix,
             displayLotNumber: displayStr,
             ...lotMarkSold,
             createdAt: now,
-          })) as number;
+          };
+          if (linkedConsignorId != null) newLotRow.consignorId = linkedConsignorId;
+          newLotId = (await db.lots.add(newLotRow)) as number;
           newSaleId = (await db.sales.add(buildSaleRow(newLotId))) as number;
         });
         nextUndo = {
@@ -539,6 +617,7 @@ export function SaleForm({
         const restoredLot: LotUndoSlice = {
           description: existingLot.description,
           consignor: existingLot.consignor,
+          consignorId: existingLot.consignorId,
           notes: existingLot.notes,
           quantity: existingLot.quantity,
           status: existingLot.status,
@@ -547,7 +626,12 @@ export function SaleForm({
         if (openCatalog) {
           let newSaleId = 0;
           await db.transaction("rw", [db.lots, db.sales], async () => {
-            await db.lots.update(lotId, lotMarkSold);
+            await patchLotWithConsignor(
+              db,
+              lotId,
+              lotMarkSold,
+              linkedConsignorId
+            );
             newSaleId = (await db.sales.add(buildSaleRow(lotId))) as number;
           });
           nextUndo = {
@@ -565,14 +649,26 @@ export function SaleForm({
             paddleNumber: prevSale.paddleNumber,
             description: prevSale.description,
             consignor: prevSale.consignor,
+            consignorId: prevSale.consignorId,
             quantity: prevSale.quantity,
             amount: prevSale.amount,
             clerkInitials: prevSale.clerkInitials,
             createdAt: prevSale.createdAt,
           };
           await db.transaction("rw", [db.lots, db.sales], async () => {
-            await db.lots.update(lotId, lotMarkSold);
-            await db.sales.update(prevSale.id!, buildSaleRow(lotId));
+            await patchLotWithConsignor(
+              db,
+              lotId,
+              lotMarkSold,
+              linkedConsignorId
+            );
+            const salePatch = buildSaleRow(lotId);
+            const curS = await db.sales.get(prevSale.id!);
+            if (curS) {
+              const nextS: Sale = { ...curS, ...salePatch };
+              if (linkedConsignorId == null) delete nextS.consignorId;
+              await db.sales.put(nextS);
+            }
           });
           nextUndo = {
             mode: "resold",
@@ -585,7 +681,12 @@ export function SaleForm({
         } else {
           let newSaleId = 0;
           await db.transaction("rw", [db.lots, db.sales], async () => {
-            await db.lots.update(lotId, lotMarkSold);
+            await patchLotWithConsignor(
+              db,
+              lotId,
+              lotMarkSold,
+              linkedConsignorId
+            );
             newSaleId = (await db.sales.add(buildSaleRow(lotId))) as number;
           });
           nextUndo = {
@@ -624,6 +725,7 @@ export function SaleForm({
       setPassOutEnabled(false);
       setTitle("");
       setConsignor("");
+      setLinkedConsignorId(null);
       setLotNotes("");
       setQuantity("1");
       setSellPrice("");
@@ -764,17 +866,64 @@ export function SaleForm({
         );
       case "consignor":
         return (
-          <Input
-            key="consignor"
-            ref={(el) => {
-              setRef("consignor")(el);
-            }}
-            id="sale-consignor"
-            label="Consignor (optional)"
-            value={consignor}
-            onChange={(e) => setConsignor(e.target.value)}
-            autoComplete="off"
-          />
+          <div key="consignor" className="space-y-2">
+            <div>
+              <label
+                htmlFor="sale-consignor-registry"
+                className="mb-1 block text-sm font-medium text-ink dark:text-slate-100"
+              >
+                Registered consignor
+              </label>
+              <select
+                id="sale-consignor-registry"
+                className="w-full rounded-lg border border-navy/20 bg-white px-3 py-2 text-sm text-ink focus:border-navy focus:outline-none focus:ring-1 focus:ring-navy dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
+                value={
+                  linkedConsignorId != null ? String(linkedConsignorId) : ""
+                }
+                onChange={(e) => {
+                  const v = e.target.value;
+                  if (!v) {
+                    setLinkedConsignorId(null);
+                    return;
+                  }
+                  const id = parseInt(v, 10);
+                  const c = consignors?.find((x) => x.id === id);
+                  if (c) {
+                    setLinkedConsignorId(id);
+                    setConsignor(formatConsignorDisplayLabel(c));
+                  }
+                }}
+              >
+                <option value="">— None —</option>
+                {(consignors ?? [])
+                  .filter((c) => c.id != null)
+                  .map((c) => (
+                    <option key={c.id} value={String(c.id)}>
+                      #{c.consignorNumber} — {c.name}
+                    </option>
+                  ))}
+              </select>
+            </div>
+            <Input
+              ref={(el) => {
+                setRef("consignor")(el);
+              }}
+              id="sale-consignor"
+              label="Consignor label (optional)"
+              value={consignor}
+              onChange={(e) => {
+                const v = e.target.value;
+                setConsignor(v);
+                if (linkedConsignorId != null) {
+                  const c = consignors?.find((x) => x.id === linkedConsignorId);
+                  if (c && v.trim() !== formatConsignorDisplayLabel(c)) {
+                    setLinkedConsignorId(null);
+                  }
+                }
+              }}
+              autoComplete="off"
+            />
+          </div>
         );
       case "initials":
         return (

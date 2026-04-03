@@ -4,7 +4,7 @@ import { newEventSyncId } from "@/lib/utils/syncId";
 /** Pre–per-user DB; migrated once into the signed-in user's database. */
 export const LEGACY_DB_NAME = "AuctionManagerDB";
 
-const STORE_DEF = {
+const STORE_DEF_CORE = {
   events: "++id, name, createdAt, syncId",
   bidders:
     "++id, eventId, paddleNumber, [eventId+paddleNumber]",
@@ -14,6 +14,21 @@ const STORE_DEF = {
     "++id, eventId, lotId, bidderId, displayLotNumber, paddleNumber",
   invoices: "++id, eventId, bidderId, status, invoiceNumber",
   settings: "++id",
+} as const;
+
+const STORE_DEF_V4 = {
+  ...STORE_DEF_CORE,
+  eventLocalBranding: "++id, &eventId",
+} as const;
+
+const STORE_DEF_V5 = {
+  ...STORE_DEF_V4,
+  consignors:
+    "++id, eventId, consignorNumber, [eventId+consignorNumber]",
+  lots:
+    "++id, eventId, baseLotNumber, lotSuffix, displayLotNumber, status, [eventId+displayLotNumber], [eventId+baseLotNumber], consignorId",
+  sales:
+    "++id, eventId, lotId, bidderId, displayLotNumber, paddleNumber, consignorId",
 } as const;
 
 export function sanitizeUserIdForDbName(userId: string): string {
@@ -32,6 +47,8 @@ export interface AuctionEvent {
   taxRate: number;
   /** 0–1, buyer's premium rate on hammer; invoice rows store premium separately. */
   buyersPremiumRate: number;
+  /** 0–1, default commission on hammer paid by consignor (before per-consignor override). */
+  defaultConsignorCommissionRate: number;
   currencySymbol: string;
   /** Stable id for cloud backup / sync (UUID). */
   syncId: string;
@@ -61,6 +78,8 @@ export interface Lot {
   displayLotNumber: string;
   description: string;
   consignor?: string;
+  /** Optional link to consignors table; commission attribution prefers this. */
+  consignorId?: number;
   /** Ring / clerk notes, shown when clerking. */
   notes?: string;
   quantity: number;
@@ -78,6 +97,7 @@ export interface Sale {
   paddleNumber: number;
   description: string;
   consignor?: string;
+  consignorId?: number;
   quantity: number;
   /** Hammer line total (unit hammer × quantity). */
   amount: number;
@@ -109,15 +129,46 @@ export interface AppSettings {
   lastCloudPushAt?: Date;
   lastCloudPullAt?: Date;
   lastBackupNudgeDismissedAt?: Date;
+  /** Local only — not included in JSON/cloud export. */
+  invoiceLogoBlob?: Blob;
+  invoiceLogoMime?: string;
+  /** Default invoice thank-you line; use {org} as placeholder for organization name. */
+  invoiceFooterMessage?: string;
+}
+
+export interface Consignor {
+  id?: number;
+  eventId: number;
+  /** Unique within the event (like paddle number). */
+  consignorNumber: number;
+  name: string;
+  email?: string;
+  phone?: string;
+  notes?: string;
+  /** 0–1; when set, overrides event defaultConsignorCommissionRate for this consignor. */
+  commissionRate?: number;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+/** Local-only branding for one event (overrides user defaults on invoices). */
+export interface EventLocalBranding {
+  id?: number;
+  eventId: number;
+  invoiceLogoBlob?: Blob;
+  invoiceLogoMime?: string;
+  invoiceFooterMessage?: string;
 }
 
 export class AuctionDB extends Dexie {
   events!: Table<AuctionEvent>;
   bidders!: Table<Bidder>;
+  consignors!: Table<Consignor>;
   lots!: Table<Lot>;
   sales!: Table<Sale>;
   invoices!: Table<Invoice>;
   settings!: Table<AppSettings>;
+  eventLocalBranding!: Table<EventLocalBranding>;
 
   constructor(userId: string | number) {
     super(userDexieDatabaseName(userId));
@@ -133,7 +184,7 @@ export class AuctionDB extends Dexie {
       settings: "++id",
     });
     this.version(2)
-      .stores(STORE_DEF)
+      .stores(STORE_DEF_CORE)
       .upgrade(async (tx) => {
         const evTable = tx.table("events");
         await evTable.toCollection().modify((row: Record<string, unknown>) => {
@@ -146,7 +197,7 @@ export class AuctionDB extends Dexie {
         });
       });
     this.version(3)
-      .stores(STORE_DEF)
+      .stores(STORE_DEF_CORE)
       .upgrade(async (tx) => {
         const round2 = (n: number) => Math.round(n * 100) / 100;
         const events = await tx.table("events").toArray();
@@ -173,6 +224,22 @@ export class AuctionDB extends Dexie {
             row.subtotal = hammer;
             row.buyersPremiumAmount = bpAmt;
           });
+      });
+    this.version(4).stores(STORE_DEF_V4);
+    this.version(5)
+      .stores(STORE_DEF_V5)
+      .upgrade(async (tx) => {
+        const evTable = tx.table("events");
+        await evTable.toCollection().modify((row: Record<string, unknown>) => {
+          const v = row.defaultConsignorCommissionRate;
+          if (
+            v == null ||
+            v === "" ||
+            (typeof v === "number" && !Number.isFinite(v))
+          ) {
+            row.defaultConsignorCommissionRate = 0;
+          }
+        });
       });
   }
 }
@@ -271,6 +338,9 @@ export async function migrateLegacyToUserDb(userDb: AuctionDB): Promise<void> {
               r.syncId = newEventSyncId();
             }
             if (r.buyersPremiumRate == null) r.buyersPremiumRate = 0;
+            if (r.defaultConsignorCommissionRate == null) {
+              r.defaultConsignorCommissionRate = 0;
+            }
             await userDb.table(name).add(r as never);
           }
         } else {

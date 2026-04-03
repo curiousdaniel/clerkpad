@@ -2,6 +2,7 @@ import type {
   AuctionDB,
   AuctionEvent,
   Bidder,
+  Consignor,
   Invoice,
   Lot,
   Sale,
@@ -11,8 +12,10 @@ import { toDate } from "@/lib/utils/coerceDate";
 import { newEventSyncId } from "@/lib/utils/syncId";
 import { roundMoney } from "@/lib/services/invoiceLogic";
 
-export const EXPORT_VERSION = 2;
+export const EXPORT_VERSION = 3;
 export const EXPORT_VERSION_LEGACY = 1;
+/** Still accepted for import (consignors array optional). */
+export const EXPORT_VERSION_2 = 2;
 
 /** JSON shape for `event` inside export (no local `id` / `updatedAt`). */
 export type EventExportEventShape = Omit<
@@ -25,6 +28,8 @@ export type EventExportEventShape = Omit<
   /** v1 exports omit these */
   syncId?: string;
   buyersPremiumRate?: number;
+  /** v2 and earlier omit; default 0 on import */
+  defaultConsignorCommissionRate?: number;
 };
 
 export type EventExportPayload = {
@@ -39,18 +44,30 @@ export type EventExportPayload = {
       updatedAt: string;
     }
   >;
-  lots: Array<
-    Omit<Lot, "id" | "eventId" | "createdAt" | "updatedAt"> & {
+  consignors: Array<
+    Omit<Consignor, "id" | "eventId" | "createdAt" | "updatedAt"> & {
       legacyId?: number;
       createdAt: string;
       updatedAt: string;
     }
   >;
+  lots: Array<
+    Omit<Lot, "id" | "eventId" | "createdAt" | "updatedAt" | "consignorId"> & {
+      legacyId?: number;
+      legacyConsignorId?: number;
+      createdAt: string;
+      updatedAt: string;
+    }
+  >;
   sales: Array<
-    Omit<Sale, "id" | "eventId" | "lotId" | "bidderId" | "createdAt"> & {
+    Omit<
+      Sale,
+      "id" | "eventId" | "lotId" | "bidderId" | "createdAt" | "consignorId"
+    > & {
       createdAt: string;
       legacyLotId?: number;
       legacyBidderId?: number;
+      legacyConsignorId?: number;
     }
   >;
   invoices: Array<
@@ -97,6 +114,7 @@ export async function buildEventExport(
   if (!event || event.id == null) throw new Error("Event not found");
 
   const bidders = await db.bidders.where("eventId").equals(eventId).toArray();
+  const consignors = await db.consignors.where("eventId").equals(eventId).toArray();
   const lots = await db.lots.where("eventId").equals(eventId).toArray();
   const sales = await db.sales.where("eventId").equals(eventId).toArray();
   const invoices = await db.invoices.where("eventId").equals(eventId).toArray();
@@ -126,19 +144,27 @@ export async function buildEventExport(
       createdAt: isoFromStored(b.createdAt, "bidder.createdAt"),
       updatedAt: isoFromStored(b.updatedAt, "bidder.updatedAt"),
     })),
-    lots: lots.map(({ id, eventId: _ev, ...l }) => ({
+    consignors: consignors.map(({ id, eventId: _ev, ...c }) => ({
+      ...c,
+      legacyId: id,
+      createdAt: isoFromStored(c.createdAt, "consignor.createdAt"),
+      updatedAt: isoFromStored(c.updatedAt, "consignor.updatedAt"),
+    })),
+    lots: lots.map(({ id, eventId: _ev, consignorId, ...l }) => ({
       ...l,
       legacyId: id,
+      ...(consignorId != null ? { legacyConsignorId: consignorId } : {}),
       createdAt: isoFromStored(l.createdAt, "lot.createdAt"),
       updatedAt: isoFromStored(l.updatedAt, "lot.updatedAt"),
     })),
     sales: sales.map((s) => {
-      const { id: _id, eventId: _ev, lotId, bidderId, ...rest } = s;
+      const { id: _id, eventId: _ev, lotId, bidderId, consignorId, ...rest } = s;
       return {
         ...rest,
         createdAt: isoFromStored(s.createdAt, "sale.createdAt"),
         legacyLotId: lotId,
         legacyBidderId: bidderId,
+        ...(consignorId != null ? { legacyConsignorId: consignorId } : {}),
       };
     }),
     invoices: invoices.map((inv) => {
@@ -179,7 +205,11 @@ export function parseEventExportPayload(raw: unknown): EventExportPayload {
   }
   const o = raw as Record<string, unknown>;
   const v = o.exportVersion;
-  if (v !== EXPORT_VERSION && v !== EXPORT_VERSION_LEGACY) {
+  if (
+    v !== EXPORT_VERSION &&
+    v !== EXPORT_VERSION_2 &&
+    v !== EXPORT_VERSION_LEGACY
+  ) {
     throw new Error(`Unsupported export version: ${String(v)}`);
   }
   if (typeof o.event !== "object" || o.event == null) {
@@ -190,9 +220,13 @@ export function parseEventExportPayload(raw: unknown): EventExportPayload {
   }
   const sales = Array.isArray(o.sales) ? o.sales : [];
   const invoices = Array.isArray(o.invoices) ? o.invoices : [];
+  const consignors = Array.isArray(o.consignors)
+    ? o.consignors
+    : ([] as EventExportPayload["consignors"]);
   return {
     ...(o as EventExportPayload),
     exportVersion: v as number,
+    consignors,
     sales: sales as EventExportPayload["sales"],
     invoices: invoices as EventExportPayload["invoices"],
   };
@@ -201,6 +235,7 @@ export function parseEventExportPayload(raw: unknown): EventExportPayload {
 export type ImportSummary = {
   eventId: number;
   bidders: number;
+  consignors: number;
   lots: number;
   sales: number;
   invoices: number;
@@ -315,13 +350,28 @@ function invoiceAmountsFromImportPayload(
   return { subtotal, buyersPremiumAmount, taxAmount: raw.taxAmount, total: raw.total };
 }
 
+function defaultConsignorRateFromPayload(
+  ev: EventExportEventShape,
+  fallback: number
+): number {
+  const r = ev.defaultConsignorCommissionRate;
+  if (typeof r === "number" && Number.isFinite(r)) {
+    return Math.max(0, Math.min(1, r));
+  }
+  if (typeof fallback === "number" && Number.isFinite(fallback)) {
+    return Math.max(0, Math.min(1, fallback));
+  }
+  return 0;
+}
+
 function eventRowFromPayload(
   ev: EventExportEventShape,
   syncId: string,
   buyersPremiumRate: number,
   now: Date,
   lastCloudPushAt?: Date,
-  lastCloudPullAt?: Date
+  lastCloudPullAt?: Date,
+  defaultConsignorCommissionRate?: number
 ): Omit<AuctionEvent, "id"> {
   return {
     name: ev.name,
@@ -330,6 +380,10 @@ function eventRowFromPayload(
     taxRate: ev.taxRate,
     currencySymbol: ev.currencySymbol,
     buyersPremiumRate,
+    defaultConsignorCommissionRate: defaultConsignorRateFromPayload(
+      ev,
+      defaultConsignorCommissionRate ?? 0
+    ),
     syncId,
     lastCloudPushAt,
     lastCloudPullAt,
@@ -359,13 +413,40 @@ async function insertChildrenForEvent(
     bidderIndex++;
   }
 
+  const consignorMap = new Map<number, number>();
+  let consignorIndex = 0;
+  const consignorRows = payload.consignors ?? [];
+  for (const c of consignorRows) {
+    const { legacyId, createdAt, updatedAt, ...rest } = c;
+    const newId = (await db.consignors.add({
+      ...rest,
+      eventId,
+      createdAt: parseDate(createdAt),
+      updatedAt: parseDate(updatedAt),
+    })) as number;
+    const key = legacyId ?? consignorIndex;
+    consignorMap.set(key, newId);
+    consignorIndex++;
+  }
+
   const lotMap = new Map<number, number>();
   let lotIndex = 0;
   for (const l of payload.lots) {
-    const { legacyId, createdAt, updatedAt, ...rest } = l;
+    const {
+      legacyId,
+      legacyConsignorId,
+      createdAt,
+      updatedAt,
+      ...rest
+    } = l;
+    const mappedConsignorId =
+      legacyConsignorId != null
+        ? consignorMap.get(legacyConsignorId)
+        : undefined;
     const newId = (await db.lots.add({
       ...rest,
       eventId,
+      ...(mappedConsignorId != null ? { consignorId: mappedConsignorId } : {}),
       createdAt: parseDate(createdAt),
       updatedAt: parseDate(updatedAt),
     })) as number;
@@ -375,7 +456,13 @@ async function insertChildrenForEvent(
   }
 
   for (const s of payload.sales) {
-    const { legacyLotId, legacyBidderId, createdAt, ...rest } = s;
+    const {
+      legacyLotId,
+      legacyBidderId,
+      legacyConsignorId,
+      createdAt,
+      ...rest
+    } = s;
     const lotId =
       legacyLotId != null ? lotMap.get(legacyLotId) : undefined;
     const bidderId =
@@ -385,11 +472,16 @@ async function insertChildrenForEvent(
         "Sale references unknown lot or bidder — export may be incomplete"
       );
     }
+    const mappedConsignorId =
+      legacyConsignorId != null
+        ? consignorMap.get(legacyConsignorId)
+        : undefined;
     await db.sales.add({
       ...rest,
       eventId,
       lotId,
       bidderId,
+      ...(mappedConsignorId != null ? { consignorId: mappedConsignorId } : {}),
       createdAt: parseDate(createdAt),
     });
   }
@@ -431,6 +523,7 @@ async function insertChildrenForEvent(
   return {
     eventId,
     bidders: payload.bidders.length,
+    consignors: consignorRows.length,
     lots: payload.lots.length,
     sales: payload.sales.length,
     invoices: payload.invoices.length,
@@ -444,7 +537,7 @@ export async function importEventFromPayload(
 ): Promise<ImportSummary> {
   return db.transaction(
     "rw",
-    [db.events, db.bidders, db.lots, db.sales, db.invoices],
+    [db.events, db.bidders, db.consignors, db.lots, db.sales, db.invoices],
     async () => {
       const ev = payload.event;
       const now = new Date();
@@ -471,7 +564,8 @@ export async function importEventFromPayload(
           buyersPremiumRate,
           now,
           lastCloudPushAt,
-          lastCloudPullAt
+          lastCloudPullAt,
+          0
         )
       )) as number;
 
@@ -491,7 +585,7 @@ export async function replaceEventFromPayload(
 ): Promise<ImportSummary> {
   return db.transaction(
     "rw",
-    [db.events, db.bidders, db.lots, db.sales, db.invoices],
+    [db.events, db.bidders, db.consignors, db.lots, db.sales, db.invoices],
     async () => {
       const existing = await db.events.get(eventId);
       if (existing == null) throw new Error("Event not found");
@@ -499,6 +593,7 @@ export async function replaceEventFromPayload(
       await db.invoices.where("eventId").equals(eventId).delete();
       await db.sales.where("eventId").equals(eventId).delete();
       await db.lots.where("eventId").equals(eventId).delete();
+      await db.consignors.where("eventId").equals(eventId).delete();
       await db.bidders.where("eventId").equals(eventId).delete();
 
       const ev = payload.event;
@@ -528,7 +623,8 @@ export async function replaceEventFromPayload(
           buyersPremiumRate,
           now,
           lastCloudPushAt,
-          lastCloudPullAt
+          lastCloudPullAt,
+          existing.defaultConsignorCommissionRate ?? 0
         )
       );
 

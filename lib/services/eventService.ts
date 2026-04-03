@@ -8,12 +8,21 @@ export async function clearEventDataKeepShell(
 ): Promise<void> {
   await db.transaction(
     "rw",
-    [db.bidders, db.lots, db.sales, db.invoices],
+    [
+      db.bidders,
+      db.consignors,
+      db.lots,
+      db.sales,
+      db.invoices,
+      db.eventLocalBranding,
+    ],
     async () => {
       await db.bidders.where("eventId").equals(eventId).delete();
+      await db.consignors.where("eventId").equals(eventId).delete();
       await db.lots.where("eventId").equals(eventId).delete();
       await db.sales.where("eventId").equals(eventId).delete();
       await db.invoices.where("eventId").equals(eventId).delete();
+      await db.eventLocalBranding.where("eventId").equals(eventId).delete();
     }
   );
 }
@@ -24,12 +33,22 @@ export async function deleteEventCascade(
 ): Promise<void> {
   await db.transaction(
     "rw",
-    [db.bidders, db.lots, db.sales, db.invoices, db.events],
+    [
+      db.bidders,
+      db.consignors,
+      db.lots,
+      db.sales,
+      db.invoices,
+      db.eventLocalBranding,
+      db.events,
+    ],
     async () => {
       await db.bidders.where("eventId").equals(eventId).delete();
+      await db.consignors.where("eventId").equals(eventId).delete();
       await db.lots.where("eventId").equals(eventId).delete();
       await db.sales.where("eventId").equals(eventId).delete();
       await db.invoices.where("eventId").equals(eventId).delete();
+      await db.eventLocalBranding.where("eventId").equals(eventId).delete();
       await db.events.delete(eventId);
     }
   );

@@ -7,6 +7,7 @@ import { Header } from "@/components/layout/Header";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { EventSettingsForm } from "@/components/settings/EventSettingsForm";
+import { GlobalInvoiceBrandingCard } from "@/components/settings/GlobalInvoiceBrandingCard";
 import { ClearEventDataDialog } from "@/components/settings/ClearEventDataDialog";
 import { useCurrentEvent } from "@/lib/hooks/useCurrentEvent";
 import { usePwaInstall } from "@/lib/hooks/usePwaInstall";
@@ -147,7 +148,7 @@ export default function SettingsPage() {
       refresh();
       showToast({
         kind: "success",
-        message: `Imported event: ${summary.bidders} bidders, ${summary.lots} lots.`,
+        message: `Imported event: ${summary.bidders} bidders, ${summary.consignors} consignors, ${summary.lots} lots.`,
       });
     } catch (err) {
       showToast({
@@ -206,6 +207,13 @@ export default function SettingsPage() {
         }
       />
 
+      <GlobalInvoiceBrandingCard
+        onSaved={() => {
+          refresh();
+          showToast({ kind: "success", message: "Invoice defaults saved." });
+        }}
+      />
+
       {currentEvent && currentEventId != null ? (
         <EventSettingsForm
           event={currentEvent}
@@ -218,7 +226,7 @@ export default function SettingsPage() {
         <Card>
           <p className="text-sm text-muted">
             Select an event in the sidebar to edit organization name, tax rate,
-            and currency.
+            currency, and per-event invoice overrides.
           </p>
         </Card>
       )}

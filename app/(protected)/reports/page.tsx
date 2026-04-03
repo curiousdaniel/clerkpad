@@ -9,6 +9,7 @@ import { SummaryStats } from "@/components/reports/SummaryStats";
 import { BidderTotals } from "@/components/reports/BidderTotals";
 import { LotResults } from "@/components/reports/LotResults";
 import { PaymentMethodSummary } from "@/components/reports/PaymentMethodSummary";
+import { ConsignorCommissionSummary } from "@/components/reports/ConsignorCommissionSummary";
 import { useCurrentEvent } from "@/lib/hooks/useCurrentEvent";
 import { useUserDb } from "@/components/providers/UserDbProvider";
 import { useToast } from "@/components/providers/ToastProvider";
@@ -46,13 +47,14 @@ export default function ReportsPage() {
     async () =>
       liveQueryGuard("reports.bundle", async () => {
         if (currentEventId == null || !dbReady || !db) return null;
-        const [sales, lots, bidders, invoices] = await Promise.all([
+        const [sales, lots, bidders, invoices, consignors] = await Promise.all([
           db.sales.where("eventId").equals(currentEventId).toArray(),
           db.lots.where("eventId").equals(currentEventId).toArray(),
           db.bidders.where("eventId").equals(currentEventId).toArray(),
           db.invoices.where("eventId").equals(currentEventId).toArray(),
+          db.consignors.where("eventId").equals(currentEventId).toArray(),
         ]);
-        return { sales, lots, bidders, invoices };
+        return { sales, lots, bidders, invoices, consignors };
       }, null),
     [currentEventId, dbReady, db]
   );
@@ -182,6 +184,12 @@ export default function ReportsPage() {
             rows={bidderRows}
             currencySymbol={sym}
             eventSlug={eventSlug}
+          />
+          <ConsignorCommissionSummary
+            event={currentEvent}
+            consignors={bundle.consignors}
+            lots={bundle.lots}
+            sales={bundle.sales}
           />
           <LotResults
             rows={lotRows}
