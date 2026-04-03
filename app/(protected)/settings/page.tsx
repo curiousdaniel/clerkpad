@@ -31,9 +31,6 @@ import { formatBytes } from "@/lib/utils/formatBytes";
 import { formatDateTime } from "@/lib/utils/formatDate";
 import { liveQueryGuard } from "@/lib/dexie/liveQueryGuard";
 
-const linkSecondary =
-  "inline-flex items-center justify-center gap-2 rounded-lg border border-navy/15 bg-surface px-4 py-2 text-sm font-medium text-ink transition hover:border-navy/30 focus:outline-none focus-visible:ring-2 focus-visible:ring-navy focus-visible:ring-offset-2 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:hover:border-slate-500 dark:focus-visible:ring-offset-slate-950";
-
 async function touchBackupDate(db: AuctionDB) {
   await ensureSettingsRow(db);
   await db.settings.update(1, { lastBackupDate: new Date() });
@@ -200,11 +197,6 @@ export default function SettingsPage() {
       <Header
         title="Settings"
         description="Event details, backups, and app information."
-        actions={
-          <Link href="/events/" className={linkSecondary}>
-            Events
-          </Link>
-        }
       />
 
       <GlobalInvoiceBrandingCard

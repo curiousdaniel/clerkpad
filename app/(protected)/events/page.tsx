@@ -9,7 +9,7 @@ import { EventCard } from "@/components/events/EventCard";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { useCurrentEvent } from "@/lib/hooks/useCurrentEvent";
 import { useToast } from "@/components/providers/ToastProvider";
-import type { AuctionEvent, Lot } from "@/lib/db";
+import type { AuctionEvent } from "@/lib/db";
 import { useUserDb } from "@/components/providers/UserDbProvider";
 import {
   buildEventExport,
@@ -18,9 +18,6 @@ import {
   parseEventExportPayload,
 } from "@/lib/services/dataPorter";
 import { deleteEventCascade } from "@/lib/services/eventService";
-import { downloadCsv } from "@/lib/services/csvExporter";
-import { parseLotCsv } from "@/lib/services/csvImportLots";
-import { formatConsignorDisplayLabel } from "@/lib/services/consignorCommission";
 import { liveQueryGuard } from "@/lib/dexie/liveQueryGuard";
 
 export default function EventsPage() {
@@ -28,7 +25,6 @@ export default function EventsPage() {
   const { ready, currentEventId, switchEvent, refresh } = useCurrentEvent();
   const { showToast } = useToast();
   const fileRef = useRef<HTMLInputElement>(null);
-  const lotsCsvRef = useRef<HTMLInputElement>(null);
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<AuctionEvent | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<AuctionEvent | null>(null);
@@ -101,134 +97,6 @@ export default function EventsPage() {
             />
             <Button variant="secondary" type="button" onClick={onPickImportFile}>
               Import event (JSON)
-            </Button>
-            <input
-              ref={lotsCsvRef}
-              type="file"
-              accept=".csv,text/csv"
-              className="hidden"
-              aria-hidden
-              onChange={async (e) => {
-                const file = e.target.files?.[0];
-                e.target.value = "";
-                if (!file || !db || currentEventId == null) return;
-                try {
-                  const text = await file.text();
-                  const { rows, issues } = parseLotCsv(text);
-                  const existing = await db.lots
-                    .where("eventId")
-                    .equals(currentEventId)
-                    .toArray();
-                  const taken = new Set(
-                    existing.map((l) => l.displayLotNumber)
-                  );
-                  const conflicts: string[] = [];
-                  const toAdd = rows.filter((r) => {
-                    if (taken.has(r.displayLotNumber)) {
-                      conflicts.push(r.displayLotNumber);
-                      return false;
-                    }
-                    taken.add(r.displayLotNumber);
-                    return true;
-                  });
-                  const now = new Date();
-                  const consignorRows = await db.consignors
-                    .where("eventId")
-                    .equals(currentEventId)
-                    .toArray();
-                  const consignorByNum = new Map(
-                    consignorRows.map((c) => [c.consignorNumber, c])
-                  );
-                  await db.transaction("rw", db.lots, async () => {
-                    for (const r of toAdd) {
-                      let consignorId: number | undefined;
-                      let consignorLabel = r.consignor;
-                      if (r.consignorNumber != null) {
-                        const c = consignorByNum.get(r.consignorNumber);
-                        if (c?.id != null) {
-                          consignorId = c.id;
-                          consignorLabel = formatConsignorDisplayLabel(c);
-                        }
-                      }
-                      const row: Omit<Lot, "id"> = {
-                        eventId: currentEventId,
-                        baseLotNumber: r.baseLotNumber,
-                        lotSuffix: r.lotSuffix,
-                        displayLotNumber: r.displayLotNumber,
-                        description: r.description,
-                        consignor: consignorLabel,
-                        quantity: r.quantity,
-                        notes: r.notes,
-                        status: "unsold",
-                        createdAt: now,
-                        updatedAt: now,
-                      };
-                      if (consignorId != null) row.consignorId = consignorId;
-                      await db.lots.add(row);
-                    }
-                  });
-                  const parts: string[] = [];
-                  if (toAdd.length) parts.push(`Imported ${toAdd.length} lot(s).`);
-                  if (issues.length)
-                    parts.push(`${issues.length} row issue(s) in file.`);
-                  if (conflicts.length)
-                    parts.push(
-                      `Skipped ${conflicts.length} lot(s) already in this event.`
-                    );
-                  const ok =
-                    toAdd.length > 0 &&
-                    issues.length === 0 &&
-                    conflicts.length === 0;
-                  showToast({
-                    kind: ok ? "success" : toAdd.length > 0 ? "info" : "error",
-                    message: parts.join(" ") || "Nothing imported.",
-                  });
-                } catch (err) {
-                  showToast({
-                    kind: "error",
-                    message:
-                      err instanceof Error ? err.message : "CSV import failed.",
-                  });
-                }
-              }}
-            />
-            <Button
-              variant="secondary"
-              type="button"
-              disabled={currentEventId == null}
-              title={
-                currentEventId == null
-                  ? "Select an event in the sidebar first"
-                  : undefined
-              }
-              onClick={() =>
-                downloadCsv("clerkbid-lots-template.csv", [
-                  "baseLotNumber",
-                  "suffix",
-                  "description",
-                  "consignorNumber",
-                  "consignor",
-                  "quantity",
-                  "notes",
-                ], [
-                  [1, "", "Sample lot description", "", "Consignor LLC", 1, "Ring note"],
-                ])
-              }
-            >
-              Lots CSV template
-            </Button>
-            <Button
-              variant="secondary"
-              type="button"
-              disabled={currentEventId == null}
-              title={
-                currentEventId == null
-                  ? "Select an event in the sidebar first"
-                  : undefined
-              }
-              onClick={() => lotsCsvRef.current?.click()}
-            >
-              Import lots (CSV)
             </Button>
             <Button type="button" onClick={() => { setEditing(null); setFormOpen(true); }}>
               Create new event

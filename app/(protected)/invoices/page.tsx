@@ -177,9 +177,6 @@ export default function InvoicesPage() {
         description={`Generate, print, and record payments for ${currentEvent.name}.`}
         actions={
           <>
-            <Link href="/clerking/" className={linkSecondary}>
-              Clerking
-            </Link>
             <Button
               type="button"
               variant="secondary"

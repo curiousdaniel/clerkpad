@@ -39,11 +39,6 @@ export default function ClerkingPage() {
       <Header
         title="Clerking"
         description={`Record sales for ${currentEvent.name}. Tab: lot → price → paddle → qty → description → notes → consignor → initials. Enter submits; Shift+Enter pass-out; Esc clears.`}
-        actions={
-          <Link href="/bidders/" className={linkSecondary}>
-            Bidders
-          </Link>
-        }
       />
 
       <div className="grid gap-8 lg:grid-cols-5">

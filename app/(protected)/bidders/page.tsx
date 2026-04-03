@@ -168,9 +168,6 @@ export default function BiddersPage() {
             >
               Import bidders (CSV)
             </Button>
-            <Link href="/events/" className={linkSecondary}>
-              Events
-            </Link>
             <Button
               type="button"
               onClick={() => {

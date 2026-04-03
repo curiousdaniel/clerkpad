@@ -140,19 +140,6 @@ export default function DashboardPage() {
       <Header
         title={currentEvent.name}
         description={currentEvent.organizationName}
-        actions={
-          <>
-            <Link href="/bidders/" className={linkSecondary}>
-              Register bidder
-            </Link>
-            <Link href="/clerking/" className={linkPrimary}>
-              Record sale
-            </Link>
-            <Link href="/invoices/" className={linkSecondary}>
-              Invoices
-            </Link>
-          </>
-        }
       />
 
       {showBackupNudge && db ? (

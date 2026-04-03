@@ -188,9 +188,6 @@ export default function ConsignorsPage() {
             >
               Import consignors (CSV)
             </Button>
-            <Link href="/settings/" className={linkSecondary}>
-              Event settings
-            </Link>
             <Button
               type="button"
               onClick={() => {

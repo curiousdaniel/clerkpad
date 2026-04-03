@@ -10,6 +10,7 @@ import {
   Gavel,
   FileText,
   BarChart3,
+  CircleHelp,
   Settings,
   LogOut,
 } from "lucide-react";
@@ -26,6 +27,7 @@ const nav = [
   { href: "/clerking/", label: "Clerking", icon: Gavel },
   { href: "/invoices/", label: "Invoices", icon: FileText },
   { href: "/reports/", label: "Reports", icon: BarChart3 },
+  { href: "/help/", label: "Help", icon: CircleHelp },
   { href: "/settings/", label: "Settings", icon: Settings },
 ];
 

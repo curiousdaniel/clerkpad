@@ -115,14 +115,9 @@ export default function ReportsPage() {
         title="Reports"
         description={`Summaries, accounting CSV, list PDFs, and detail exports for ${currentEvent.name}.`}
         actions={
-          <>
-            <Link href="/invoices/" className={linkSecondary}>
-              Invoices
-            </Link>
-            <Link href="/clerking/" className={linkSecondary}>
-              Clerking
-            </Link>
-          </>
+          <Link href="/invoices/" className={linkSecondary}>
+            Invoices
+          </Link>
         }
       />
 
