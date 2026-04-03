@@ -47,3 +47,7 @@ Under Settings, **Invoice appearance** (account-wide) lets you upload a **defaul
 ## Feedback
 
 If something is confusing, broken, or missing, we want to hear it. Use **[Feedback](/feedback/)** (also linked in the sidebar and app footer) to send questions, bug reports, and **requests for changes or new features**. The AuctionMethod team reads every submission and uses it to improve ClerkBid.
+
+## Open source
+
+ClerkBid is published under the **MIT License**, so anyone may use, modify, and redistribute it for commercial or personal projects, subject to the license terms. The full source code is available on **[GitHub](https://github.com/curiousdaniel/clerkbid)**.

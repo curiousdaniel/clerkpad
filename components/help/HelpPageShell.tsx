@@ -152,6 +152,19 @@ export function HelpPageShell({ markdown }: { markdown: string }) {
             </Link>
             .
           </p>
+          <p className="mt-3 text-xs leading-relaxed text-muted dark:text-slate-400">
+            ClerkBid is open source under the MIT License—anyone may use and
+            adapt it.{" "}
+            <a
+              href="https://github.com/curiousdaniel/clerkbid"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-medium text-navy underline underline-offset-2 dark:text-sky-300"
+            >
+              Source code on GitHub
+            </a>
+            .
+          </p>
         </div>
       </div>
     </>
