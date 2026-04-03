@@ -33,7 +33,10 @@ export async function nextPassOutLineDisplay(
   if (rows.length === 0) {
     return displayLotNumberFromParts(baseLotNumber, "");
   }
+  const sample = rows[0]!.displayLotNumber;
+  const digitPrefix = sample.match(/^(\d+)/);
+  const baseDigits = digitPrefix ? digitPrefix[1]! : String(baseLotNumber);
   const maxS = maxLotSuffix(rows.map((r) => r.lotSuffix));
   const nextS = nextSuffix(maxS);
-  return displayLotNumberFromParts(baseLotNumber, nextS);
+  return baseDigits + nextS;
 }

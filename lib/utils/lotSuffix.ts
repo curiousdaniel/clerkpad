@@ -41,9 +41,10 @@ export function nextSuffix(current: string): string {
   return "A" + chars.join("");
 }
 
+/** Canonical display: unpadded base + suffix (no leading zeros added). */
 export function displayLotNumberFromParts(
   baseLotNumber: number,
   lotSuffix: string
 ): string {
-  return baseLotNumber.toString().padStart(4, "0") + lotSuffix;
+  return String(baseLotNumber) + lotSuffix;
 }

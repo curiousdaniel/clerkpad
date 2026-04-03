@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { formatBaseLotDisplay, parseLotDisplay } from "./lotParse";
+import {
+  formatBaseLotDisplay,
+  formatLotDisplayFromInput,
+  lotDisplayBaseDigits,
+  parseLotDisplay,
+} from "./lotParse";
 
 describe("parseLotDisplay", () => {
   it("parses padded base", () => {
@@ -20,8 +25,17 @@ describe("parseLotDisplay", () => {
 });
 
 describe("formatBaseLotDisplay", () => {
-  it("pads to 4", () => {
-    expect(formatBaseLotDisplay(1)).toBe("0001");
+  it("uses decimal digits without padding", () => {
+    expect(formatBaseLotDisplay(1)).toBe("1");
     expect(formatBaseLotDisplay(9999)).toBe("9999");
+  });
+});
+
+describe("formatLotDisplayFromInput / lotDisplayBaseDigits", () => {
+  it("preserves typed digit run", () => {
+    expect(formatLotDisplayFromInput("1")).toBe("1");
+    expect(formatLotDisplayFromInput("001")).toBe("001");
+    expect(lotDisplayBaseDigits("001")).toBe("001");
+    expect(formatLotDisplayFromInput("12a")).toBe("12A");
   });
 });

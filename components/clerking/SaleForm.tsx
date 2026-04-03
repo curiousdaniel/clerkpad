@@ -10,8 +10,12 @@ import {
 } from "react";
 import { useUserDb } from "@/components/providers/UserDbProvider";
 import type { Lot, Sale } from "@/lib/db";
-import { displayLotNumberFromParts } from "@/lib/utils/lotSuffix";
-import { parseLotDisplay } from "@/lib/clerking/lotParse";
+import { findLotByEventBaseAndSuffix } from "@/lib/clerking/findLotByBaseSuffix";
+import {
+  formatLotDisplayFromInput,
+  lotDisplayBaseDigits,
+  parseLotDisplay,
+} from "@/lib/clerking/lotParse";
 import {
   computeNewPassOutLotSuffix,
   nextPassOutLineDisplay,
@@ -168,11 +172,12 @@ export function SaleForm({
     if (!db) return;
     const parsed = parseLotDisplay(lotNumber);
     if (!parsed) return;
-    const display = displayLotNumberFromParts(parsed.base, parsed.suffix);
-    const lot = await db.lots
-      .where("[eventId+displayLotNumber]")
-      .equals([eventId, display])
-      .first();
+    const lot = await findLotByEventBaseAndSuffix(
+      db,
+      eventId,
+      parsed.base,
+      parsed.suffix
+    );
     if (lot) {
       setTitle(lot.description);
       setConsignor(lot.consignor ?? "");
@@ -269,7 +274,7 @@ export function SaleForm({
 
     const parsed = parseLotDisplay(lotNumber);
     if (!parsed) {
-      setFormError("Enter a valid lot number (e.g. 0001 or 0001A).");
+      setFormError("Enter a valid lot number (e.g. 1 or 1A).");
       return;
     }
 
@@ -318,12 +323,17 @@ export function SaleForm({
     const newSuffix = passOutActive
       ? await computeNewPassOutLotSuffix(db, eventId, baseNum)
       : "";
-    const displayStr = displayLotNumberFromParts(baseNum, newSuffix);
+    const baseDigits = lotDisplayBaseDigits(lotNumber) ?? String(baseNum);
+    const displayStr = passOutActive
+      ? baseDigits + newSuffix
+      : formatLotDisplayFromInput(lotNumber) ?? baseDigits;
 
-    const existingLot = await db.lots
-      .where("[eventId+displayLotNumber]")
-      .equals([eventId, displayStr])
-      .first();
+    const existingLot = await findLotByEventBaseAndSuffix(
+      db,
+      eventId,
+      baseNum,
+      newSuffix
+    );
 
     const qty = Math.max(1, parseInt(quantity.trim(), 10) || 1);
     const now = new Date();

@@ -38,9 +38,9 @@ describe("suffixRank / maxLotSuffix", () => {
 });
 
 describe("displayLotNumberFromParts", () => {
-  it("pads base and appends suffix", () => {
-    expect(displayLotNumberFromParts(1, "")).toBe("0001");
-    expect(displayLotNumberFromParts(1, "A")).toBe("0001A");
-    expect(displayLotNumberFromParts(42, "BC")).toBe("0042BC");
+  it("uses unpadded base and appends suffix", () => {
+    expect(displayLotNumberFromParts(1, "")).toBe("1");
+    expect(displayLotNumberFromParts(1, "A")).toBe("1A");
+    expect(displayLotNumberFromParts(42, "BC")).toBe("42BC");
   });
 });

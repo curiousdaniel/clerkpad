@@ -35,6 +35,6 @@ describe("parseLotCsv", () => {
 12,A,Widget,1`;
     const { rows, issues } = parseLotCsv(csv);
     expect(issues).toHaveLength(0);
-    expect(rows[0]?.displayLotNumber).toBe("0012A");
+    expect(rows[0]?.displayLotNumber).toBe("12A");
   });
 });

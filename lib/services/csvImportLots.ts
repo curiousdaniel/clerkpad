@@ -1,5 +1,4 @@
 import { normalizeHeaderKey, parseCsvTable } from "@/lib/services/csvParse";
-import { displayLotNumberFromParts } from "@/lib/utils/lotSuffix";
 
 export type LotCsvRow = {
   baseLotNumber: number;
@@ -93,7 +92,7 @@ export function parseLotCsv(text: string): {
     }
 
     const lotSuffix = suffixRaw.replace(/[^A-Z]/g, "");
-    const displayLotNumber = displayLotNumberFromParts(baseLotNumber, lotSuffix);
+    const displayLotNumber = baseStr.trim() + lotSuffix;
     if (displaysSeen.has(displayLotNumber)) {
       issues.push({
         rowIndex: rowNum,

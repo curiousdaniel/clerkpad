@@ -4,8 +4,11 @@ import { useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import type { AuctionDB, Lot } from "@/lib/db";
-import { parseLotDisplay } from "@/lib/clerking/lotParse";
-import { displayLotNumberFromParts } from "@/lib/utils/lotSuffix";
+import { findLotByEventBaseAndSuffix } from "@/lib/clerking/findLotByBaseSuffix";
+import {
+  formatLotDisplayFromInput,
+  parseLotDisplay,
+} from "@/lib/clerking/lotParse";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
@@ -23,11 +26,14 @@ async function lookupLot(
 ): Promise<LookupResult | null> {
   const parsed = parseLotDisplay(displayRaw);
   if (!parsed) return null;
-  const display = displayLotNumberFromParts(parsed.base, parsed.suffix);
-  const lot = await db.lots
-    .where("[eventId+displayLotNumber]")
-    .equals([eventId, display])
-    .first();
+  const display = formatLotDisplayFromInput(displayRaw);
+  if (!display) return null;
+  const lot = await findLotByEventBaseAndSuffix(
+    db,
+    eventId,
+    parsed.base,
+    parsed.suffix
+  );
   return { display, lot };
 }
 
@@ -68,7 +74,7 @@ export function LotLookup({ eventId }: { eventId: number }) {
     <Card className="!p-4">
       <h3 className="text-sm font-semibold text-navy">Lot lookup</h3>
       <p className="mt-1 text-xs text-muted">
-        Enter lot # (e.g. 0012 or 0012A) to see status and description.
+        Enter lot # (e.g. 12 or 12A) to see status and description.
       </p>
       <div className="mt-3 flex flex-wrap gap-2">
         <div className="min-w-[140px] flex-1">

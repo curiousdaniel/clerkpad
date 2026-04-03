@@ -13,6 +13,28 @@ export function parseLotDisplay(
   return { base, suffix: m[2] ?? "" };
 }
 
+/** Suggested next lot field: numeric base only, no zero-padding. */
 export function formatBaseLotDisplay(base: number): string {
-  return base.toString().padStart(4, "0");
+  return String(base);
+}
+
+/**
+ * Digit run as entered (after trim / uppercase / collapse spaces), e.g. "1", "001".
+ */
+export function lotDisplayBaseDigits(input: string): string | null {
+  const parsed = parseLotDisplay(input);
+  if (!parsed) return null;
+  const t = input.trim().toUpperCase().replace(/\s+/g, "");
+  const m = t.match(/^(\d{1,4})/);
+  return m ? m[1]! : null;
+}
+
+/** Full display string preserving typed digits + uppercase suffix (e.g. "1", "001A"). */
+export function formatLotDisplayFromInput(input: string): string | null {
+  const parsed = parseLotDisplay(input);
+  if (!parsed) return null;
+  const t = input.trim().toUpperCase().replace(/\s+/g, "");
+  const m = t.match(/^(\d{1,4})([A-Z]*)$/);
+  if (!m) return null;
+  return m[1]! + (m[2] ?? "");
 }
