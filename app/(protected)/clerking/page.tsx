@@ -38,7 +38,7 @@ export default function ClerkingPage() {
     <div>
       <Header
         title="Clerking"
-        description={`Record sales for ${currentEvent.name}. Tab: lot → price → paddle → qty → description → notes → consignor → initials. Enter submits; Shift+Enter pass-out; Esc clears.`}
+        description={`Record sales for ${currentEvent.name}. Tab: lot → price → paddle → qty → description → notes → consignor → initials. Use Record sale or Enter to submit; Shift+Enter pass-out; Esc clears.`}
       />
 
       <div className="grid gap-8 lg:grid-cols-5">

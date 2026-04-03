@@ -1038,6 +1038,20 @@ export function SaleForm({
         onChange={setPassOutEnabled}
       />
 
+      <div className="space-y-1">
+        <Button
+          type="submit"
+          variant="primary"
+          className="w-full py-3 text-base font-semibold sm:py-2.5"
+        >
+          Record sale
+        </Button>
+        <p className="text-center text-xs text-muted sm:text-left">
+          Same as pressing Enter — use after lot, price, paddle, and initials
+          are filled (and pass-out if needed).
+        </p>
+      </div>
+
       <div className="flex flex-wrap items-end gap-3">
         <Button type="button" variant="secondary" onClick={() => void passLotNoSale()}>
           Pass lot (no sale)
@@ -1061,14 +1075,22 @@ export function SaleForm({
       ) : null}
 
       <p className="text-xs text-muted">
-        Enter records the sale (normal or pass-out per checkbox). Tab order:{" "}
-        {tabOrderHelpFragment(fieldOrder)}, then next-lot suggestion, pass out,
-        pass lot (no sale), undo (when shown), then Enter to submit.
+        <span className="sm:hidden">
+          Use <strong className="font-medium text-ink dark:text-slate-200">
+            Record sale
+          </strong>{" "}
+          or a keyboard: Enter submits (normal or pass-out per checkbox).
+        </span>
+        <span className="hidden sm:inline">
+          Enter records the sale (normal or pass-out per checkbox). Tab order:{" "}
+          {tabOrderHelpFragment(fieldOrder)}, then next-lot suggestion, pass out,
+          <strong className="font-medium text-ink dark:text-slate-200">
+            {" "}
+            Record sale
+          </strong>
+          , pass lot (no sale), undo (when shown), then Enter to submit.
+        </span>
       </p>
-
-      <button type="submit" className="sr-only">
-        Submit sale
-      </button>
     </form>
   );
 }
