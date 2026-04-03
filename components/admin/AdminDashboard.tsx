@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { startTransition, useState } from "react";
 import { signIn } from "next-auth/react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
@@ -57,7 +57,14 @@ export function AdminDashboard({
     }
   }
 
-  async function deleteUser(target: AdminUserRow) {
+  /** Defer after click so the browser can paint before confirm/fetch (INP). */
+  function requestDeleteUser(target: AdminUserRow) {
+    window.setTimeout(() => {
+      void runDeleteUser(target);
+    }, 0);
+  }
+
+  async function runDeleteUser(target: AdminUserRow) {
     const ok = window.confirm(
       `Permanently delete user ${target.email} (ID ${target.id})?\n\n` +
         `This cannot be undone. If they are the last member of “${target.vendor_name}”, the organization and its cloud backups will be removed.`
@@ -73,12 +80,18 @@ export function AdminDashboard({
       });
       const data = (await res.json()) as { error?: string };
       if (!res.ok) {
-        window.alert(data.error ?? "Could not delete user.");
+        window.setTimeout(() => {
+          window.alert(data.error ?? "Could not delete user.");
+        }, 0);
         return;
       }
-      router.refresh();
+      startTransition(() => {
+        router.refresh();
+      });
     } catch {
-      window.alert("Something went wrong.");
+      window.setTimeout(() => {
+        window.alert("Something went wrong.");
+      }, 0);
     } finally {
       setDeletingId(null);
     }
@@ -186,7 +199,7 @@ export function AdminDashboard({
                             isSuperAdminUserIdAndEmail(String(u.id), u.email)
                           }
                           className="border-red-200 text-red-800 hover:bg-red-50 dark:border-red-900/50 dark:text-red-200 dark:hover:bg-red-950/40"
-                          onClick={() => void deleteUser(u)}
+                          onClick={() => requestDeleteUser(u)}
                           title={
                             isSuperAdminUserIdAndEmail(String(u.id), u.email)
                               ? "Super-admin accounts cannot be deleted here."
