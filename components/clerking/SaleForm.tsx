@@ -129,15 +129,22 @@ export function SaleForm({
     requestAnimationFrame(() => el?.focus());
   }, []);
 
-  const refreshLotSuggestion = useCallback(async () => {
-    if (!readSuggestNextLot()) {
-      setLotNumber("");
-      return;
-    }
-    if (!db) return;
-    const next = await getNextSuggestedLotDisplay(db, eventId);
-    setLotNumber(next);
-  }, [db, eventId]);
+  const refreshLotSuggestion = useCallback(
+    async (afterSoldDisplay?: string) => {
+      if (!readSuggestNextLot()) {
+        setLotNumber("");
+        return;
+      }
+      if (!db) return;
+      const next = await getNextSuggestedLotDisplay(
+        db,
+        eventId,
+        afterSoldDisplay ? { afterSoldDisplay } : undefined
+      );
+      setLotNumber(next);
+    },
+    [db, eventId]
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -524,7 +531,7 @@ export function SaleForm({
       setQuantity("1");
       setSellPrice("");
       setPaddleNumber("");
-      await refreshLotSuggestion();
+      await refreshLotSuggestion(displayStr);
       focusField("lot");
     }
   }
