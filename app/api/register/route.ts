@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { sql } from "@/lib/db/postgres";
 import { slugifyOrgName } from "@/lib/auth/slug";
+import { syncHubSpotRegistration } from "@/lib/hubspot/syncRegistration";
 
 export const runtime = "nodejs";
 
@@ -88,6 +89,13 @@ export async function POST(req: Request) {
       }
       throw e;
     }
+
+    void syncHubSpotRegistration({
+      email,
+      firstName,
+      lastName,
+      organizationName,
+    });
 
     return NextResponse.json({ ok: true });
   } catch (e) {
