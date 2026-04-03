@@ -13,9 +13,11 @@ import {
   CircleHelp,
   MessageSquare,
   Settings,
+  Shield,
   LogOut,
 } from "lucide-react";
-import { signOut } from "next-auth/react";
+import { signOut, useSession } from "next-auth/react";
+import { isSuperAdminUserIdAndEmail } from "@/lib/auth/superAdmin";
 import { OFFLINE_SESSION_STORAGE_KEY } from "@/lib/auth/offlineSession";
 import { closeAndClearAuctionDbCache } from "@/lib/db";
 import { EventSwitcher } from "./EventSwitcher";
@@ -35,6 +37,23 @@ const nav = [
 
 export function Sidebar() {
   const pathname = usePathname();
+  const { data: session, status } = useSession();
+
+  const showAdminLink =
+    status === "authenticated" &&
+    session?.user &&
+    isSuperAdminUserIdAndEmail(session.user.id, session.user.email) &&
+    !session.impersonatedByUserId;
+
+  const adminNav = showAdminLink
+    ? [{ href: "/admin/", label: "Admin", icon: Shield }]
+    : [];
+
+  const mainNav = [
+    ...nav.slice(0, -1),
+    ...adminNav,
+    nav[nav.length - 1]!,
+  ];
 
   return (
     <aside className="flex h-full w-60 shrink-0 flex-col border-r border-navy/10 bg-surface dark:border-slate-700 dark:bg-slate-900">
@@ -52,7 +71,7 @@ export function Sidebar() {
         </div>
       </div>
       <nav className="flex-1 space-y-0.5 p-3" aria-label="Main">
-        {nav.map(({ href, label, icon: Icon }) => {
+        {mainNav.map(({ href, label, icon: Icon }) => {
           const p = (pathname ?? "/").replace(/\/$/, "") || "/";
           const h = href.replace(/\/$/, "") || "/";
           const active = p === h || p.startsWith(`${h}/`);
@@ -83,7 +102,7 @@ export function Sidebar() {
               /* ignore */
             }
             closeAndClearAuctionDbCache();
-            void signOut({ callbackUrl: "/login/" });
+            void signOut({ callbackUrl: "/" });
           }}
         >
           <LogOut className="h-4 w-4 shrink-0" aria-hidden />

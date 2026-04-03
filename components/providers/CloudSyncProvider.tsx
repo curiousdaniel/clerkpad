@@ -11,6 +11,7 @@ import {
   type ReactNode,
 } from "react";
 import { useSession } from "next-auth/react";
+import { ImpersonationBanner } from "@/components/admin/ImpersonationBanner";
 import { useUserDb } from "@/components/providers/UserDbProvider";
 import { useEventContext } from "@/components/providers/EventProvider";
 import { useToast } from "@/components/providers/ToastProvider";
@@ -45,7 +46,7 @@ export function useCloudSync(): CloudSyncContextValue {
 }
 
 export function CloudSyncProvider({ children }: { children: ReactNode }) {
-  const { status } = useSession();
+  const { status, data: session } = useSession();
   const { db, ready: dbReady } = useUserDb();
   const { currentEventId, currentEvent, refresh } = useEventContext();
   const { showToast } = useToast();
@@ -255,7 +256,10 @@ export function CloudSyncProvider({ children }: { children: ReactNode }) {
     [pushNow, restoreFromCloud, lastPushAt, checking]
   );
 
-  const topBanner =
+  const impersonationBanner =
+    session?.impersonatedByUserId != null ? <ImpersonationBanner /> : null;
+
+  const syncConflictBanner =
     remoteBanner && currentEventId != null ? (
       <div
         className="flex flex-col gap-3 rounded-xl border border-gold/40 bg-gold/10 px-4 py-3 text-sm text-ink sm:flex-row sm:items-center sm:justify-between"
@@ -278,6 +282,14 @@ export function CloudSyncProvider({ children }: { children: ReactNode }) {
             Dismiss
           </Button>
         </div>
+      </div>
+    ) : null;
+
+  const topBanner =
+    impersonationBanner || syncConflictBanner ? (
+      <div className="space-y-3">
+        {impersonationBanner}
+        {syncConflictBanner}
       </div>
     ) : null;
 

@@ -10,16 +10,22 @@ declare module "next-auth" {
       vendorId: string;
     };
     expires: string;
+    /** Present when super admin is signed in as another user. */
+    impersonatedByUserId?: string;
   }
 
   interface User {
     id: string;
     vendorId: string;
+    /** Set by admin-impersonate provider when acting as a non-admin user. */
+    impersonatedBy?: string;
   }
 }
 
 declare module "next-auth/jwt" {
   interface JWT extends DefaultJWT {
     vendorId?: string;
+    /** Super-admin user id who started impersonation. */
+    impersonatedBy?: string;
   }
 }

@@ -28,6 +28,20 @@ const CONTACT_SIGNUP_VALUE = "HUBSPOT_CONTACT_SIGNUP_SOURCE_VALUE";
 const COMPANY_SIGNUP_PROP = "HUBSPOT_COMPANY_SIGNUP_SOURCE_PROP";
 const COMPANY_SIGNUP_VALUE = "HUBSPOT_COMPANY_SIGNUP_SOURCE_VALUE";
 
+/** HubSpot internal name: Lead Source (How They Heard) — see hs-fields/contact.csv */
+const LEAD_SOURCE_HOW_THEY_HEARD = "lead_source__how_they_heard_";
+/** Must match the dropdown option’s internal value in HubSpot (Settings → Properties). */
+const DEFAULT_LEAD_SOURCE_VALUE = "Clerkbid";
+
+/** Marketing contact status: HubSpot enum “Marketing contact (true)” */
+const MARKETING_CONTACT_STATUS_PROP = "hs_marketable_status";
+const MARKETING_CONTACT_STATUS_VALUE = "true";
+
+const OWNER_PROP = "hubspot_owner_id";
+
+let cachedOwnerId: string | undefined;
+let ownerResolveLoggedError = false;
+
 function envTrim(key: string): string | undefined {
   const v = process.env[key]?.trim();
   return v || undefined;
@@ -45,6 +59,59 @@ function companyAttributionProps(): Record<string, string> {
   if (!prop) return {};
   const val = envTrim(COMPANY_SIGNUP_VALUE) ?? "ClerkBid";
   return { [prop]: val };
+}
+
+function leadSourceValue(): string {
+  return envTrim("HUBSPOT_LEAD_SOURCE_VALUE") ?? DEFAULT_LEAD_SOURCE_VALUE;
+}
+
+/**
+ * Resolves hubspot_owner_id: explicit env, else CRM Owners API by email.
+ * Requires owner read scope on the Private App if not using HUBSPOT_CONTACT_OWNER_ID.
+ */
+async function resolveHubSpotOwnerId(token: string): Promise<string | undefined> {
+  const explicit = envTrim("HUBSPOT_CONTACT_OWNER_ID");
+  if (explicit) {
+    cachedOwnerId = explicit;
+    return explicit;
+  }
+  if (cachedOwnerId) return cachedOwnerId;
+
+  const email =
+    envTrim("HUBSPOT_CONTACT_OWNER_EMAIL") ?? "daniel@auctionmethod.com";
+
+  try {
+    const res = await hubspotRequest<{ results?: Array<{ id: string }> }>(
+      token,
+      `/crm/v3/owners?email=${encodeURIComponent(email)}&limit=1`
+    );
+    const id = res.results?.[0]?.id;
+    if (id) {
+      cachedOwnerId = String(id);
+      return cachedOwnerId;
+    }
+  } catch (e) {
+    if (!ownerResolveLoggedError) {
+      ownerResolveLoggedError = true;
+      console.error(
+        "[hubspot] could not resolve contact owner by email; set HUBSPOT_CONTACT_OWNER_ID or grant crm.objects.owners.read",
+        e
+      );
+    }
+  }
+  return undefined;
+}
+
+async function contactCrmFieldProps(
+  token: string
+): Promise<Record<string, string>> {
+  const props: Record<string, string> = {
+    [LEAD_SOURCE_HOW_THEY_HEARD]: leadSourceValue(),
+    [MARKETING_CONTACT_STATUS_PROP]: MARKETING_CONTACT_STATUS_VALUE,
+  };
+  const ownerId = await resolveHubSpotOwnerId(token);
+  if (ownerId) props[OWNER_PROP] = ownerId;
+  return props;
 }
 
 function escapeHtml(s: string): string {
@@ -184,9 +251,14 @@ async function findOrCreateCompany(
 
 async function createContact(
   token: string,
-  properties: Record<string, string>
+  properties: Record<string, string>,
+  crmProps: Record<string, string>
 ): Promise<string> {
-  const merged = { ...properties, ...contactAttributionProps() };
+  const merged = {
+    ...properties,
+    ...crmProps,
+    ...contactAttributionProps(),
+  };
   const { id } = await hubspotRequest<CreateResult>(
     token,
     "/crm/v3/objects/contacts",
@@ -201,9 +273,14 @@ async function createContact(
 async function patchContact(
   token: string,
   id: string,
-  properties: Record<string, string>
+  properties: Record<string, string>,
+  crmProps: Record<string, string>
 ): Promise<void> {
-  const merged = { ...properties, ...contactAttributionProps() };
+  const merged = {
+    ...properties,
+    ...crmProps,
+    ...contactAttributionProps(),
+  };
   if (Object.keys(merged).length === 0) return;
   await hubspotRequest(token, `/crm/v3/objects/contacts/${id}`, {
     method: "PATCH",
@@ -213,7 +290,8 @@ async function patchContact(
 
 async function findOrCreateContact(
   token: string,
-  payload: HubSpotRegistrationPayload
+  payload: HubSpotRegistrationPayload,
+  crmProps: Record<string, string>
 ): Promise<string> {
   const { email, firstName, lastName, organizationName } = payload;
   const found = await searchContactsByEmail(token, email);
@@ -223,15 +301,19 @@ async function findOrCreateContact(
       firstname: firstName,
       lastname: lastName,
       company: organizationName,
-    });
+    }, crmProps);
     return id;
   }
-  return createContact(token, {
-    email,
-    firstname: firstName,
-    lastname: lastName,
-    company: organizationName,
-  });
+  return createContact(
+    token,
+    {
+      email,
+      firstname: firstName,
+      lastname: lastName,
+      company: organizationName,
+    },
+    crmProps
+  );
 }
 
 /** Primary company: HubSpot-defined type id 1 (contact → company). */
@@ -341,12 +423,17 @@ export async function syncHubSpotRegistration(
   if (!token) return;
 
   try {
+    const contactCrmProps = await contactCrmFieldProps(token);
     const companyId = await findOrCreateCompany(
       token,
       payload.organizationName,
       payload.email
     );
-    const contactId = await findOrCreateContact(token, payload);
+    const contactId = await findOrCreateContact(
+      token,
+      payload,
+      contactCrmProps
+    );
     await associateContactToPrimaryCompany(token, contactId, companyId);
     try {
       await createAttributionNote(token, contactId, companyId, payload);
