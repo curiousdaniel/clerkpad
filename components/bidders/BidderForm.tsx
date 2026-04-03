@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import type { Bidder } from "@/lib/db";
 import { useUserDb } from "@/components/providers/UserDbProvider";
+import { useCloudSync } from "@/components/providers/CloudSyncProvider";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
@@ -24,6 +25,7 @@ export function BidderForm({
   editing,
 }: Props) {
   const { db } = useUserDb();
+  const { scheduleCloudPush } = useCloudSync();
   const [paddleNumber, setPaddleNumber] = useState("");
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
@@ -98,6 +100,7 @@ export function BidderForm({
         updatedAt: now,
       });
     }
+    scheduleCloudPush();
     onSaved();
     onClose();
   }

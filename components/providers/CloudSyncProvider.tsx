@@ -51,6 +51,13 @@ export type CloudSyncContextValue = {
   lastSyncError: string | null;
   /** False when the server reports cloud sync tables missing (503). */
   cloudSyncAvailable: boolean;
+  /** Debounced upload after local changes (events, bidders, sales, etc.). */
+  scheduleCloudPush: () => void;
+  /**
+   * Uploads all local events to the cloud. Returns true when safe to sign out
+   * (no events, or every event saved successfully).
+   */
+  ensureCloudBackupBeforeSignOut: () => Promise<boolean>;
 };
 
 const CloudSyncContext = createContext<CloudSyncContextValue | null>(null);
@@ -83,9 +90,14 @@ export function CloudSyncProvider({ children }: { children: ReactNode }) {
   const [lastSyncError, setLastSyncError] = useState<string | null>(null);
   const [cloudSyncAvailable, setCloudSyncAvailable] = useState(true);
 
-  const lastPullListAttemptRef = useRef(0);
+  /** Updated only after a successful `fetchSyncList` (so failed list calls can retry next cycle). */
+  const lastSuccessfulPullListAtRef = useRef(0);
   const syncCycleLockRef = useRef(false);
   const syncIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const debouncedPushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null
+  );
+  const runPushAllSilentRef = useRef<() => Promise<void>>(async () => {});
 
   useEffect(() => {
     if (!dbReady || !db) return;
@@ -148,8 +160,12 @@ export function CloudSyncProvider({ children }: { children: ReactNode }) {
   const runPullAndMaybeSwitchEvent = useCallback(async () => {
     if (status !== "authenticated" || !db || !online) return;
     const now = Date.now();
-    if (now - lastPullListAttemptRef.current < PULL_LIST_THROTTLE_MS) return;
-    lastPullListAttemptRef.current = now;
+    if (
+      lastSuccessfulPullListAtRef.current > 0 &&
+      now - lastSuccessfulPullListAtRef.current < PULL_LIST_THROTTLE_MS
+    ) {
+      return;
+    }
 
     const list = await fetchSyncList();
     if (!list.ok) {
@@ -157,12 +173,12 @@ export function CloudSyncProvider({ children }: { children: ReactNode }) {
       return;
     }
     setCloudSyncAvailable(true);
+    lastSuccessfulPullListAtRef.current = Date.now();
 
     setSyncPhase("pulling");
     try {
       const r = await pullCloudEventsMissingLocally(db, list.events);
       setLastPullAt(new Date());
-      setLastSyncError(null);
       if (r.imported > 0) {
         refresh();
         await ensureSettingsRow(db);
@@ -200,13 +216,14 @@ export function CloudSyncProvider({ children }: { children: ReactNode }) {
         refresh();
         setRemoteBanner(null);
         setLastSyncError(null);
-      }
-      if (
-        summary.failCount > 0 &&
-        summary.okCount === 0 &&
-        !summary.serverUnavailable
-      ) {
-        setLastSyncError("Cloud backup failed. Try again when online.");
+      } else if (count > 0 && !summary.serverUnavailable) {
+        if (summary.conflictCount > 0 && summary.okCount === 0) {
+          setLastSyncError(
+            "Cloud backup blocked (server has newer data). Open Settings → Sync now or Restore from cloud."
+          );
+        } else if (summary.failCount > 0 && summary.okCount === 0) {
+          setLastSyncError("Cloud backup failed. Try Settings → Sync now.");
+        }
       }
       if (summary.conflictCount > 0) {
         await checkRemoteNewer();
@@ -217,6 +234,127 @@ export function CloudSyncProvider({ children }: { children: ReactNode }) {
       setSyncPhase("idle");
     }
   }, [status, db, online, refresh, checkRemoteNewer]);
+
+  useEffect(() => {
+    runPushAllSilentRef.current = runPushAllSilent;
+  }, [runPushAllSilent]);
+
+  const scheduleCloudPush = useCallback(() => {
+    if (status !== "authenticated" || !online) return;
+    if (debouncedPushTimerRef.current) {
+      clearTimeout(debouncedPushTimerRef.current);
+    }
+    debouncedPushTimerRef.current = setTimeout(() => {
+      debouncedPushTimerRef.current = null;
+      void runPushAllSilentRef.current();
+    }, 1200);
+  }, [status, online]);
+
+  const ensureCloudBackupBeforeSignOut = useCallback(async (): Promise<boolean> => {
+    if (status !== "authenticated" || !db) {
+      showToast({
+        kind: "error",
+        message: "Sign out isn’t available right now. Try again.",
+      });
+      return false;
+    }
+    const eventCount = await db.events.count();
+    if (eventCount === 0) {
+      return true;
+    }
+    if (typeof navigator !== "undefined" && !navigator.onLine) {
+      showToast({
+        kind: "error",
+        message:
+          "You’re offline. Connect to the internet so we can save your auction data to your account, then sign out again.",
+      });
+      return false;
+    }
+    if (debouncedPushTimerRef.current) {
+      clearTimeout(debouncedPushTimerRef.current);
+      debouncedPushTimerRef.current = null;
+    }
+    setSyncPhase("pushing");
+    try {
+      const summary = await pushAllLocalEvents(db);
+      if (summary.serverUnavailable) {
+        setCloudSyncAvailable(false);
+        showToast({
+          kind: "error",
+          message:
+            "Cloud backup isn’t available on this server. Export your events from Settings, or fix backup setup, before signing out.",
+        });
+        return false;
+      }
+      const fullySynced =
+        summary.okCount === eventCount &&
+        summary.failCount === 0 &&
+        summary.conflictCount === 0;
+      if (summary.lastUpdatedAt) {
+        setLastPushAt(new Date(summary.lastUpdatedAt));
+        refresh();
+        setRemoteBanner(null);
+      }
+      if (fullySynced) {
+        setLastSyncError(null);
+        showToast({
+          kind: "success",
+          message: "Latest data saved to your account. Signing you out…",
+        });
+        return true;
+      }
+      if (summary.conflictCount > 0) {
+        showToast({
+          kind: "error",
+          message:
+            "Cloud backup conflict: open Settings and use Restore from cloud or Overwrite cloud copy, then sign out again.",
+        });
+      } else {
+        showToast({
+          kind: "error",
+          message:
+            "Could not save all events to the cloud. Check your connection and try signing out again.",
+        });
+      }
+      return false;
+    } catch {
+      showToast({
+        kind: "error",
+        message:
+          "Could not reach cloud backup. Try again with a stable connection.",
+      });
+      return false;
+    } finally {
+      setSyncPhase("idle");
+    }
+  }, [status, db, refresh, showToast]);
+
+  useEffect(() => {
+    const flush = () => {
+      if (debouncedPushTimerRef.current) {
+        clearTimeout(debouncedPushTimerRef.current);
+        debouncedPushTimerRef.current = null;
+      }
+      if (
+        status !== "authenticated" ||
+        !dbReady ||
+        !db ||
+        (typeof navigator !== "undefined" && !navigator.onLine)
+      ) {
+        return;
+      }
+      void runPushAllSilentRef.current();
+    };
+    const onVisibility = () => {
+      if (document.visibilityState === "hidden") flush();
+    };
+    window.addEventListener("pagehide", flush);
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      window.removeEventListener("pagehide", flush);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+  }, [status, db, dbReady]);
 
   const runBackgroundSyncCycle = useCallback(async () => {
     if (syncCycleLockRef.current) return;
@@ -464,6 +602,8 @@ export function CloudSyncProvider({ children }: { children: ReactNode }) {
       syncPhase,
       lastSyncError,
       cloudSyncAvailable,
+      scheduleCloudPush,
+      ensureCloudBackupBeforeSignOut,
     }),
     [
       pushNow,
@@ -475,6 +615,8 @@ export function CloudSyncProvider({ children }: { children: ReactNode }) {
       syncPhase,
       lastSyncError,
       cloudSyncAvailable,
+      scheduleCloudPush,
+      ensureCloudBackupBeforeSignOut,
     ]
   );
 

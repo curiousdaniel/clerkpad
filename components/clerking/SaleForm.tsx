@@ -28,6 +28,7 @@ import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import { PassOutCheckbox } from "./PassOutCheckbox";
 import { useToast } from "@/components/providers/ToastProvider";
+import { useCloudSync } from "@/components/providers/CloudSyncProvider";
 import { formatCurrency } from "@/lib/utils/formatCurrency";
 import { roundMoney } from "@/lib/services/invoiceLogic";
 import {
@@ -117,6 +118,7 @@ export function SaleForm({
 }) {
   const { db } = useUserDb();
   const { showToast } = useToast();
+  const { scheduleCloudPush } = useCloudSync();
   const [lotNumber, setLotNumber] = useState("");
   const [title, setTitle] = useState("");
   const [consignor, setConsignor] = useState("");
@@ -437,6 +439,7 @@ export function SaleForm({
       kind: "success",
       message: `Lot ${displayStr} marked passed (no sale).`,
     });
+    scheduleCloudPush();
 
     setPassOutEnabled(false);
     setTitle("");
@@ -714,6 +717,7 @@ export function SaleForm({
     }
 
     showToast({ kind: "success", message: `Sale recorded — ${displayStr}` });
+    scheduleCloudPush();
 
     if (passOutActive) {
       setPaddleNumber("");

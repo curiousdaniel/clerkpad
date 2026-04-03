@@ -15,6 +15,7 @@ import {
   type BidderRow,
 } from "@/lib/hooks/useBidders";
 import { useToast } from "@/components/providers/ToastProvider";
+import { useCloudSync } from "@/components/providers/CloudSyncProvider";
 import { useUserDb } from "@/components/providers/UserDbProvider";
 import { downloadCsv } from "@/lib/services/csvExporter";
 import { parseBidderCsv } from "@/lib/services/csvImportBidders";
@@ -39,6 +40,7 @@ export default function BiddersPage() {
   const { db } = useUserDb();
   const { currentEvent, currentEventId } = useCurrentEvent();
   const { showToast } = useToast();
+  const { scheduleCloudPush } = useCloudSync();
   const csvRef = useRef<HTMLInputElement>(null);
   const [search, setSearch] = useState("");
   const [formOpen, setFormOpen] = useState(false);
@@ -119,6 +121,7 @@ export default function BiddersPage() {
                       });
                     }
                   });
+                  if (toAdd.length > 0) scheduleCloudPush();
                   const parts: string[] = [];
                   if (toAdd.length) parts.push(`Imported ${toAdd.length} bidder(s).`);
                   if (issues.length)

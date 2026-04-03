@@ -9,6 +9,7 @@ import { EventCard } from "@/components/events/EventCard";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { useCurrentEvent } from "@/lib/hooks/useCurrentEvent";
 import { useToast } from "@/components/providers/ToastProvider";
+import { useCloudSync } from "@/components/providers/CloudSyncProvider";
 import type { AuctionEvent } from "@/lib/db";
 import { useUserDb } from "@/components/providers/UserDbProvider";
 import {
@@ -24,6 +25,7 @@ export default function EventsPage() {
   const { db, ready: dbReady } = useUserDb();
   const { ready, currentEventId, switchEvent, refresh } = useCurrentEvent();
   const { showToast } = useToast();
+  const { scheduleCloudPush } = useCloudSync();
   const fileRef = useRef<HTMLInputElement>(null);
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<AuctionEvent | null>(null);
@@ -72,6 +74,7 @@ export default function EventsPage() {
       });
       await switchEvent(summary.eventId);
       refresh();
+      scheduleCloudPush();
     } catch (err) {
       showToast({
         kind: "error",

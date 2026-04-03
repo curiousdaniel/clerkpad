@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import type { AuctionEvent } from "@/lib/db";
 import { useUserDb } from "@/components/providers/UserDbProvider";
+import { useCloudSync } from "@/components/providers/CloudSyncProvider";
 import { newEventSyncId } from "@/lib/utils/syncId";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
@@ -17,6 +18,7 @@ type Props = {
 
 export function EventForm({ open, onClose, onSaved, editing }: Props) {
   const { db } = useUserDb();
+  const { scheduleCloudPush } = useCloudSync();
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [organizationName, setOrganizationName] = useState("");
@@ -104,6 +106,7 @@ export function EventForm({ open, onClose, onSaved, editing }: Props) {
         updatedAt: now,
       });
     }
+    scheduleCloudPush();
     onSaved();
     onClose();
   }

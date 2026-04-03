@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import {
   LayoutDashboard,
@@ -22,6 +22,7 @@ import { signOut, useSession } from "next-auth/react";
 import { isSuperAdminUserIdAndEmail } from "@/lib/auth/superAdmin";
 import { OFFLINE_SESSION_STORAGE_KEY } from "@/lib/auth/offlineSession";
 import { closeAndClearAuctionDbCache } from "@/lib/db";
+import { useCloudSync } from "@/components/providers/CloudSyncProvider";
 import { EventSwitcher } from "./EventSwitcher";
 
 const nav = [
@@ -52,6 +53,8 @@ export function Sidebar({
 }: SidebarProps) {
   const pathname = usePathname();
   const { data: session, status } = useSession();
+  const { ensureCloudBackupBeforeSignOut } = useCloudSync();
+  const [signingOut, setSigningOut] = useState(false);
 
   useEffect(() => {
     onClose?.();
@@ -138,19 +141,31 @@ export function Sidebar({
       <div className="border-t border-navy/10 p-3 dark:border-slate-700">
         <button
           type="button"
-          className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-muted transition hover:bg-white/60 hover:text-ink dark:hover:bg-slate-800/60 dark:hover:text-slate-100"
+          disabled={signingOut}
+          aria-busy={signingOut}
+          className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-muted transition hover:bg-white/60 hover:text-ink disabled:cursor-not-allowed disabled:opacity-60 dark:hover:bg-slate-800/60 dark:hover:text-slate-100"
           onClick={() => {
-            try {
-              sessionStorage.removeItem(OFFLINE_SESSION_STORAGE_KEY);
-            } catch {
-              /* ignore */
-            }
-            closeAndClearAuctionDbCache();
-            void signOut({ callbackUrl: "/" });
+            void (async () => {
+              if (signingOut) return;
+              setSigningOut(true);
+              try {
+                const ok = await ensureCloudBackupBeforeSignOut();
+                if (!ok) return;
+                try {
+                  sessionStorage.removeItem(OFFLINE_SESSION_STORAGE_KEY);
+                } catch {
+                  /* ignore */
+                }
+                closeAndClearAuctionDbCache();
+                await signOut({ callbackUrl: "/" });
+              } finally {
+                setSigningOut(false);
+              }
+            })();
           }}
         >
           <LogOut className="h-4 w-4 shrink-0" aria-hidden />
-          Sign out
+          {signingOut ? "Saving to cloud…" : "Sign out"}
         </button>
       </div>
     </aside>

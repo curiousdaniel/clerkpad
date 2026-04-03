@@ -60,10 +60,17 @@ export function SyncStatusBar() {
         <span>On · connected</span>
       )}
       <span className="text-muted dark:text-slate-500">
-        Last backup: {formatRelative(lastPushAt)}
+        Last backup to account:{" "}
+        {lastPushAt == null ? (
+          <span className="text-amber-800 dark:text-amber-200">
+            not from this device yet
+          </span>
+        ) : (
+          formatRelative(lastPushAt)
+        )}
       </span>
       <span className="text-muted dark:text-slate-500">
-        Last merged from cloud: {formatRelative(lastPullAt)}
+        Checked cloud for other devices: {formatRelative(lastPullAt)}
       </span>
       {lastSyncError ? (
         <span className="text-danger dark:text-red-400">{lastSyncError}</span>
