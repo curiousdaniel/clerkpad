@@ -102,6 +102,9 @@ export function OrganizationTeamCard() {
       const data = (await res.json()) as {
         error?: string;
         invitePath?: string;
+        inviteUrl?: string;
+        emailSent?: boolean;
+        emailSendError?: string;
       };
       if (!res.ok) {
         showToast({
@@ -110,13 +113,27 @@ export function OrganizationTeamCard() {
         });
         return;
       }
-      if (data.invitePath && typeof window !== "undefined") {
-        const full = `${window.location.origin}${data.invitePath}`;
-        setLastInviteUrl(full);
-        showToast({
-          kind: "success",
-          message: "Invite created. Copy the link and send it to your teammate.",
-        });
+      if (typeof window !== "undefined") {
+        const full =
+          data.inviteUrl?.trim() ||
+          (data.invitePath
+            ? `${window.location.origin}${data.invitePath}`
+            : "");
+        if (full) setLastInviteUrl(full);
+        if (data.emailSent === true) {
+          showToast({
+            kind: "success",
+            message: `Invitation email sent to ${email}. They can also use the link below if needed.`,
+          });
+        } else {
+          showToast({
+            kind: "success",
+            message:
+              data.emailSendError != null && data.emailSendError.length > 0
+                ? `Invite created, but email was not sent (${data.emailSendError}). Copy the link below or configure RESEND_API_KEY and RESEND_FROM (same as password reset).`
+                : "Invite created. Copy the link below and send it to your teammate.",
+          });
+        }
       }
       setInviteEmail("");
       void load();
@@ -210,8 +227,10 @@ export function OrganizationTeamCard() {
                     Invite a teammate
                   </h3>
                   <p className="text-xs text-muted">
-                    They&apos;ll create their own password using the link. Only
-                    admins can send invites.
+                    We send a sign-up link to this address (requires Resend
+                    email setup, same as password reset). You can copy the link
+                    below if email is not configured. Only admins can send
+                    invites.
                   </p>
                   <Input
                     id="team-invite-email"
@@ -242,12 +261,12 @@ export function OrganizationTeamCard() {
                     </select>
                   </div>
                   <Button type="submit" disabled={invitePending}>
-                    {invitePending ? "Creating…" : "Create invite link"}
+                    {invitePending ? "Sending…" : "Send invitation"}
                   </Button>
                   {lastInviteUrl ? (
                     <div className="rounded-md bg-navy/5 p-3 text-xs dark:bg-slate-800">
                       <p className="mb-2 font-medium text-navy dark:text-slate-200">
-                        Invite link (send this to your teammate)
+                        Invite link (backup if email didn&apos;t arrive)
                       </p>
                       <p className="break-all font-mono text-muted">{lastInviteUrl}</p>
                       <Button

@@ -7,18 +7,13 @@ import {
   sendResendEmail,
   type ResendSendResult,
 } from "@/lib/email/resendSend";
-
-function baseUrl(): string {
-  const u = process.env.NEXTAUTH_URL?.trim();
-  if (u) return u.replace(/\/$/, "");
-  return "http://localhost:3000";
-}
+import { getAppBaseUrl } from "@/lib/utils/appBaseUrl";
 
 export async function sendPasswordResetEmail(
   toEmail: string,
   plainToken: string
 ): Promise<ResendSendResult> {
-  const resetUrl = `${baseUrl()}/reset-password/?token=${encodeURIComponent(plainToken)}`;
+  const resetUrl = `${getAppBaseUrl()}/reset-password/?token=${encodeURIComponent(plainToken)}`;
 
   return sendResendEmail({
     to: [toEmail],

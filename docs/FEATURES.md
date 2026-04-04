@@ -10,7 +10,7 @@ This document summarizes product-facing capabilities of **ClerkBid** (auction cl
 - **Progressive Web App (PWA)** — Installable from the browser; supports offline-oriented workflows and quick launch from the home screen or dock.
 - **Per-account local database** — Auction data for each signed-in user is stored in **IndexedDB** on the device (Dexie), scoped by user id.
 - **Multi-tenant by organization** — Each account belongs to an **organization (vendor)** with a name and slug; users are tied to one vendor.
-- **Team members (shared cloud)** — Organization **admins** invite additional users (clerk / cashier roles) by link from Settings. All users in the same vendor share **one cloud backup per event** so multiple devices can stay in sync when online.
+- **Team members (shared cloud)** — Organization **admins** invite additional users (clerk / cashier roles) from Settings; an **email** with a sign-up link is sent when Resend is configured (with a copyable link as fallback). All users in the same vendor share **one cloud backup per event** so multiple devices can stay in sync when online.
 - **Multi-event workflow** — Operations are scoped to a **currently selected event**. The sidebar **event switcher** changes context for bidders, consignors, clerking, invoices, and reports.
 - **Dark and light UI** — Interface supports light/dark/system appearance and related display options (see Accessibility).
 - **Vercel Analytics** — Anonymous usage analytics may be collected when deployed on Vercel (project configuration).
@@ -20,7 +20,7 @@ This document summarizes product-facing capabilities of **ClerkBid** (auction cl
 ## Authentication and account
 
 - **Self-serve registration** — Create an account with email, password, name, and organization name; creates vendor + user records server-side (first user is the organization **admin**).
-- **Invite-based join** — Admins generate a time-limited invite link so teammates register with their own email and password into the same organization (no duplicate vendor).
+- **Invite-based join** — Admins send a time-limited invite (email plus optional copied link) so teammates register with their own email and password into the same organization (no duplicate vendor).
 - **Email + password sign-in** — Credentials-based sessions (JWT), with configurable session lifetime.
 - **Forgot password** — Request a reset flow delivered by email (when email is configured).
 - **Reset password** — Complete password change via token link from email.

@@ -4,7 +4,7 @@ ClerkBid runs in your browser and stores auction data on **this device** (Indexe
 
 If you use **cloud backup/sync** (optional, from [Settings](/settings/)), event snapshots are stored on the server **for your whole organization**—everyone who signs in under the same vendor shares the same cloud copies, so clerk and cashier can use different logins and devices. Invoice **logo images** and some branding fields stay **local only** and are not included in JSON export.
 
-**Organization & team** (Settings): an **admin** can invite teammates with a secure link (clerk or cashier role). Invited people complete sign-up on the join page; they do not create a separate organization.
+**Organization & team** (Settings): an **admin** can send an invitation to a teammate’s email (clerk or cashier role). They receive a sign-up link by email when your site has **Resend** configured (same as password reset); you can also copy the link from Settings if email is not available. Invited people complete sign-up on the join page; they do not create a separate organization.
 
 **Offline and multiple devices:** while offline, each device keeps its own copy; changes are not visible to teammates until you reconnect and sync. If two devices both change data offline, you may need **Restore from cloud** or **Overwrite cloud copy** in Settings after reconnect. At a venue with poor connectivity, a **phone hotspot** or local Wi‑Fi with internet often works better than expecting devices to sync without any shared network path to the server.
 

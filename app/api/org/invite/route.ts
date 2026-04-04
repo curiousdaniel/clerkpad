@@ -11,6 +11,8 @@ import {
   hashInviteToken,
 } from "@/lib/auth/inviteToken";
 import { parseOrgRole, type OrgRole, isOrgAdmin } from "@/lib/auth/orgRole";
+import { sendOrgInviteEmail } from "@/lib/email/sendOrgInviteEmail";
+import { getAppBaseUrl } from "@/lib/utils/appBaseUrl";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -83,13 +85,45 @@ export async function POST(req: Request) {
     `;
 
     const joinPath = `/register/join/?token=${encodeURIComponent(plaintext)}`;
+    const inviteUrl = `${getAppBaseUrl()}${joinPath}`;
+
+    const { rows: ctxRows } = await sql<{
+      vendor_name: string;
+      first_name: string;
+      last_name: string;
+    }>`
+      SELECT v.name AS vendor_name, u.first_name, u.last_name
+      FROM vendors v
+      INNER JOIN users u ON u.id = ${userId} AND u.vendor_id = v.id
+      WHERE v.id = ${vendorId}
+      LIMIT 1
+    `;
+    const ctx = ctxRows[0];
+    const organizationName = ctx?.vendor_name?.trim() || "your organization";
+    const inviterDisplay =
+      `${ctx?.first_name ?? ""} ${ctx?.last_name ?? ""}`.trim() ||
+      session?.user?.email?.trim() ||
+      "An administrator";
+
+    const emailResult = await sendOrgInviteEmail({
+      toEmail: email,
+      inviteUrl,
+      organizationName,
+      inviterDisplayName: inviterDisplay,
+      orgRole,
+    });
 
     return NextResponse.json({
       ok: true as const,
       invitePath: joinPath,
+      inviteUrl,
       orgRole,
       email,
       expiresAt: expiresAt.toISOString(),
+      emailSent: emailResult.ok,
+      ...(emailResult.ok
+        ? {}
+        : { emailSendError: emailResult.reason }),
     });
   } catch (e) {
     console.error("[org/invite]", e);
