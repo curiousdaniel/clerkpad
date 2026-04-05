@@ -27,6 +27,15 @@ function buyersPremiumLineLabel(buyersPremiumRate: number): string {
   return `Buyer's premium (${pct})`;
 }
 
+/** Double rAF so React can commit and the browser can paint (improves INP after clicks). */
+function yieldToPaint(): Promise<void> {
+  return new Promise((resolve) => {
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => resolve());
+    });
+  });
+}
+
 function taxLineLabel(taxRate: number): string {
   if (taxRate <= 0) return "Tax";
   const pct = `${(taxRate * 100).toFixed(2).replace(/\.?0+$/, "")}%`;
@@ -165,12 +174,14 @@ export function InvoiceDetailModal({
       return;
     }
     setSaving(true);
+    await yieldToPaint();
     try {
       await db.invoices.where("id").equals(inv.id).modify((row) => {
         row.status = "unpaid";
         delete row.paymentMethod;
         delete row.paymentDate;
       });
+      await yieldToPaint();
       onUnpaid?.();
     } catch (e) {
       onError(e instanceof Error ? e.message : "Could not update invoice.");
