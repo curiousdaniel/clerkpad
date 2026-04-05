@@ -1,5 +1,8 @@
 import type { AuctionEvent, Bidder, Invoice, Sale } from "@/lib/db";
-import { roundMoney } from "@/lib/services/invoiceLogic";
+import {
+  effectiveInvoiceBuyersPremiumRate,
+  roundMoney,
+} from "@/lib/services/invoiceLogic";
 import { formatDateOnly } from "@/lib/utils/formatDate";
 import { rowsToCsv } from "@/lib/services/csvExporter";
 
@@ -19,9 +22,12 @@ export const ACCOUNTING_CSV_HEADERS = [
 
 export type AccountingCsvRow = (string | number)[];
 
+type TaxKey = `sale:${number}` | `manual:${string}`;
+
 /**
- * One row per sale. Tax is allocated from the bidder’s invoice in proportion to
- * each line’s taxable amount (line hammer total × (1 + BP rate)).
+ * One row per sale plus one row per invoice manual line. Tax is allocated per
+ * invoice in proportion to each line’s weight: sales use hammer × (1 + invoice
+ * effective BP rate); manual lines use abs(amount) (post-BP adjustments).
  */
 export function buildAccountingCsvRows(
   event: AuctionEvent,
@@ -29,52 +35,89 @@ export function buildAccountingCsvRows(
   bidders: Bidder[],
   invoices: Invoice[]
 ): AccountingCsvRow[] {
-  const bpRate = event.buyersPremiumRate ?? 0;
+  const defaultBpRate = event.buyersPremiumRate ?? 0;
   const bidderById = new Map<number, Bidder>();
   for (const b of bidders) {
     if (b.id != null) bidderById.set(b.id, b);
   }
-  const invByBidder = new Map<number, Invoice>();
+  const invById = new Map<number, Invoice>();
   for (const inv of invoices) {
-    invByBidder.set(inv.bidderId, inv);
+    if (inv.id != null) invById.set(inv.id, inv);
   }
 
-  const salesByBidder = new Map<number, Sale[]>();
+  const salesByInvoiceId = new Map<number, Sale[]>();
+  const unallocated: Sale[] = [];
   for (const s of sales) {
-    const list = salesByBidder.get(s.bidderId) ?? [];
-    list.push(s);
-    salesByBidder.set(s.bidderId, list);
+    if (s.invoiceId == null) {
+      unallocated.push(s);
+    } else {
+      const list = salesByInvoiceId.get(s.invoiceId) ?? [];
+      list.push(s);
+      salesByInvoiceId.set(s.invoiceId, list);
+    }
   }
 
-  const lineTaxableBySaleId = new Map<number, number>();
-  const taxShareBySaleId = new Map<number, number>();
+  const taxShareByKey = new Map<TaxKey, number>();
+  const lineTaxableByKey = new Map<TaxKey, number>();
 
-  for (const [bidderId, list] of Array.from(salesByBidder.entries())) {
-    const taxables = list.map((s) => {
-      const lt = roundMoney(s.amount * (1 + bpRate));
-      lineTaxableBySaleId.set(s.id!, lt);
-      return { sale: s, lineTaxable: lt };
-    });
-    const sumTaxable = roundMoney(taxables.reduce((a, x) => a + x.lineTaxable, 0));
-    const inv = invByBidder.get(bidderId);
-    if (!inv || sumTaxable <= 0) {
-      for (const { sale } of taxables) {
-        taxShareBySaleId.set(sale.id!, 0);
-      }
-      continue;
+  function allocateTaxForInvoice(inv: Invoice, list: Sale[]) {
+    if (inv.id == null) return;
+    const bpRate = effectiveInvoiceBuyersPremiumRate(inv, event);
+    type Entry = { key: TaxKey; weight: number };
+    const entries: Entry[] = [];
+
+    for (const s of list) {
+      if (s.id == null) continue;
+      const key: TaxKey = `sale:${s.id}`;
+      const w = roundMoney(s.amount * (1 + bpRate));
+      lineTaxableByKey.set(key, w);
+      entries.push({ key, weight: w });
     }
+
+    const manualLines = inv.manualLines ?? [];
+    for (const m of manualLines) {
+      const key: TaxKey = `manual:${m.id}`;
+      const w = roundMoney(Math.abs(m.amount));
+      lineTaxableByKey.set(key, w);
+      entries.push({ key, weight: w });
+    }
+
+    const sumW = roundMoney(entries.reduce((a, e) => a + e.weight, 0));
+    if (sumW <= 0) {
+      for (const e of entries) {
+        taxShareByKey.set(e.key, 0);
+      }
+      return;
+    }
+
     let allocated = 0;
-    for (let i = 0; i < taxables.length; i++) {
-      const { sale, lineTaxable } = taxables[i]!;
+    for (let i = 0; i < entries.length; i++) {
+      const e = entries[i]!;
       let share: number;
-      if (i === taxables.length - 1) {
+      if (i === entries.length - 1) {
         share = roundMoney(inv.taxAmount - allocated);
       } else {
-        share = roundMoney(inv.taxAmount * (lineTaxable / sumTaxable));
+        share = roundMoney(inv.taxAmount * (e.weight / sumW));
         allocated = roundMoney(allocated + share);
       }
-      taxShareBySaleId.set(sale.id!, share);
+      taxShareByKey.set(e.key, share);
     }
+  }
+
+  for (const inv of invoices) {
+    if (inv.id == null) continue;
+    const list = salesByInvoiceId.get(inv.id) ?? [];
+    allocateTaxForInvoice(inv, list);
+  }
+
+  for (const s of unallocated) {
+    if (s.id == null) continue;
+    const key = `sale:${s.id}` as TaxKey;
+    lineTaxableByKey.set(
+      key,
+      roundMoney(s.amount * (1 + defaultBpRate))
+    );
+    taxShareByKey.set(key, 0);
   }
 
   const sorted = [...sales].sort(
@@ -87,13 +130,19 @@ export function buildAccountingCsvRows(
     if (s.id == null) continue;
     const b = bidderById.get(s.bidderId);
     const name = b ? `${b.firstName} ${b.lastName}` : "";
+    const inv =
+      s.invoiceId != null ? invById.get(s.invoiceId) : undefined;
+    const bpRate =
+      inv != null
+        ? effectiveInvoiceBuyersPremiumRate(inv, event)
+        : defaultBpRate;
     const hammer = s.amount;
     const bp = roundMoney(hammer * bpRate);
+    const key = `sale:${s.id}` as TaxKey;
     const lineTaxable =
-      lineTaxableBySaleId.get(s.id) ?? roundMoney(hammer * (1 + bpRate));
-    const tax = taxShareBySaleId.get(s.id) ?? 0;
+      lineTaxableByKey.get(key) ?? roundMoney(hammer * (1 + bpRate));
+    const tax = taxShareByKey.get(key) ?? 0;
     const lineTotal = roundMoney(lineTaxable + tax);
-    const inv = invByBidder.get(s.bidderId);
     out.push([
       formatDateOnly(s.createdAt),
       s.displayLotNumber,
@@ -108,6 +157,46 @@ export function buildAccountingCsvRows(
       inv?.status ?? "",
     ]);
   }
+
+  const manualRows: {
+    inv: Invoice;
+    line: NonNullable<Invoice["manualLines"]>[number];
+    sortDate: Date;
+  }[] = [];
+  for (const inv of invoices) {
+    if (inv.id == null) continue;
+    const lines = inv.manualLines ?? [];
+    for (const m of lines) {
+      manualRows.push({ inv, line: m, sortDate: inv.generatedAt });
+    }
+  }
+  manualRows.sort(
+    (a, b) => a.sortDate.getTime() - b.sortDate.getTime()
+  );
+
+  for (const { inv, line: m } of manualRows) {
+    const b = bidderById.get(inv.bidderId);
+    const name = b ? `${b.firstName} ${b.lastName}` : "";
+    const key = `manual:${m.id}` as TaxKey;
+    const lineTaxable =
+      lineTaxableByKey.get(key) ?? roundMoney(Math.abs(m.amount));
+    const tax = taxShareByKey.get(key) ?? 0;
+    const lineTotal = roundMoney(m.amount + tax);
+    out.push([
+      formatDateOnly(inv.generatedAt),
+      "ADJ",
+      b?.paddleNumber ?? "",
+      name,
+      m.amount,
+      0,
+      lineTaxable,
+      tax,
+      lineTotal,
+      inv.invoiceNumber,
+      inv.status,
+    ]);
+  }
+
   return out;
 }
 

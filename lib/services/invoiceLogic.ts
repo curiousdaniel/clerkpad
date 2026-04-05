@@ -1,4 +1,11 @@
-import type { AuctionDB, AuctionEvent, Bidder, Invoice, Sale } from "@/lib/db";
+import type {
+  AuctionDB,
+  AuctionEvent,
+  Bidder,
+  Invoice,
+  InvoiceManualLine,
+  Sale,
+} from "@/lib/db";
 import type { InvoicePdfInput } from "@/lib/services/invoicePdf";
 import {
   resolveInvoiceBrandingForPdf,
@@ -21,17 +28,67 @@ export function computeInvoiceFromSubtotal(
   return { subtotal: s, taxAmount, total };
 }
 
-export function formatInvoiceNumber(eventId: number, seq: number): string {
-  return `${eventId}-${String(seq).padStart(3, "0")}`;
+/** Resolved BP rate (0–1) for invoice math and labels. */
+export function effectiveInvoiceBuyersPremiumRate(
+  invoice: Pick<Invoice, "buyersPremiumRate">,
+  event: AuctionEvent
+): number {
+  const r = invoice.buyersPremiumRate;
+  if (typeof r === "number" && Number.isFinite(r)) {
+    return Math.max(0, r);
+  }
+  return Math.max(0, event.buyersPremiumRate ?? 0);
 }
 
-export async function findInvoiceForBidder(
-  db: AuctionDB,
-  eventId: number,
-  bidderId: number
-): Promise<Invoice | undefined> {
-  const rows = await db.invoices.where("eventId").equals(eventId).toArray();
-  return rows.find((i) => i.bidderId === bidderId);
+/** Resolved tax rate (0–1) for invoice math and labels. */
+export function effectiveInvoiceTaxRate(
+  invoice: Pick<Invoice, "taxRate">,
+  event: AuctionEvent
+): number {
+  const r = invoice.taxRate;
+  if (typeof r === "number" && Number.isFinite(r)) {
+    return Math.max(0, r);
+  }
+  return Math.max(0, event.taxRate ?? 0);
+}
+
+/**
+ * Hammer from sales only; BP on hammer; manual lines after BP; tax on pre-tax subtotal.
+ */
+export function computeInvoiceTotalsFromParts(
+  hammerSubtotal: number,
+  manualLines: InvoiceManualLine[] | undefined,
+  invoice: Pick<Invoice, "buyersPremiumRate" | "taxRate">,
+  event: AuctionEvent
+): {
+  subtotal: number;
+  buyersPremiumAmount: number;
+  taxAmount: number;
+  total: number;
+} {
+  const hammer = roundMoney(hammerSubtotal);
+  const manualSum = roundMoney(
+    (manualLines ?? []).reduce(
+      (a, m) => a + (Number.isFinite(m.amount) ? m.amount : 0),
+      0
+    )
+  );
+  const bpRate = effectiveInvoiceBuyersPremiumRate(invoice, event);
+  const buyersPremiumAmount = roundMoney(hammer * bpRate);
+  const preTax = roundMoney(hammer + buyersPremiumAmount + manualSum);
+  const taxRate = effectiveInvoiceTaxRate(invoice, event);
+  const taxAmount = roundMoney(preTax * taxRate);
+  const total = roundMoney(preTax + taxAmount);
+  return {
+    subtotal: hammer,
+    buyersPremiumAmount,
+    taxAmount,
+    total,
+  };
+}
+
+export function formatInvoiceNumber(eventId: number, seq: number): string {
+  return `${eventId}-${String(seq).padStart(3, "0")}`;
 }
 
 export async function nextInvoiceSequence(
@@ -63,8 +120,41 @@ export type UpsertResult =
   | { kind: "no_sales" };
 
 /**
- * One invoice row per (event, bidder). Unpaid → recalc & update. Paid → skip.
- * Creates new invoice if none exists.
+ * Recompute persisted totals from sales + manual lines + effective rates.
+ * No-op for paid invoices.
+ */
+export async function recalculateAndPersistInvoice(
+  db: AuctionDB,
+  invoiceId: number,
+  event: AuctionEvent,
+  options?: { touchGeneratedAt?: boolean }
+): Promise<void> {
+  const inv = await db.invoices.get(invoiceId);
+  if (inv?.id == null || inv.status === "paid") return;
+
+  const lineSales = await getSalesForInvoice(db, invoiceId);
+  const hammerSubtotal = roundMoney(
+    lineSales.reduce((a, s) => a + s.amount, 0)
+  );
+  const parts = computeInvoiceTotalsFromParts(
+    hammerSubtotal,
+    inv.manualLines,
+    inv,
+    event
+  );
+  await db.invoices.update(invoiceId, {
+    subtotal: parts.subtotal,
+    buyersPremiumAmount: parts.buyersPremiumAmount,
+    taxAmount: parts.taxAmount,
+    total: parts.total,
+    ...(options?.touchGeneratedAt ? { generatedAt: new Date() } : {}),
+  });
+}
+
+/**
+ * Allocates sales to invoices via `sale.invoiceId`.
+ * Unpaid invoice absorbs any unallocated lines; paid invoices are never changed.
+ * After the bidder’s invoices are all paid, new unallocated sales get a new supplemental invoice.
  */
 export async function upsertInvoiceForBidder(
   db: AuctionDB,
@@ -72,53 +162,66 @@ export async function upsertInvoiceForBidder(
   bidderId: number
 ): Promise<UpsertResult> {
   const eventId = event.id!;
-  const sales = await db.sales
+  const allSales = await db.sales
     .where("eventId")
     .equals(eventId)
     .filter((s) => s.bidderId === bidderId)
     .toArray();
-  if (sales.length === 0) return { kind: "no_sales" };
 
-  const hammerSubtotal = roundMoney(sales.reduce((a, s) => a + s.amount, 0));
-  const bpRate = event.buyersPremiumRate ?? 0;
-  const buyersPremiumAmount = roundMoney(hammerSubtotal * bpRate);
-  const taxableSubtotal = roundMoney(hammerSubtotal + buyersPremiumAmount);
-  const { taxAmount, total } = computeInvoiceFromSubtotal(
-    taxableSubtotal,
-    event.taxRate
-  );
+  if (allSales.length === 0) return { kind: "no_sales" };
 
-  const existing = await findInvoiceForBidder(db, eventId, bidderId);
+  const invs = await db.invoices
+    .where("eventId")
+    .equals(eventId)
+    .filter((i) => i.bidderId === bidderId)
+    .toArray();
+
+  const unpaid = invs
+    .filter((i) => i.status === "unpaid")
+    .sort((a, b) => (a.id ?? 0) - (b.id ?? 0))[0];
+
+  const unallocated = allSales.filter((s) => s.invoiceId == null);
+
   const now = new Date();
 
-  if (existing?.id != null) {
-    if (existing.status === "paid") {
-      return { kind: "skipped_paid" };
+  if (unpaid?.id != null) {
+    for (const s of unallocated) {
+      if (s.id != null) {
+        await db.sales.update(s.id, { invoiceId: unpaid.id });
+      }
     }
-    await db.invoices.update(existing.id, {
-      subtotal: hammerSubtotal,
-      buyersPremiumAmount,
-      taxAmount,
-      total,
-      generatedAt: now,
+    await recalculateAndPersistInvoice(db, unpaid.id, event, {
+      touchGeneratedAt: true,
     });
-    return { kind: "updated", invoiceId: existing.id };
+    return { kind: "updated", invoiceId: unpaid.id };
   }
 
-  const seq = await nextInvoiceSequence(db, eventId);
-  const invoiceNumber = formatInvoiceNumber(eventId, seq);
-  const id = await db.invoices.add({
-    eventId,
-    bidderId,
-    invoiceNumber,
-    subtotal: hammerSubtotal,
-    buyersPremiumAmount,
-    taxAmount,
-    total,
-    status: "unpaid",
-    generatedAt: now,
-  });
-  return { kind: "created", invoiceId: id as number };
+  if (unallocated.length > 0) {
+    const seq = await nextInvoiceSequence(db, eventId);
+    const invoiceNumber = formatInvoiceNumber(eventId, seq);
+    const id = (await db.invoices.add({
+      eventId,
+      bidderId,
+      invoiceNumber,
+      subtotal: 0,
+      buyersPremiumAmount: 0,
+      taxAmount: 0,
+      total: 0,
+      status: "unpaid",
+      generatedAt: now,
+    })) as number;
+    for (const s of unallocated) {
+      if (s.id != null) {
+        await db.sales.update(s.id, { invoiceId: id });
+      }
+    }
+    await recalculateAndPersistInvoice(db, id, event, {
+      touchGeneratedAt: true,
+    });
+    return { kind: "created", invoiceId: id };
+  }
+
+  return { kind: "skipped_paid" };
 }
 
 export async function generateAllInvoicesForEvent(
@@ -151,16 +254,11 @@ export async function generateAllInvoicesForEvent(
   return { created, updated, skippedPaid, noSales };
 }
 
-export async function getSalesForBidderInvoice(
+export async function getSalesForInvoice(
   db: AuctionDB,
-  eventId: number,
-  bidderId: number
-) {
-  const rows = await db.sales
-    .where("eventId")
-    .equals(eventId)
-    .filter((s) => s.bidderId === bidderId)
-    .toArray();
+  invoiceId: number
+): Promise<Sale[]> {
+  const rows = await db.sales.where("invoiceId").equals(invoiceId).toArray();
   rows.sort((a, b) =>
     a.displayLotNumber.localeCompare(b.displayLotNumber, undefined, {
       numeric: true,
@@ -179,13 +277,33 @@ export function toInvoicePdfInput(
   const footerLine = branding
     ? branding.footerLine
     : resolveInvoiceFooterText(null, event.organizationName);
+  const bpRateEff = effectiveInvoiceBuyersPremiumRate(invoice, event);
+  const taxRateEff = effectiveInvoiceTaxRate(invoice, event);
+
+  const saleLines = sales.map((s) => ({
+    displayLotNumber: s.displayLotNumber,
+    description: s.description,
+    quantity: s.quantity,
+    unitHammer: saleUnitHammer(s),
+    lineHammer: roundMoney(s.amount),
+  }));
+
+  const manualLines = invoice.manualLines ?? [];
+  const manualPdfLines = manualLines.map((m) => ({
+    displayLotNumber: "—",
+    description: m.description || "Adjustment",
+    quantity: 1,
+    unitHammer: roundMoney(m.amount),
+    lineHammer: roundMoney(m.amount),
+  }));
+
   return {
     organizationName: event.organizationName,
     eventName: event.name,
     invoiceNumber: invoice.invoiceNumber,
     generatedAt: invoice.generatedAt,
-    taxRate: event.taxRate,
-    buyersPremiumRate: event.buyersPremiumRate ?? 0,
+    taxRate: taxRateEff,
+    buyersPremiumRate: bpRateEff,
     currencySymbol: event.currencySymbol,
     bidderName: `${bidder.firstName} ${bidder.lastName}`,
     paddleNumber: bidder.paddleNumber,
@@ -194,13 +312,7 @@ export function toInvoicePdfInput(
     status: invoice.status,
     paymentMethod: invoice.paymentMethod,
     paymentDate: invoice.paymentDate,
-    lines: sales.map((s) => ({
-      displayLotNumber: s.displayLotNumber,
-      description: s.description,
-      quantity: s.quantity,
-      unitHammer: saleUnitHammer(s),
-      lineHammer: roundMoney(s.amount),
-    })),
+    lines: [...saleLines, ...manualPdfLines],
     hammerSubtotal: invoice.subtotal,
     buyersPremiumAmount: invoice.buyersPremiumAmount,
     taxAmount: invoice.taxAmount,
@@ -223,7 +335,7 @@ export async function loadInvoicePdfInput(
     db.bidders.get(inv.bidderId),
   ]);
   if (event?.id == null || bidder?.id == null) return null;
-  const sales = await getSalesForBidderInvoice(db, inv.eventId, inv.bidderId);
+  const sales = await getSalesForInvoice(db, invoiceId);
   const branding = await resolveInvoiceBrandingForPdf(
     db,
     inv.eventId,
@@ -232,13 +344,15 @@ export async function loadInvoicePdfInput(
   return toInvoicePdfInput(inv, event, bidder, sales, branding);
 }
 
-/** Bidders who have sales but no invoice row yet for this event. */
+/** Bidders with at least one sale not yet linked to an invoice (`invoiceId` null). */
 export async function bidderIdsPendingFirstInvoice(
   db: AuctionDB,
   eventId: number
 ): Promise<number[]> {
-  const withSales = await bidderIdsWithSales(db, eventId);
-  const invs = await db.invoices.where("eventId").equals(eventId).toArray();
-  const invoiced = new Set(invs.map((i) => i.bidderId));
-  return withSales.filter((id) => !invoiced.has(id));
+  const sales = await db.sales.where("eventId").equals(eventId).toArray();
+  const ids = new Set<number>();
+  for (const s of sales) {
+    if (s.invoiceId == null) ids.add(s.bidderId);
+  }
+  return Array.from(ids);
 }

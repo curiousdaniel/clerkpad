@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
+import type { AuctionEvent, Invoice } from "@/lib/db";
 import {
   computeInvoiceFromSubtotal,
+  computeInvoiceTotalsFromParts,
+  effectiveInvoiceBuyersPremiumRate,
+  effectiveInvoiceTaxRate,
   formatInvoiceNumber,
   roundMoney,
 } from "./invoiceLogic";
@@ -35,5 +39,65 @@ describe("formatInvoiceNumber", () => {
   it("pads sequence", () => {
     expect(formatInvoiceNumber(1, 1)).toBe("1-001");
     expect(formatInvoiceNumber(12, 42)).toBe("12-042");
+  });
+});
+
+const baseEvent: AuctionEvent = {
+  id: 1,
+  name: "E",
+  organizationName: "O",
+  taxRate: 0.1,
+  buyersPremiumRate: 0.1,
+  defaultConsignorCommissionRate: 0,
+  currencySymbol: "$",
+  syncId: "x",
+  createdAt: new Date(),
+  updatedAt: new Date(),
+};
+
+describe("computeInvoiceTotalsFromParts", () => {
+  it("applies BP only to hammer; manual lines after BP, before tax", () => {
+    const inv = {} as Invoice;
+    const r = computeInvoiceTotalsFromParts(
+      100,
+      [{ id: "a", description: "Fee", amount: 10 }],
+      inv,
+      baseEvent
+    );
+    expect(r.subtotal).toBe(100);
+    expect(r.buyersPremiumAmount).toBe(10);
+    expect(r.taxAmount).toBe(12);
+    expect(r.total).toBe(132);
+  });
+
+  it("supports negative manual lines and invoice rate overrides", () => {
+    const inv = {
+      buyersPremiumRate: 0.2,
+      taxRate: 0.05,
+    } as Invoice;
+    const r = computeInvoiceTotalsFromParts(
+      100,
+      [{ id: "a", description: "Credit", amount: -15 }],
+      inv,
+      baseEvent
+    );
+    expect(r.buyersPremiumAmount).toBe(20);
+    expect(roundMoney(100 + 20 - 15)).toBe(105);
+    expect(r.taxAmount).toBe(5.25);
+    expect(r.total).toBe(110.25);
+  });
+});
+
+describe("effective invoice rates", () => {
+  it("falls back to event when invoice override unset", () => {
+    const inv = {} as Invoice;
+    expect(effectiveInvoiceBuyersPremiumRate(inv, baseEvent)).toBe(0.1);
+    expect(effectiveInvoiceTaxRate(inv, baseEvent)).toBe(0.1);
+  });
+
+  it("uses invoice numbers when set", () => {
+    const inv = { buyersPremiumRate: 0.15, taxRate: 0.08 } as Invoice;
+    expect(effectiveInvoiceBuyersPremiumRate(inv, baseEvent)).toBe(0.15);
+    expect(effectiveInvoiceTaxRate(inv, baseEvent)).toBe(0.08);
   });
 });

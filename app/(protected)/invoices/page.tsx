@@ -14,7 +14,7 @@ import { useUserDb } from "@/components/providers/UserDbProvider";
 import {
   bidderIdsPendingFirstInvoice,
   generateAllInvoicesForEvent,
-  getSalesForBidderInvoice,
+  getSalesForInvoice,
   loadInvoicePdfInput,
   upsertInvoiceForBidder,
 } from "@/lib/services/invoiceLogic";
@@ -89,11 +89,25 @@ export default function InvoicesPage() {
   const detailSales = useLiveQuery(
     async () =>
       liveQueryGuard("invoices.detailSales", async () => {
-        if (!detailInv || currentEventId == null || !db) return [];
-        return getSalesForBidderInvoice(db, currentEventId, detailInv.bidderId);
+        if (!detailInv?.id || !db) return [];
+        return getSalesForInvoice(db, detailInv.id);
       }, []),
-    [detailInv?.id, detailInv?.bidderId, currentEventId, db]
+    [detailInv?.id, db]
   );
+
+  const detailInvoiceLive = useLiveQuery(
+    async () =>
+      liveQueryGuard("invoices.detailInvoice", async () => {
+        if (detailInv?.id == null || !dbReady || !db) return null;
+        return db.invoices.get(detailInv.id);
+      }, null),
+    [detailInv?.id, dbReady, db]
+  );
+
+  const displayDetailInvoice =
+    detailInv && detailInvoiceLive
+      ? { ...detailInvoiceLive, bidder: detailInv.bidder }
+      : detailInv;
 
   async function handleGenerateAll() {
     if (currentEventId == null || !currentEvent || !db) return;
@@ -101,7 +115,7 @@ export default function InvoicesPage() {
       const r = await generateAllInvoicesForEvent(db, currentEventId);
       showToast({
         kind: "success",
-        message: `Invoices: ${r.created} created, ${r.updated} updated${r.skippedPaid ? `, ${r.skippedPaid} paid skipped` : ""}.`,
+        message: `Invoices: ${r.created} created, ${r.updated} updated${r.skippedPaid ? `, ${r.skippedPaid} unchanged (all sales already invoiced)` : ""}.`,
       });
     } catch (e) {
       showToast({
@@ -117,7 +131,10 @@ export default function InvoicesPage() {
     if (r.kind === "created" || r.kind === "updated") {
       showToast({ kind: "success", message: "Invoice created." });
     } else if (r.kind === "skipped_paid") {
-      showToast({ kind: "info", message: "Bidder already has a paid invoice." });
+      showToast({
+        kind: "info",
+        message: "All of this bidder’s sales are already on invoices.",
+      });
     } else {
       showToast({ kind: "error", message: "No sales for this bidder." });
     }
@@ -213,7 +230,7 @@ export default function InvoicesPage() {
       {pendingBidders && pendingBidders.length > 0 ? (
         <div className="mb-8 rounded-xl border border-gold/30 bg-amber-50/40 p-4 dark:border-amber-900/50 dark:bg-amber-950/30">
           <h2 className="text-sm font-semibold text-navy dark:text-amber-100">
-            Bidders with sales — no invoice yet
+            Bidders with sales not yet on an invoice
           </h2>
           <ul className="mt-3 space-y-2">
             {pendingBidders.map((b) => (
@@ -257,17 +274,17 @@ export default function InvoicesPage() {
 
       <InvoiceDetailModal
         open={detailInv != null}
-        invoice={detailInv}
-        bidder={detailInv?.bidder}
+        invoice={displayDetailInvoice}
+        bidder={displayDetailInvoice?.bidder}
         sales={detailSales ?? []}
+        event={currentEvent}
         currencySymbol={sym}
-        buyersPremiumRate={currentEvent.buyersPremiumRate ?? 0}
-        taxRate={currentEvent.taxRate}
         onClose={() => setDetailInv(null)}
-        onPrint={() => detailInv && void handlePrint(detailInv)}
+        onPrint={() => displayDetailInvoice && void handlePrint(displayDetailInvoice)}
         onMarkPaid={() => {
-          if (detailInv) setPayInv(detailInv);
+          if (displayDetailInvoice) setPayInv(displayDetailInvoice);
         }}
+        onError={(message) => showToast({ kind: "error", message })}
       />
 
       <PaymentModal

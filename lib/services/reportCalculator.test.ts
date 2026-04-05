@@ -1,10 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildBidderReportRows,
   buildPaymentMethodBreakdown,
   compareLotsForReport,
   computeEventSummary,
 } from "./reportCalculator";
-import type { Invoice, Lot, Sale } from "@/lib/db";
+import type { Bidder, Invoice, Lot, Sale } from "@/lib/db";
 
 describe("computeEventSummary", () => {
   it("handles empty inputs", () => {
@@ -83,6 +84,68 @@ describe("computeEventSummary", () => {
     expect(s.totalPaid).toBe(108);
     expect(s.totalOutstanding).toBe(54);
     expect(s.totalInvoiced).toBe(162);
+  });
+});
+
+describe("buildBidderReportRows", () => {
+  it("marks Unpaid when all invoices are paid but a sale is unallocated", () => {
+    const bidders: Bidder[] = [
+      {
+        id: 1,
+        eventId: 1,
+        paddleNumber: 1,
+        firstName: "A",
+        lastName: "B",
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      },
+    ];
+    const sales: Sale[] = [
+      {
+        id: 10,
+        eventId: 1,
+        lotId: 1,
+        bidderId: 1,
+        displayLotNumber: "1",
+        paddleNumber: 1,
+        description: "x",
+        quantity: 1,
+        amount: 50,
+        clerkInitials: "X",
+        createdAt: new Date(),
+        invoiceId: 100,
+      },
+      {
+        id: 11,
+        eventId: 1,
+        lotId: 2,
+        bidderId: 1,
+        displayLotNumber: "2",
+        paddleNumber: 1,
+        description: "y",
+        quantity: 1,
+        amount: 25,
+        clerkInitials: "X",
+        createdAt: new Date(),
+      },
+    ];
+    const invoices: Invoice[] = [
+      {
+        id: 100,
+        eventId: 1,
+        bidderId: 1,
+        invoiceNumber: "1-001",
+        subtotal: 50,
+        buyersPremiumAmount: 0,
+        taxAmount: 0,
+        total: 50,
+        status: "paid",
+        generatedAt: new Date(),
+      },
+    ];
+    const rows = buildBidderReportRows(bidders, sales, invoices, 0);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.paymentStatus).toBe("Unpaid");
   });
 });
 

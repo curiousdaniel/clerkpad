@@ -1,7 +1,14 @@
 "use client";
 
-import type { Bidder, Invoice, Sale } from "@/lib/db";
+import { useCallback, useState } from "react";
+import type { AuctionEvent, Bidder, Invoice, InvoiceManualLine, Sale } from "@/lib/db";
 import { saleUnitHammer } from "@/lib/services/saleLineTotals";
+import {
+  effectiveInvoiceBuyersPremiumRate,
+  effectiveInvoiceTaxRate,
+  recalculateAndPersistInvoice,
+} from "@/lib/services/invoiceLogic";
+import { useUserDb } from "@/components/providers/UserDbProvider";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
@@ -26,34 +33,123 @@ function taxLineLabel(taxRate: number): string {
   return `Tax (${pct})`;
 }
 
+function newManualLine(): InvoiceManualLine {
+  return {
+    id:
+      typeof crypto !== "undefined" && crypto.randomUUID
+        ? crypto.randomUUID()
+        : `ml-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
+    description: "",
+    amount: 0,
+  };
+}
+
 export function InvoiceDetailModal({
   open,
   invoice,
   bidder,
   sales,
+  event,
   currencySymbol,
-  buyersPremiumRate,
-  taxRate,
   onClose,
   onPrint,
   onMarkPaid,
+  onError,
 }: {
   open: boolean;
   invoice: Invoice | null;
   bidder: Bidder | undefined;
   sales: Sale[];
+  event: AuctionEvent;
   currencySymbol: string;
-  buyersPremiumRate: number;
-  taxRate: number;
   onClose: () => void;
   onPrint: () => void;
   onMarkPaid: () => void;
+  onError: (message: string) => void;
 }) {
+  const { db } = useUserDb();
+  const [saving, setSaving] = useState(false);
+
+  const persistAndRecalc = useCallback(
+    async (patch: Partial<Invoice>) => {
+      if (invoice?.id == null || !db || invoice.status === "paid") return;
+      setSaving(true);
+      try {
+        await db.invoices.update(invoice.id, patch);
+        await recalculateAndPersistInvoice(db, invoice.id, event);
+      } catch (e) {
+        onError(e instanceof Error ? e.message : "Could not save invoice.");
+      } finally {
+        setSaving(false);
+      }
+    },
+    [db, event, invoice?.id, invoice?.status, onError]
+  );
+
   if (!invoice) return null;
 
   const sym = currencySymbol;
+  const bpEff = effectiveInvoiceBuyersPremiumRate(invoice, event);
+  const taxEff = effectiveInvoiceTaxRate(invoice, event);
   const showBpLine =
-    invoice.buyersPremiumAmount > 0 || buyersPremiumRate > 0;
+    invoice.buyersPremiumAmount !== 0 || bpEff > 0;
+  const manualLines = invoice.manualLines ?? [];
+
+  async function handleBpRateBlur(raw: string) {
+    const t = raw.trim();
+    if (t === "") {
+      await persistAndRecalc({ buyersPremiumRate: null });
+      return;
+    }
+    const n = Number(t);
+    if (!Number.isFinite(n) || n < 0) {
+      onError("Buyer’s premium rate must be a non-negative number (decimal, e.g. 0.10 for 10%).");
+      return;
+    }
+    await persistAndRecalc({ buyersPremiumRate: n });
+  }
+
+  async function handleTaxRateBlur(raw: string) {
+    const t = raw.trim();
+    if (t === "") {
+      await persistAndRecalc({ taxRate: null });
+      return;
+    }
+    const n = Number(t);
+    if (!Number.isFinite(n) || n < 0) {
+      onError("Tax rate must be a non-negative number (decimal, e.g. 0.0875 for 8.75%).");
+      return;
+    }
+    await persistAndRecalc({ taxRate: n });
+  }
+
+  async function setManualLines(next: InvoiceManualLine[]) {
+    await persistAndRecalc({ manualLines: next });
+  }
+
+  async function addManualLine() {
+    await setManualLines([...manualLines, newManualLine()]);
+  }
+
+  async function removeManualLine(id: string) {
+    await setManualLines(manualLines.filter((m) => m.id !== id));
+  }
+
+  async function updateManualLine(
+    id: string,
+    field: "description" | "amount",
+    value: string
+  ) {
+    const next = manualLines.map((m) => {
+      if (m.id !== id) return m;
+      if (field === "description") {
+        return { ...m, description: value };
+      }
+      const n = Number(value);
+      return { ...m, amount: Number.isFinite(n) ? n : 0 };
+    });
+    await setManualLines(next);
+  }
 
   return (
     <Modal
@@ -77,6 +173,10 @@ export function InvoiceDetailModal({
       }
     >
       <div className="space-y-4 text-sm">
+        {saving ? (
+          <p className="text-xs text-muted">Saving…</p>
+        ) : null}
+
         <div className="flex flex-wrap items-center gap-2">
           <Badge tone={invoice.status === "paid" ? "success" : "warning"}>
             {invoice.status}
@@ -108,6 +208,145 @@ export function InvoiceDetailModal({
           </p>
         ) : null}
 
+        {invoice.status === "unpaid" ? (
+          <div className="rounded-lg border border-navy/15 bg-surface/40 p-3 dark:border-slate-600 dark:bg-slate-900/40">
+            <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">
+              Rates (optional overrides)
+            </h3>
+            <p className="mb-3 text-xs text-muted">
+              Leave blank to use the event default. Use decimals (e.g. 0.10 =
+              10%).
+            </p>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div>
+                <label
+                  htmlFor="inv-bp-rate"
+                  className="mb-1 block text-xs font-medium text-ink dark:text-slate-200"
+                >
+                  Buyer&apos;s premium rate
+                </label>
+                <input
+                  id="inv-bp-rate"
+                  key={`bp-${invoice.buyersPremiumRate ?? "d"}`}
+                  type="text"
+                  inputMode="decimal"
+                  className="w-full rounded-lg border border-navy/20 bg-white px-2 py-1.5 font-mono text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
+                  placeholder={`Event: ${(event.buyersPremiumRate ?? 0).toString()}`}
+                  defaultValue={
+                    invoice.buyersPremiumRate != null
+                      ? String(invoice.buyersPremiumRate)
+                      : ""
+                  }
+                  onBlur={(e) => void handleBpRateBlur(e.target.value)}
+                />
+              </div>
+              <div>
+                <label
+                  htmlFor="inv-tax-rate"
+                  className="mb-1 block text-xs font-medium text-ink dark:text-slate-200"
+                >
+                  Tax rate
+                </label>
+                <input
+                  id="inv-tax-rate"
+                  key={`tx-${invoice.taxRate ?? "d"}`}
+                  type="text"
+                  inputMode="decimal"
+                  className="w-full rounded-lg border border-navy/20 bg-white px-2 py-1.5 font-mono text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
+                  placeholder={`Event: ${event.taxRate.toString()}`}
+                  defaultValue={
+                    invoice.taxRate != null ? String(invoice.taxRate) : ""
+                  }
+                  onBlur={(e) => void handleTaxRateBlur(e.target.value)}
+                />
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="rounded-lg border border-navy/10 bg-surface/30 p-3 text-xs text-muted dark:border-slate-700">
+            <p>
+              Rates used: buyer&apos;s premium {((bpEff) * 100).toFixed(2).replace(/\.?0+$/, "")}
+              % · tax {((taxEff) * 100).toFixed(2).replace(/\.?0+$/, "")}%
+              {invoice.buyersPremiumRate != null || invoice.taxRate != null
+                ? " (includes invoice overrides)"
+                : " (event defaults)"}
+            </p>
+          </div>
+        )}
+
+        {invoice.status === "unpaid" ? (
+          <div className="rounded-lg border border-navy/15 bg-surface/40 p-3 dark:border-slate-600 dark:bg-slate-900/40">
+            <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+              <h3 className="text-xs font-semibold uppercase tracking-wide text-muted">
+                Manual lines (after buyer&apos;s premium, before tax)
+              </h3>
+              <Button
+                type="button"
+                variant="secondary"
+                className="text-xs"
+                onClick={() => void addManualLine()}
+              >
+                Add line
+              </Button>
+            </div>
+            {manualLines.length === 0 ? (
+              <p className="text-xs text-muted">
+                Optional fees, unrecorded purchases (positive), or discounts
+                (negative).
+              </p>
+            ) : (
+              <ul className="space-y-2">
+                {manualLines.map((m) => (
+                  <li
+                    key={m.id}
+                    className="flex flex-wrap items-end gap-2 rounded-md border border-navy/10 bg-white p-2 dark:border-slate-600 dark:bg-slate-800"
+                  >
+                    <div className="min-w-[140px] flex-1">
+                      <label className="sr-only" htmlFor={`desc-${m.id}`}>
+                        Description
+                      </label>
+                      <input
+                        id={`desc-${m.id}`}
+                        type="text"
+                        className="w-full rounded border border-navy/15 px-2 py-1 text-sm dark:border-slate-600 dark:bg-slate-900"
+                        placeholder="Description"
+                        defaultValue={m.description}
+                        onBlur={(e) =>
+                          void updateManualLine(m.id, "description", e.target.value)
+                        }
+                      />
+                    </div>
+                    <div className="w-28">
+                      <label className="sr-only" htmlFor={`amt-${m.id}`}>
+                        Amount
+                      </label>
+                      <input
+                        id={`amt-${m.id}`}
+                        type="text"
+                        inputMode="decimal"
+                        className="w-full rounded border border-navy/15 px-2 py-1 font-mono text-sm dark:border-slate-600 dark:bg-slate-900"
+                        placeholder="0.00"
+                        defaultValue={String(m.amount)}
+                        onBlur={(e) =>
+                          void updateManualLine(m.id, "amount", e.target.value)
+                        }
+                      />
+                    </div>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      className="text-xs"
+                      onClick={() => void removeManualLine(m.id)}
+                    >
+                      Remove
+                    </Button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        ) : null}
+
         <div className="overflow-x-auto rounded-lg border border-navy/10 dark:border-slate-700">
           <table className="w-full min-w-[520px] text-sm">
             <thead className="bg-surface dark:bg-slate-800/80">
@@ -130,32 +369,53 @@ export function InvoiceDetailModal({
               </tr>
             </thead>
             <tbody className="divide-y divide-navy/10 dark:divide-slate-700">
-              {sales.length === 0 ? (
+              {sales.length === 0 && manualLines.length === 0 ? (
                 <tr>
                   <td colSpan={5} className="px-3 py-4 text-center text-muted">
                     No line items
                   </td>
                 </tr>
-              ) : (
-                sales.map((s) => (
-                  <tr key={s.id}>
-                    <td className="px-3 py-2 font-mono">{s.displayLotNumber}</td>
-                    <td className="px-3 py-2">{s.description}</td>
-                    <td className="px-3 py-2 text-right font-mono">
-                      {s.quantity}
-                    </td>
-                    <td className="px-3 py-2 text-right font-mono">
-                      {formatCurrency(saleUnitHammer(s), sym)}
-                    </td>
-                    <td className="px-3 py-2 text-right font-mono">
-                      {formatCurrency(s.amount, sym)}
-                    </td>
-                  </tr>
-                ))
-              )}
+              ) : null}
+              {sales.map((s) => (
+                <tr key={s.id}>
+                  <td className="px-3 py-2 font-mono">{s.displayLotNumber}</td>
+                  <td className="px-3 py-2">{s.description}</td>
+                  <td className="px-3 py-2 text-right font-mono">
+                    {s.quantity}
+                  </td>
+                  <td className="px-3 py-2 text-right font-mono">
+                    {formatCurrency(saleUnitHammer(s), sym)}
+                  </td>
+                  <td className="px-3 py-2 text-right font-mono">
+                    {formatCurrency(s.amount, sym)}
+                  </td>
+                </tr>
+              ))}
+              {manualLines.map((m) => (
+                <tr key={m.id}>
+                  <td className="px-3 py-2 font-mono text-muted">—</td>
+                  <td className="px-3 py-2">
+                    {m.description || "Adjustment"}
+                  </td>
+                  <td className="px-3 py-2 text-right font-mono">1</td>
+                  <td className="px-3 py-2 text-right font-mono">
+                    {formatCurrency(m.amount, sym)}
+                  </td>
+                  <td className="px-3 py-2 text-right font-mono">
+                    {formatCurrency(m.amount, sym)}
+                  </td>
+                </tr>
+              ))}
             </tbody>
           </table>
         </div>
+
+        {invoice.status === "unpaid" && manualLines.length > 0 ? (
+          <p className="text-xs text-muted">
+            Manual lines appear in the PDF after clerking lines. Edit amounts
+            on blur to update totals.
+          </p>
+        ) : null}
 
         <dl className="space-y-1 border-t border-navy/10 pt-3 text-right font-mono">
           <div className="flex justify-between gap-4">
@@ -165,15 +425,17 @@ export function InvoiceDetailModal({
           {showBpLine ? (
             <div className="flex justify-between gap-4">
               <dt className="text-muted">
-                {buyersPremiumLineLabel(buyersPremiumRate)}
+                {buyersPremiumLineLabel(bpEff)}
               </dt>
               <dd>{formatCurrency(invoice.buyersPremiumAmount, sym)}</dd>
             </div>
           ) : null}
-          <div className="flex justify-between gap-4">
-            <dt className="text-muted">{taxLineLabel(taxRate)}</dt>
-            <dd>{formatCurrency(invoice.taxAmount, sym)}</dd>
-          </div>
+          {invoice.taxAmount !== 0 || taxEff > 0 ? (
+            <div className="flex justify-between gap-4">
+              <dt className="text-muted">{taxLineLabel(taxEff)}</dt>
+              <dd>{formatCurrency(invoice.taxAmount, sym)}</dd>
+            </div>
+          ) : null}
           <div className="flex justify-between gap-4 text-base font-semibold text-navy dark:text-slate-100">
             <dt>Total</dt>
             <dd>{formatCurrency(invoice.total, sym)}</dd>

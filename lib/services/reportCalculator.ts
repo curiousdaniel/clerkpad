@@ -99,9 +99,11 @@ export function buildBidderReportRows(
   invoices: Invoice[],
   taxRate: number
 ): BidderReportRow[] {
-  const invByBidder = new Map<number, Invoice>();
+  const invsByBidder = new Map<number, Invoice[]>();
   for (const inv of invoices) {
-    invByBidder.set(inv.bidderId, inv);
+    const list = invsByBidder.get(inv.bidderId) ?? [];
+    list.push(inv);
+    invsByBidder.set(inv.bidderId, list);
   }
 
   const salesByBidder = new Map<number, Sale[]>();
@@ -118,10 +120,15 @@ export function buildBidderReportRows(
     const list = salesByBidder.get(b.id) ?? [];
     const subtotal = roundMoney(list.reduce((a, s) => a + s.amount, 0));
     const { taxAmount, total } = computeInvoiceFromSubtotal(subtotal, taxRate);
-    const inv = invByBidder.get(b.id);
+    const invList = invsByBidder.get(b.id) ?? [];
+    const hasUnallocated = list.some((s) => s.invoiceId == null);
     let paymentStatus: BidderReportRow["paymentStatus"] = "No invoice";
-    if (inv) {
-      paymentStatus = inv.status === "paid" ? "Paid" : "Unpaid";
+    if (invList.length > 0) {
+      if (hasUnallocated || invList.some((i) => i.status === "unpaid")) {
+        paymentStatus = "Unpaid";
+      } else {
+        paymentStatus = "Paid";
+      }
     }
     rows.push({
       bidderId: b.id,

@@ -87,11 +87,13 @@ This document summarizes product-facing capabilities of **ClerkBid** (auction cl
 
 ## Invoices
 
-- **Per-bidder invoices** — Built from recorded sales for the current event.
-- **Generate from sales** — Create or refresh invoice lines from clerking data.
-- **PDF output** — Open/print invoice PDFs.
-- **Payment tracking** — Mark paid or unpaid with payment method and date where supported.
-- **Buyer’s premium and tax** — Totals follow event settings (rates from Settings).
+- **Per-bidder invoices** — Each invoice is a separate document with its own number; a bidder can have more than one (for example after new sales post-payment).
+- **Sale allocation** — Each sale line is linked to exactly one invoice. Generating or refreshing invoices attaches **unallocated** lines to the current **unpaid** invoice, or creates a **new** unpaid invoice when the bidder only has **paid** invoices and new sales exist.
+- **Paid invoices frozen** — Marking an invoice paid does not change its totals; supplemental lines get a new invoice.
+- **PDF output** — Open/print invoice PDFs for a single invoice (lines match that invoice only).
+- **Payment tracking** — Mark paid or unpaid with payment method and date per invoice.
+- **Buyer’s premium and tax** — Defaults come from event settings; **unpaid** invoices can override BP and tax **rates** per invoice.
+- **Manual lines** — Unpaid invoices support signed **manual lines** (fees, unrecorded purchases, discounts/credits) applied **after** buyer’s premium and **before** tax; they appear on the PDF and in **accounting CSV** (as `ADJ` rows).
 
 ---
 

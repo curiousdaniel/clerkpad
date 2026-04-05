@@ -182,7 +182,7 @@ export function renderInvoiceOnDoc(doc: jsPDF, input: InvoicePdfInput): void {
     { align: "right" }
   );
   ty += 5;
-  if (input.buyersPremiumAmount > 0 || input.buyersPremiumRate > 0) {
+  if (input.buyersPremiumAmount !== 0 || input.buyersPremiumRate > 0) {
     doc.text(
       `Buyer's premium (${bpPct}): ${formatCurrency(input.buyersPremiumAmount, sym)}`,
       doc.internal.pageSize.getWidth() - 14,
@@ -191,13 +191,15 @@ export function renderInvoiceOnDoc(doc: jsPDF, input: InvoicePdfInput): void {
     );
     ty += 5;
   }
-  doc.text(
-    `Tax (${taxPct}): ${formatCurrency(input.taxAmount, sym)}`,
-    doc.internal.pageSize.getWidth() - 14,
-    ty,
-    { align: "right" }
-  );
-  ty += 5;
+  if (input.taxAmount !== 0 || input.taxRate > 0) {
+    doc.text(
+      `Tax (${taxPct}): ${formatCurrency(input.taxAmount, sym)}`,
+      doc.internal.pageSize.getWidth() - 14,
+      ty,
+      { align: "right" }
+    );
+    ty += 5;
+  }
   doc.setFont("helvetica", "bold");
   doc.text(
     `TOTAL: ${formatCurrency(input.total, sym)}`,

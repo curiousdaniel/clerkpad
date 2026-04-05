@@ -32,7 +32,7 @@ After a sale, a short **undo** window may appear—use it immediately if you nee
 
 ## Invoices
 
-[Invoices](/invoices/) are built **per bidder** for the current event. You can **generate** invoices from recorded sales, open **PDFs** for printing, and mark **paid** or **unpaid** with payment method and date. Buyer’s premium and tax follow the rates set for the event in Settings.
+[Invoices](/invoices/) are built **per bidder** for the current event. A bidder can have **several invoice numbers** over time: new sales after an invoice is **paid** are gathered into a **new** unpaid invoice the next time you generate. **Unpaid** invoices are updated when you generate so they include any sales not yet on an invoice. Each **PDF** only includes lines for **that** invoice. For **unpaid** invoices you can optionally override **buyer’s premium** and **tax rates** (otherwise the event defaults from Settings apply), and add **manual lines**—positive amounts for extra charges or unrecorded purchases, negative for discounts or credits. Those lines are calculated **after** buyer’s premium and **before** tax. **Paid** invoices stay fixed; you cannot change their rates or manual lines afterward.
 
 ## Reports
 

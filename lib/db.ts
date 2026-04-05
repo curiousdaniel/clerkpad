@@ -31,6 +31,16 @@ const STORE_DEF_V5 = {
     "++id, eventId, lotId, bidderId, displayLotNumber, paddleNumber, consignorId",
 } as const;
 
+const STORE_DEF_V6 = {
+  ...STORE_DEF_V5,
+  sales:
+    "++id, eventId, lotId, bidderId, displayLotNumber, paddleNumber, consignorId, invoiceId",
+} as const;
+
+const STORE_DEF_V7 = {
+  ...STORE_DEF_V6,
+} as const;
+
 export function sanitizeUserIdForDbName(userId: string): string {
   return userId.replace(/[^a-zA-Z0-9_-]/g, "_");
 }
@@ -103,6 +113,16 @@ export interface Sale {
   amount: number;
   clerkInitials: string;
   createdAt: Date;
+  /** Which invoice owns this line; null/undefined = not yet allocated. */
+  invoiceId?: number | null;
+}
+
+/** Manual invoice line (fees, credits, unrecorded purchases); post–buyer's premium, pre-tax. */
+export interface InvoiceManualLine {
+  id: string;
+  description: string;
+  /** Signed dollars (negative = discount/credit). */
+  amount: number;
 }
 
 export interface Invoice {
@@ -112,7 +132,7 @@ export interface Invoice {
   invoiceNumber: string;
   /** Sum of hammer / bid line amounts (before buyer's premium). */
   subtotal: number;
-  /** Buyer's premium dollars; tax applies to subtotal + buyersPremiumAmount. */
+  /** Buyer's premium dollars; tax applies to subtotal + buyersPremiumAmount + manual lines. */
   buyersPremiumAmount: number;
   taxAmount: number;
   total: number;
@@ -120,6 +140,12 @@ export interface Invoice {
   paymentMethod?: "cash" | "check" | "credit_card" | "other";
   paymentDate?: Date;
   generatedAt: Date;
+  /** When set, overrides event buyer's premium rate (0–1) for this invoice. */
+  buyersPremiumRate?: number | null;
+  /** When set, overrides event tax rate (0–1) for this invoice. */
+  taxRate?: number | null;
+  /** Adjustments after BP, before tax. */
+  manualLines?: InvoiceManualLine[];
 }
 
 export interface AppSettings {
@@ -241,6 +267,33 @@ export class AuctionDB extends Dexie {
           }
         });
       });
+    this.version(6)
+      .stores(STORE_DEF_V6)
+      .upgrade(async (tx) => {
+        const salesTable = tx.table("sales");
+        const invoices = await tx.table("invoices").toArray();
+        const sorted = (invoices as Invoice[]).sort(
+          (a, b) => (a.id ?? 0) - (b.id ?? 0)
+        );
+        for (const inv of sorted) {
+          if (inv.id == null) continue;
+          const rows = await salesTable
+            .where("eventId")
+            .equals(inv.eventId)
+            .filter(
+              (s: Sale) =>
+                s.bidderId === inv.bidderId &&
+                (s.invoiceId === undefined || s.invoiceId === null)
+            )
+            .toArray();
+          for (const s of rows) {
+            if (s.id != null) {
+              await salesTable.update(s.id, { invoiceId: inv.id });
+            }
+          }
+        }
+      });
+    this.version(7).stores(STORE_DEF_V7);
   }
 }
 

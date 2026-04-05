@@ -12,10 +12,14 @@ import { toDate } from "@/lib/utils/coerceDate";
 import { newEventSyncId } from "@/lib/utils/syncId";
 import { roundMoney } from "@/lib/services/invoiceLogic";
 
-export const EXPORT_VERSION = 3;
+export const EXPORT_VERSION = 5;
 export const EXPORT_VERSION_LEGACY = 1;
 /** Still accepted for import (consignors array optional). */
 export const EXPORT_VERSION_2 = 2;
+/** Pre–sale.invoiceId + invoice legacyId on export. */
+export const EXPORT_VERSION_3 = 3;
+/** Pre–per-invoice rate overrides and manualLines. */
+export const EXPORT_VERSION_4 = 4;
 
 /** JSON shape for `event` inside export (no local `id` / `updatedAt`). */
 export type EventExportEventShape = Omit<
@@ -68,6 +72,9 @@ export type EventExportPayload = {
       legacyLotId?: number;
       legacyBidderId?: number;
       legacyConsignorId?: number;
+      /** Source sale id — links to legacyInvoiceId on import (v4+). */
+      legacyId?: number;
+      legacyInvoiceId?: number;
     }
   >;
   invoices: Array<
@@ -78,6 +85,8 @@ export type EventExportPayload = {
       generatedAt: string;
       paymentDate?: string;
       legacyBidderId?: number;
+      /** Source invoice id — links from sale.legacyInvoiceId (v4+). */
+      legacyId?: number;
     }
   >;
 };
@@ -158,17 +167,27 @@ export async function buildEventExport(
       updatedAt: isoFromStored(l.updatedAt, "lot.updatedAt"),
     })),
     sales: sales.map((s) => {
-      const { id: _id, eventId: _ev, lotId, bidderId, consignorId, ...rest } = s;
+      const {
+        id: sid,
+        eventId: _ev,
+        lotId,
+        bidderId,
+        consignorId,
+        invoiceId,
+        ...rest
+      } = s;
       return {
         ...rest,
         createdAt: isoFromStored(s.createdAt, "sale.createdAt"),
         legacyLotId: lotId,
         legacyBidderId: bidderId,
+        legacyId: sid,
         ...(consignorId != null ? { legacyConsignorId: consignorId } : {}),
+        ...(invoiceId != null ? { legacyInvoiceId: invoiceId } : {}),
       };
     }),
     invoices: invoices.map((inv) => {
-      const { id: _id, eventId: _ev, bidderId, ...rest } = inv;
+      const { id: iid, eventId: _ev, bidderId, ...rest } = inv;
       return {
         ...rest,
         generatedAt: isoFromStored(inv.generatedAt, "invoice.generatedAt"),
@@ -176,6 +195,7 @@ export async function buildEventExport(
           ? isoOptFromStored(inv.paymentDate)
           : undefined,
         legacyBidderId: bidderId,
+        legacyId: iid,
       };
     }),
   };
@@ -207,6 +227,8 @@ export function parseEventExportPayload(raw: unknown): EventExportPayload {
   const v = o.exportVersion;
   if (
     v !== EXPORT_VERSION &&
+    v !== EXPORT_VERSION_4 &&
+    v !== EXPORT_VERSION_3 &&
     v !== EXPORT_VERSION_2 &&
     v !== EXPORT_VERSION_LEGACY
   ) {
@@ -455,14 +477,19 @@ async function insertChildrenForEvent(
     lotIndex++;
   }
 
+  const saleLegacyMap = new Map<number, number>();
+  let saleIndex = 0;
   for (const s of payload.sales) {
     const {
       legacyLotId,
       legacyBidderId,
       legacyConsignorId,
+      legacyId,
+      legacyInvoiceId: _li,
       createdAt,
+      invoiceId: _invPayload,
       ...rest
-    } = s;
+    } = s as typeof s & { invoiceId?: number };
     const lotId =
       legacyLotId != null ? lotMap.get(legacyLotId) : undefined;
     const bidderId =
@@ -476,19 +503,26 @@ async function insertChildrenForEvent(
       legacyConsignorId != null
         ? consignorMap.get(legacyConsignorId)
         : undefined;
-    await db.sales.add({
+    const newSaleId = (await db.sales.add({
       ...rest,
       eventId,
       lotId,
       bidderId,
       ...(mappedConsignorId != null ? { consignorId: mappedConsignorId } : {}),
       createdAt: parseDate(createdAt),
-    });
+    })) as number;
+    const legacyKey = legacyId ?? saleIndex;
+    saleLegacyMap.set(legacyKey, newSaleId);
+    saleIndex++;
   }
 
+  const invLegacyMap = new Map<number, number>();
+  const newInvoiceIdsByBidder = new Map<number, number[]>();
+  let invIndex = 0;
   for (const inv of payload.invoices) {
     const {
       legacyBidderId,
+      legacyId: invLegacyId,
       generatedAt,
       paymentDate,
       subtotal,
@@ -510,14 +544,52 @@ async function insertChildrenForEvent(
       { subtotal, taxAmount, total, buyersPremiumAmount },
       eventBuyersPremiumRate
     );
-    await db.invoices.add({
+    const newInvId = (await db.invoices.add({
       ...meta,
       ...amounts,
       eventId,
       bidderId,
       generatedAt: parseDate(generatedAt),
       paymentDate: paymentDate ? parseDate(paymentDate) : undefined,
-    });
+    })) as number;
+    const legacyInvKey = invLegacyId ?? invIndex;
+    invLegacyMap.set(legacyInvKey, newInvId);
+    const bidderInvList = newInvoiceIdsByBidder.get(bidderId) ?? [];
+    bidderInvList.push(newInvId);
+    newInvoiceIdsByBidder.set(bidderId, bidderInvList);
+    invIndex++;
+  }
+
+  const exportV = payload.exportVersion;
+  for (const s of payload.sales) {
+    const lid = s.legacyId;
+    const linv = s.legacyInvoiceId;
+    if (
+      typeof exportV === "number" &&
+      exportV >= 4 &&
+      typeof lid === "number" &&
+      typeof linv === "number"
+    ) {
+      const newSaleId = saleLegacyMap.get(lid);
+      const newInvId = invLegacyMap.get(linv);
+      if (newSaleId != null && newInvId != null) {
+        await db.sales.update(newSaleId, { invoiceId: newInvId });
+      }
+    }
+  }
+
+  for (const [bidderId, invIds] of Array.from(
+    newInvoiceIdsByBidder.entries()
+  )) {
+    if (invIds.length !== 1) continue;
+    const onlyId = invIds[0]!;
+    await db.sales
+      .where("eventId")
+      .equals(eventId)
+      .filter(
+        (x) => x.bidderId === bidderId && (x.invoiceId == null)
+      )
+      .modify({ invoiceId: onlyId });
   }
 
   return {
