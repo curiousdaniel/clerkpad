@@ -8,6 +8,14 @@ If you use **cloud backup/sync** (optional, from [Settings](/settings/)), event 
 
 **Offline and multiple devices:** while offline, each device keeps its own copy; changes are not visible to teammates until you reconnect and sync. If two devices both change data offline, you may need **Restore from cloud** or **Overwrite cloud copy** in Settings after reconnect. At a venue with poor connectivity, a **phone hotspot** or local Wi‑Fi with internet often works better than expecting devices to sync without any shared network path to the server.
 
+## Recent updates
+
+Changes since the last major refresh of this Help page:
+
+- **Invoices — detail view** — The invoice detail dialog is wider so line items, descriptions, and line totals are easier to read without horizontal scrolling.
+- **Invoices — mark as unpaid** — If you marked an invoice paid by mistake, open its detail from [Invoices](/invoices/) and use **Mark as unpaid** (with confirmation). That clears payment method and date and sets the invoice back to unpaid so you can record payment again. Totals and lines on the invoice are unchanged.
+- **Reports — buyer’s premium** — The event summary includes **Buyer’s premium (invoiced)**. The **bidder totals** table and its CSV export include a buyer’s premium column; figures follow invoice totals when invoices exist, and otherwise follow the same basis as invoice generation from your event rates.
+
 ## Events
 
 On [Events](/events/) you can **create** and **edit** events, **switch** the active event, **export** a single event as JSON for backup, and **import** an event from JSON. Export/import is useful for moving data between devices or keeping an offline copy.
@@ -34,9 +42,11 @@ After a sale, a short **undo** window may appear—use it immediately if you nee
 
 [Invoices](/invoices/) are built **per bidder** for the current event. A bidder can have **several invoice numbers** over time: new sales after an invoice is **paid** are gathered into a **new** unpaid invoice the next time you generate. **Unpaid** invoices are updated when you generate so they include any sales not yet on an invoice. Each **PDF** only includes lines for **that** invoice. For **unpaid** invoices you can optionally override **buyer’s premium** and **tax rates** (otherwise the event defaults from Settings apply), and add **manual lines**—positive amounts for extra charges or unrecorded purchases, negative for discounts or credits. Those lines are calculated **after** buyer’s premium and **before** tax. **Paid** invoices stay fixed; you cannot change their rates or manual lines afterward.
 
+Click a row to open **invoice detail**: a wider layout shows the full line-item table. From there you can print the PDF, **Mark as paid** (unpaid invoices), or **Mark as unpaid** (paid invoices) if you need to reverse a mistaken payment—after confirming, payment method and date are cleared and you can mark paid again.
+
 ## Reports
 
-[Reports](/reports/) summarizes the event: revenue, lot status, bidder totals, payment methods, **consignor commission** summaries, and exports. You can download **accounting CSV**, **run list** and **bidder list** PDFs, and consignor-related CSV where available.
+[Reports](/reports/) summarizes the event: revenue, lot status, bidder totals, payment methods, **consignor commission** summaries, and exports. The summary includes **buyer’s premium (invoiced)** alongside hammer and tax. **Bidder totals** list hammer, buyer’s premium, tax, and total per bidder (aligned with invoices when they exist). You can download **accounting CSV**, **run list** and **bidder list** PDFs, consignor-related CSV where available, and a **bidder totals CSV** that includes the buyer’s premium column.
 
 ## Settings backups and data
 

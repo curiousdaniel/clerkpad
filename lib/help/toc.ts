@@ -1,6 +1,7 @@
 /** In-page TOC; `id` values must match `rehype-slug` output for each `##` heading in docs/clerkbid_help.md */
 export const helpTableOfContents: { id: string; label: string }[] = [
   { id: "getting-started", label: "Getting started" },
+  { id: "recent-updates", label: "Recent updates" },
   { id: "events", label: "Events" },
   { id: "bidders", label: "Bidders" },
   { id: "consignors-and-commission", label: "Consignors and commission" },

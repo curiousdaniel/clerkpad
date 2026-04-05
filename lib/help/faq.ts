@@ -31,4 +31,9 @@ export const helpFaqs: HelpFaqItem[] = [
     answer:
       "Set a default commission percent on the event in Settings. Individual consignors can have an override percent. Statements and commission reports use the effective rate per line.",
   },
+  {
+    question: "What if I marked an invoice paid by mistake?",
+    answer:
+      "Open Invoices, click the invoice to open its detail, and choose Mark as unpaid (with confirmation). That clears payment method and date so you can record payment again. Invoice lines and totals are not changed.",
+  },
 ];
