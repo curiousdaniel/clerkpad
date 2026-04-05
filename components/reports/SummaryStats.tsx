@@ -14,7 +14,7 @@ export function SummaryStats({
   const sym = currencySymbol;
   const c = [
     {
-      label: "Total revenue",
+      label: "Total hammer (sales)",
       value: formatCurrency(stats.totalRevenue, sym),
       accent: "text-gold",
     },
@@ -43,6 +43,11 @@ export function SummaryStats({
       value: stats.highestSale
         ? `${stats.highestSale.displayLotNumber} · ${formatCurrency(stats.highestSale.amount, sym)}`
         : "—",
+      accent: "text-navy",
+    },
+    {
+      label: "Buyer's premium (invoiced)",
+      value: formatCurrency(stats.totalBuyersPremium, sym),
       accent: "text-navy",
     },
     {

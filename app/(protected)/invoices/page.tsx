@@ -285,6 +285,9 @@ export default function InvoicesPage() {
           if (displayDetailInvoice) setPayInv(displayDetailInvoice);
         }}
         onError={(message) => showToast({ kind: "error", message })}
+        onUnpaid={() =>
+          showToast({ kind: "success", message: "Invoice marked unpaid." })
+        }
       />
 
       <PaymentModal

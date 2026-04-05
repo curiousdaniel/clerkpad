@@ -5,12 +5,26 @@ import {
   compareLotsForReport,
   computeEventSummary,
 } from "./reportCalculator";
-import type { Bidder, Invoice, Lot, Sale } from "@/lib/db";
+import type { AuctionEvent, Bidder, Invoice, Lot, Sale } from "@/lib/db";
+
+const reportEvent: AuctionEvent = {
+  id: 1,
+  name: "E",
+  organizationName: "O",
+  taxRate: 0.1,
+  buyersPremiumRate: 0.1,
+  defaultConsignorCommissionRate: 0,
+  currencySymbol: "$",
+  syncId: "x",
+  createdAt: new Date(),
+  updatedAt: new Date(),
+};
 
 describe("computeEventSummary", () => {
   it("handles empty inputs", () => {
     const s = computeEventSummary([], [], [], []);
     expect(s.totalRevenue).toBe(0);
+    expect(s.totalBuyersPremium).toBe(0);
     expect(s.bidderCount).toBe(0);
     expect(s.activeBidderCount).toBe(0);
     expect(s.highestSale).toBeNull();
@@ -81,9 +95,41 @@ describe("computeEventSummary", () => {
     ];
     const s = computeEventSummary([], [], [], invoices);
     expect(s.totalTaxCollected).toBe(8);
+    expect(s.totalBuyersPremium).toBe(0);
     expect(s.totalPaid).toBe(108);
     expect(s.totalOutstanding).toBe(54);
     expect(s.totalInvoiced).toBe(162);
+  });
+
+  it("sums buyer's premium across invoices", () => {
+    const invoices: Invoice[] = [
+      {
+        id: 1,
+        eventId: 1,
+        bidderId: 1,
+        invoiceNumber: "1-001",
+        subtotal: 100,
+        buyersPremiumAmount: 10,
+        taxAmount: 11,
+        total: 121,
+        status: "paid",
+        generatedAt: new Date(),
+      },
+      {
+        id: 2,
+        eventId: 1,
+        bidderId: 2,
+        invoiceNumber: "1-002",
+        subtotal: 200,
+        buyersPremiumAmount: 20,
+        taxAmount: 22,
+        total: 242,
+        status: "unpaid",
+        generatedAt: new Date(),
+      },
+    ];
+    const s = computeEventSummary([], [], [], invoices);
+    expect(s.totalBuyersPremium).toBe(30);
   });
 });
 
@@ -143,9 +189,96 @@ describe("buildBidderReportRows", () => {
         generatedAt: new Date(),
       },
     ];
-    const rows = buildBidderReportRows(bidders, sales, invoices, 0);
+    const rows = buildBidderReportRows(bidders, sales, invoices, reportEvent);
     expect(rows).toHaveLength(1);
     expect(rows[0]!.paymentStatus).toBe("Unpaid");
+    expect(rows[0]!.buyersPremium).toBe(0);
+    expect(rows[0]!.subtotal).toBe(75);
+    expect(rows[0]!.tax).toBe(0);
+    expect(rows[0]!.total).toBe(50);
+  });
+
+  it("uses invoice BP and tax when invoices exist", () => {
+    const bidders: Bidder[] = [
+      {
+        id: 1,
+        eventId: 1,
+        paddleNumber: 1,
+        firstName: "A",
+        lastName: "B",
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      },
+    ];
+    const sales: Sale[] = [
+      {
+        id: 10,
+        eventId: 1,
+        lotId: 1,
+        bidderId: 1,
+        displayLotNumber: "1",
+        paddleNumber: 1,
+        description: "x",
+        quantity: 1,
+        amount: 100,
+        clerkInitials: "X",
+        createdAt: new Date(),
+        invoiceId: 100,
+      },
+    ];
+    const invoices: Invoice[] = [
+      {
+        id: 100,
+        eventId: 1,
+        bidderId: 1,
+        invoiceNumber: "1-001",
+        subtotal: 100,
+        buyersPremiumAmount: 10,
+        taxAmount: 11,
+        total: 121,
+        status: "unpaid",
+        generatedAt: new Date(),
+      },
+    ];
+    const rows = buildBidderReportRows(bidders, sales, invoices, reportEvent);
+    expect(rows[0]!.buyersPremium).toBe(10);
+    expect(rows[0]!.tax).toBe(11);
+    expect(rows[0]!.total).toBe(121);
+  });
+
+  it("applies event BP and tax when no invoice", () => {
+    const bidders: Bidder[] = [
+      {
+        id: 1,
+        eventId: 1,
+        paddleNumber: 1,
+        firstName: "A",
+        lastName: "B",
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      },
+    ];
+    const sales: Sale[] = [
+      {
+        id: 10,
+        eventId: 1,
+        lotId: 1,
+        bidderId: 1,
+        displayLotNumber: "1",
+        paddleNumber: 1,
+        description: "x",
+        quantity: 1,
+        amount: 100,
+        clerkInitials: "X",
+        createdAt: new Date(),
+      },
+    ];
+    const rows = buildBidderReportRows(bidders, sales, [], reportEvent);
+    expect(rows[0]!.subtotal).toBe(100);
+    expect(rows[0]!.buyersPremium).toBe(10);
+    expect(rows[0]!.tax).toBe(11);
+    expect(rows[0]!.total).toBe(121);
+    expect(rows[0]!.paymentStatus).toBe("No invoice");
   });
 });
 

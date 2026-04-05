@@ -11,6 +11,7 @@ type SortKey =
   | "name"
   | "items"
   | "subtotal"
+  | "buyersPremium"
   | "tax"
   | "total"
   | "status";
@@ -45,6 +46,9 @@ export function BidderTotals({
         case "subtotal":
           cmp = a.subtotal - b.subtotal;
           break;
+        case "buyersPremium":
+          cmp = a.buyersPremium - b.buyersPremium;
+          break;
         case "tax":
           cmp = a.tax - b.tax;
           break;
@@ -76,7 +80,8 @@ export function BidderTotals({
       "Paddle #",
       "Name",
       "Items won",
-      "Subtotal",
+      "Hammer",
+      "Buyer's premium",
       "Tax",
       "Total",
       "Payment status",
@@ -86,6 +91,7 @@ export function BidderTotals({
       r.name,
       r.itemsWon,
       r.subtotal,
+      r.buyersPremium,
       r.tax,
       r.total,
       r.paymentStatus,
@@ -117,13 +123,14 @@ export function BidderTotals({
         </Button>
       </div>
       <div className="overflow-x-auto rounded-xl border border-navy/10 bg-white dark:border-slate-700 dark:bg-slate-900">
-        <table className="w-full min-w-[720px] text-sm">
+        <table className="w-full min-w-[860px] text-sm">
           <thead className="border-b border-navy/10 bg-surface dark:border-slate-700 dark:bg-slate-800/80">
             <tr>
               {th("paddle", "Paddle #")}
               {th("name", "Name")}
               {th("items", "Items won")}
-              {th("subtotal", "Subtotal")}
+              {th("subtotal", "Hammer")}
+              {th("buyersPremium", "Buyer's prem.")}
               {th("tax", "Tax")}
               {th("total", "Total")}
               {th("status", "Payment status")}
@@ -132,7 +139,7 @@ export function BidderTotals({
           <tbody className="divide-y divide-navy/10 dark:divide-slate-700">
             {sorted.length === 0 ? (
               <tr>
-                <td colSpan={7} className="px-3 py-6 text-center text-muted">
+                <td colSpan={8} className="px-3 py-6 text-center text-muted">
                   No bidders for this event.
                 </td>
               </tr>
@@ -149,6 +156,9 @@ export function BidderTotals({
                   <td className="px-3 py-2 text-right font-mono">{r.itemsWon}</td>
                   <td className="px-3 py-2 text-right font-mono">
                     {formatCurrency(r.subtotal, currencySymbol)}
+                  </td>
+                  <td className="px-3 py-2 text-right font-mono">
+                    {formatCurrency(r.buyersPremium, currencySymbol)}
                   </td>
                   <td className="px-3 py-2 text-right font-mono">
                     {formatCurrency(r.tax, currencySymbol)}

@@ -75,7 +75,7 @@ export default function ReportsPage() {
       bundle.bidders,
       bundle.sales,
       bundle.invoices,
-      currentEvent.taxRate
+      currentEvent
     );
   }, [bundle, currentEvent]);
 

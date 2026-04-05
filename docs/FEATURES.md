@@ -99,7 +99,8 @@ This document summarizes product-facing capabilities of **ClerkBid** (auction cl
 
 ## Reports
 
-- **Event summaries** — Revenue, lot status, bidder totals, payment methods, consignor commission views, and related breakdowns.
+- **Event summaries** — Total hammer from sales, invoiced buyer’s premium and tax, lot status, bidder totals, payment methods, consignor commission views, and related breakdowns.
+- **Bidder totals** — When invoices exist, hammer / buyer’s premium / tax / total per bidder match **invoice** sums; without invoices, BP and tax are estimated from event rates (same basis as invoice generation).
 - **Exports** — **Accounting CSV** and consignor-related CSV where available.
 - **PDFs** — **Run list** and **bidder list** (and similar) where implemented.
 

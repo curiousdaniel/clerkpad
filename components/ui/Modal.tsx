@@ -10,12 +10,15 @@ export function Modal({
   children,
   onClose,
   footer,
+  maxWidthClass = "max-w-lg",
 }: {
   open: boolean;
   title: string;
   children: ReactNode;
   onClose: () => void;
   footer?: ReactNode;
+  /** Tailwind max-width for the dialog panel (default ~32rem). */
+  maxWidthClass?: string;
 }) {
   useEffect(() => {
     if (!open) return;
@@ -37,7 +40,7 @@ export function Modal({
         onClick={onClose}
       />
       <div
-        className="relative z-10 w-full max-w-lg rounded-xl border border-navy/10 bg-white shadow-xl dark:border-slate-700 dark:bg-slate-900"
+        className={`relative z-10 w-full rounded-xl border border-navy/10 bg-white shadow-xl dark:border-slate-700 dark:bg-slate-900 ${maxWidthClass}`}
         role="dialog"
         aria-modal="true"
         aria-labelledby="modal-title"
@@ -55,7 +58,7 @@ export function Modal({
         </div>
         <div className="max-h-[70vh] overflow-y-auto px-5 py-4">{children}</div>
         {footer ? (
-          <div className="flex justify-end gap-2 border-t border-navy/10 px-5 py-3 dark:border-slate-700">
+          <div className="flex flex-wrap justify-end gap-2 border-t border-navy/10 px-5 py-3 dark:border-slate-700">
             {footer}
           </div>
         ) : null}

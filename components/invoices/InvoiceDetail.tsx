@@ -54,6 +54,7 @@ export function InvoiceDetailModal({
   onClose,
   onPrint,
   onMarkPaid,
+  onUnpaid,
   onError,
 }: {
   open: boolean;
@@ -65,6 +66,8 @@ export function InvoiceDetailModal({
   onClose: () => void;
   onPrint: () => void;
   onMarkPaid: () => void;
+  /** Called after marking paid invoice unpaid (payment cleared). */
+  onUnpaid?: () => void;
   onError: (message: string) => void;
 }) {
   const { db } = useUserDb();
@@ -151,10 +154,36 @@ export function InvoiceDetailModal({
     await setManualLines(next);
   }
 
+  async function handleUnpay() {
+    const inv = invoice;
+    if (inv?.id == null || !db) return;
+    if (
+      !window.confirm(
+        "Mark this invoice unpaid and clear payment method and date? You can record payment again afterward."
+      )
+    ) {
+      return;
+    }
+    setSaving(true);
+    try {
+      await db.invoices.where("id").equals(inv.id).modify((row) => {
+        row.status = "unpaid";
+        delete row.paymentMethod;
+        delete row.paymentDate;
+      });
+      onUnpaid?.();
+    } catch (e) {
+      onError(e instanceof Error ? e.message : "Could not update invoice.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
   return (
     <Modal
       open={open}
       title={`Invoice ${invoice.invoiceNumber}`}
+      maxWidthClass="max-w-4xl"
       onClose={onClose}
       footer={
         <>
@@ -168,7 +197,15 @@ export function InvoiceDetailModal({
             <Button type="button" onClick={onMarkPaid}>
               Mark as paid
             </Button>
-          ) : null}
+          ) : (
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => void handleUnpay()}
+            >
+              Mark as unpaid
+            </Button>
+          )}
         </>
       }
     >
@@ -348,7 +385,7 @@ export function InvoiceDetailModal({
         ) : null}
 
         <div className="overflow-x-auto rounded-lg border border-navy/10 dark:border-slate-700">
-          <table className="w-full min-w-[520px] text-sm">
+          <table className="w-full min-w-[640px] text-sm">
             <thead className="bg-surface dark:bg-slate-800/80">
               <tr>
                 <th className="px-3 py-2 text-left font-semibold text-navy dark:text-slate-200">

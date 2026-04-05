@@ -4,7 +4,10 @@ import {
   effectiveCommissionRate,
   lineCommission,
 } from "@/lib/services/consignorCommission";
-import { computeInvoiceFromSubtotal, roundMoney } from "@/lib/services/invoiceLogic";
+import {
+  computeInvoiceTotalsFromParts,
+  roundMoney,
+} from "@/lib/services/invoiceLogic";
 import { suffixRank } from "@/lib/utils/lotSuffix";
 import { PAYMENT_METHODS } from "@/lib/utils/constants";
 
@@ -19,6 +22,8 @@ export type EventSummaryStats = {
   avgSaleAmount: number;
   highestSale: { displayLotNumber: string; amount: number } | null;
   totalTaxCollected: number;
+  /** Sum of buyer's premium dollars across all invoices. */
+  totalBuyersPremium: number;
   totalInvoiced: number;
   totalPaid: number;
   totalOutstanding: number;
@@ -55,6 +60,9 @@ export function computeEventSummary(
   const totalTaxCollected = roundMoney(
     paidInvoices.reduce((a, i) => a + i.taxAmount, 0)
   );
+  const totalBuyersPremium = roundMoney(
+    invoices.reduce((a, i) => a + i.buyersPremiumAmount, 0)
+  );
   const totalInvoiced = roundMoney(
     invoices.reduce((a, i) => a + i.total, 0)
   );
@@ -76,6 +84,7 @@ export function computeEventSummary(
     avgSaleAmount,
     highestSale,
     totalTaxCollected,
+    totalBuyersPremium,
     totalInvoiced,
     totalPaid,
     totalOutstanding,
@@ -87,7 +96,9 @@ export type BidderReportRow = {
   paddleNumber: number;
   name: string;
   itemsWon: number;
+  /** Hammer total from clerking (sum of sale line amounts). */
   subtotal: number;
+  buyersPremium: number;
   tax: number;
   total: number;
   paymentStatus: "Paid" | "Unpaid" | "No invoice";
@@ -97,7 +108,7 @@ export function buildBidderReportRows(
   bidders: Bidder[],
   sales: Sale[],
   invoices: Invoice[],
-  taxRate: number
+  event: AuctionEvent
 ): BidderReportRow[] {
   const invsByBidder = new Map<number, Invoice[]>();
   for (const inv of invoices) {
@@ -118,9 +129,32 @@ export function buildBidderReportRows(
   for (const b of bidders) {
     if (b.id == null) continue;
     const list = salesByBidder.get(b.id) ?? [];
-    const subtotal = roundMoney(list.reduce((a, s) => a + s.amount, 0));
-    const { taxAmount, total } = computeInvoiceFromSubtotal(subtotal, taxRate);
+    const hammer = roundMoney(list.reduce((a, s) => a + s.amount, 0));
     const invList = invsByBidder.get(b.id) ?? [];
+    let buyersPremium: number;
+    let taxAmount: number;
+    let total: number;
+    if (invList.length > 0) {
+      buyersPremium = roundMoney(
+        invList.reduce((a, i) => a + i.buyersPremiumAmount, 0)
+      );
+      taxAmount = roundMoney(invList.reduce((a, i) => a + i.taxAmount, 0));
+      total = roundMoney(invList.reduce((a, i) => a + i.total, 0));
+    } else if (list.length > 0) {
+      const parts = computeInvoiceTotalsFromParts(
+        hammer,
+        undefined,
+        {} as Pick<Invoice, "buyersPremiumRate" | "taxRate">,
+        event
+      );
+      buyersPremium = parts.buyersPremiumAmount;
+      taxAmount = parts.taxAmount;
+      total = parts.total;
+    } else {
+      buyersPremium = 0;
+      taxAmount = 0;
+      total = 0;
+    }
     const hasUnallocated = list.some((s) => s.invoiceId == null);
     let paymentStatus: BidderReportRow["paymentStatus"] = "No invoice";
     if (invList.length > 0) {
@@ -135,7 +169,8 @@ export function buildBidderReportRows(
       paddleNumber: b.paddleNumber,
       name: `${b.lastName}, ${b.firstName}`,
       itemsWon: list.length,
-      subtotal,
+      subtotal: hammer,
+      buyersPremium,
       tax: taxAmount,
       total,
       paymentStatus,
