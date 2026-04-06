@@ -13,7 +13,6 @@ import {
 import { useSession } from "next-auth/react";
 import { ImpersonationBanner } from "@/components/admin/ImpersonationBanner";
 import { AppShell } from "@/components/layout/AppShell";
-import { SyncStatusBar } from "@/components/layout/SyncStatusBar";
 import { Button } from "@/components/ui/Button";
 import { useEventContext } from "@/components/providers/EventProvider";
 import { useToast } from "@/components/providers/ToastProvider";
@@ -683,7 +682,7 @@ export function CloudSyncProvider({ children }: { children: ReactNode }) {
 
   return (
     <CloudSyncContext.Provider value={ctxValue}>
-      <AppShell topBanner={topBanner} syncStatusBar={<SyncStatusBar />}>
+      <AppShell topBanner={topBanner}>
         {children}
       </AppShell>
     </CloudSyncContext.Provider>

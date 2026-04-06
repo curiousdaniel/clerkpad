@@ -12,6 +12,7 @@ import {
   type ColorSchemePreference,
   type FontScaleKey,
 } from "@/lib/displayPrefs";
+import { SyncStatusIndicator } from "./SyncStatusBar";
 
 export function DisplayPrefsRoot() {
   const [fontScale, setFontScale] = useState<FontScaleKey>(() =>
@@ -88,6 +89,9 @@ export function DisplayPrefsRoot() {
           />
           High contrast
         </label>
+        <div className="ml-auto flex shrink-0 items-center">
+          <SyncStatusIndicator />
+        </div>
       </div>
     </div>
   );

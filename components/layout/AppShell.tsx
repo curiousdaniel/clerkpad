@@ -9,12 +9,9 @@ import { DisplayPrefsRoot } from "./DisplayPrefsRoot";
 export function AppShell({
   children,
   topBanner,
-  syncStatusBar,
 }: {
   children: ReactNode;
   topBanner?: ReactNode;
-  /** Optional strip below display prefs (e.g. cloud sync status). */
-  syncStatusBar?: ReactNode;
 }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const menuButtonRef = useRef<HTMLButtonElement>(null);
@@ -82,11 +79,6 @@ export function AppShell({
             </span>
           </div>
           <DisplayPrefsRoot />
-          {syncStatusBar ? (
-            <div className="border-b border-navy/10 dark:border-slate-700">
-              {syncStatusBar}
-            </div>
-          ) : null}
         </div>
         <main className="flex-1 overflow-auto p-4 sm:p-6 md:p-8 lg:p-10">
           {topBanner ? (
