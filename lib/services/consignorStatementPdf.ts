@@ -92,12 +92,26 @@ export function buildConsignorStatementPdf(
   doc.setTextColor(60, 60, 60);
   doc.text(event.organizationName, 14, 26);
   doc.text(event.name, 14, 32);
+  let headerY = 40;
   doc.text(
     `Consignor #${consignor.consignorNumber} — ${consignor.name}`,
     14,
-    40
+    headerY
   );
-  doc.text(`Commission rate (this statement): ${rateLabel}`, 14, 46);
+  headerY += 6;
+  const addr = consignor.mailingAddress?.trim();
+  if (addr) {
+    doc.setFontSize(10);
+    for (const line of addr.split(/\r?\n/)) {
+      const t = line.trim();
+      if (!t) continue;
+      doc.text(t.slice(0, 90), 14, headerY);
+      headerY += 5;
+    }
+    doc.setFontSize(11);
+  }
+  doc.text(`Commission rate (this statement): ${rateLabel}`, 14, headerY);
+  headerY += 8;
 
   let gross = 0;
   let commission = 0;
@@ -126,7 +140,7 @@ export function buildConsignorStatementPdf(
   const netTotal = Math.round((gross - commission) * 100) / 100;
 
   autoTable(doc, {
-    startY: 52,
+    startY: headerY,
     head: [
       [
         "Lot",

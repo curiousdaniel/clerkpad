@@ -28,6 +28,7 @@ export function ConsignorForm({
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
+  const [mailingAddress, setMailingAddress] = useState("");
   const [notes, setNotes] = useState("");
   const [commissionPct, setCommissionPct] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -42,6 +43,7 @@ export function ConsignorForm({
         setName(editing.name);
         setPhone(editing.phone ?? "");
         setEmail(editing.email ?? "");
+        setMailingAddress(editing.mailingAddress ?? "");
         setNotes(editing.notes ?? "");
         setCommissionPct(
           typeof editing.commissionRate === "number"
@@ -54,6 +56,7 @@ export function ConsignorForm({
         setName("");
         setPhone("");
         setEmail("");
+        setMailingAddress("");
         setNotes("");
         setCommissionPct("");
       }
@@ -107,6 +110,9 @@ export function ConsignorForm({
         notes: notes.trim() || undefined,
         updatedAt: now,
       };
+      const ma = mailingAddress.trim();
+      if (ma) next.mailingAddress = ma;
+      else delete next.mailingAddress;
       if (commissionRate !== undefined) next.commissionRate = commissionRate;
       else delete next.commissionRate;
       await db.consignors.put(next);
@@ -121,6 +127,8 @@ export function ConsignorForm({
         createdAt: now,
         updatedAt: now,
       };
+      const maNew = mailingAddress.trim();
+      if (maNew) row.mailingAddress = maNew;
       if (commissionRate !== undefined) row.commissionRate = commissionRate;
       await db.consignors.add(row);
     }
@@ -181,6 +189,22 @@ export function ConsignorForm({
           value={phone}
           onChange={(e) => setPhone(e.target.value)}
         />
+        <div>
+          <label
+            htmlFor="consignor-mailing"
+            className="mb-1 block text-sm font-medium text-ink dark:text-slate-200"
+          >
+            Mailing address
+          </label>
+          <textarea
+            id="consignor-mailing"
+            rows={3}
+            value={mailingAddress}
+            onChange={(e) => setMailingAddress(e.target.value)}
+            placeholder="Street, city, state, ZIP — for mailing checks"
+            className="w-full rounded-lg border border-navy/20 bg-white px-3 py-2 text-sm text-ink placeholder:text-muted focus:border-navy focus:outline-none focus:ring-1 focus:ring-navy dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:placeholder:text-slate-500"
+          />
+        </div>
         <Input
           id="consignor-notes"
           label="Notes"

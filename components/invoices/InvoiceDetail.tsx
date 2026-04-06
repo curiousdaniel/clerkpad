@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import type { AuctionEvent, Bidder, Invoice, InvoiceManualLine, Sale } from "@/lib/db";
 import { saleUnitHammer } from "@/lib/services/saleLineTotals";
 import {
@@ -15,6 +15,8 @@ import { Badge } from "@/components/ui/Badge";
 import { formatCurrency } from "@/lib/utils/formatCurrency";
 import { formatDateOnly, formatDateTime } from "@/lib/utils/formatDate";
 import { PAYMENT_METHODS } from "@/lib/utils/constants";
+import { removeSaleFromInvoice } from "@/lib/services/saleInvoiceEdits";
+import { SaleCorrectionModal } from "@/components/invoices/SaleCorrectionModal";
 
 function paymentLabel(value: string | undefined): string {
   if (!value) return "—";
@@ -65,6 +67,7 @@ export function InvoiceDetailModal({
   onMarkPaid,
   onUnpaid,
   onError,
+  onSuccess,
 }: {
   open: boolean;
   invoice: Invoice | null;
@@ -78,9 +81,16 @@ export function InvoiceDetailModal({
   /** Called after marking paid invoice unpaid (payment cleared). */
   onUnpaid?: () => void;
   onError: (message: string) => void;
+  /** Success toasts for line edits / removal */
+  onSuccess?: (message: string) => void;
 }) {
   const { db } = useUserDb();
   const [saving, setSaving] = useState(false);
+  const [correctionSale, setCorrectionSale] = useState<Sale | null>(null);
+
+  useEffect(() => {
+    if (!open) setCorrectionSale(null);
+  }, [open]);
 
   const persistAndRecalc = useCallback(
     async (patch: Partial<Invoice>) => {
@@ -100,12 +110,13 @@ export function InvoiceDetailModal({
 
   if (!invoice) return null;
 
+  const inv = invoice;
   const sym = currencySymbol;
-  const bpEff = effectiveInvoiceBuyersPremiumRate(invoice, event);
-  const taxEff = effectiveInvoiceTaxRate(invoice, event);
+  const bpEff = effectiveInvoiceBuyersPremiumRate(inv, event);
+  const taxEff = effectiveInvoiceTaxRate(inv, event);
   const showBpLine =
-    invoice.buyersPremiumAmount !== 0 || bpEff > 0;
-  const manualLines = invoice.manualLines ?? [];
+    inv.buyersPremiumAmount !== 0 || bpEff > 0;
+  const manualLines = inv.manualLines ?? [];
 
   async function handleBpRateBlur(raw: string) {
     const t = raw.trim();
@@ -164,8 +175,7 @@ export function InvoiceDetailModal({
   }
 
   async function handleUnpay() {
-    const inv = invoice;
-    if (inv?.id == null || !db) return;
+    if (inv.id == null || !db) return;
     if (
       !window.confirm(
         "Mark this invoice unpaid and clear payment method and date? You can record payment again afterward."
@@ -190,7 +200,32 @@ export function InvoiceDetailModal({
     }
   }
 
+  async function handleRemoveSaleFromInvoice(s: Sale) {
+    if (!db || inv.id == null || s.id == null) return;
+    if (
+      !window.confirm(
+        "Remove this hammer line from the invoice? The sale stays in your event data as unallocated. Use Generate / refresh invoices for the affected bidder(s) to attach it to an open unpaid invoice again."
+      )
+    ) {
+      return;
+    }
+    setSaving(true);
+    await yieldToPaint();
+    try {
+      await removeSaleFromInvoice(db, event, s.id, inv.id);
+      await yieldToPaint();
+      onSuccess?.("Line removed from invoice.");
+    } catch (e) {
+      onError(
+        e instanceof Error ? e.message : "Could not remove line from invoice."
+      );
+    } finally {
+      setSaving(false);
+    }
+  }
+
   return (
+    <>
     <Modal
       open={open}
       title={`Invoice ${invoice.invoiceNumber}`}
@@ -396,7 +431,7 @@ export function InvoiceDetailModal({
         ) : null}
 
         <div className="overflow-x-auto rounded-lg border border-navy/10 dark:border-slate-700">
-          <table className="w-full min-w-[640px] text-sm">
+          <table className="w-full min-w-[760px] text-sm">
             <thead className="bg-surface dark:bg-slate-800/80">
               <tr>
                 <th className="px-3 py-2 text-left font-semibold text-navy dark:text-slate-200">
@@ -414,12 +449,20 @@ export function InvoiceDetailModal({
                 <th className="px-3 py-2 text-right font-semibold text-navy dark:text-slate-200">
                   Line total
                 </th>
+                {invoice.status === "unpaid" ? (
+                  <th className="px-3 py-2 text-right font-semibold text-navy dark:text-slate-200">
+                    Actions
+                  </th>
+                ) : null}
               </tr>
             </thead>
             <tbody className="divide-y divide-navy/10 dark:divide-slate-700">
               {sales.length === 0 && manualLines.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="px-3 py-4 text-center text-muted">
+                  <td
+                    colSpan={invoice.status === "unpaid" ? 6 : 5}
+                    className="px-3 py-4 text-center text-muted"
+                  >
                     No line items
                   </td>
                 </tr>
@@ -437,6 +480,28 @@ export function InvoiceDetailModal({
                   <td className="px-3 py-2 text-right font-mono">
                     {formatCurrency(s.amount, sym)}
                   </td>
+                  {invoice.status === "unpaid" ? (
+                    <td className="px-3 py-2 text-right">
+                      <div className="flex flex-wrap justify-end gap-1">
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          className="text-xs"
+                          onClick={() => setCorrectionSale(s)}
+                        >
+                          Correct
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          className="text-xs"
+                          onClick={() => void handleRemoveSaleFromInvoice(s)}
+                        >
+                          Remove
+                        </Button>
+                      </div>
+                    </td>
+                  ) : null}
                 </tr>
               ))}
               {manualLines.map((m) => (
@@ -452,6 +517,9 @@ export function InvoiceDetailModal({
                   <td className="px-3 py-2 text-right font-mono">
                     {formatCurrency(m.amount, sym)}
                   </td>
+                  {invoice.status === "unpaid" ? (
+                    <td className="px-3 py-2 text-muted">—</td>
+                  ) : null}
                 </tr>
               ))}
             </tbody>
@@ -491,5 +559,16 @@ export function InvoiceDetailModal({
         </dl>
       </div>
     </Modal>
+    <SaleCorrectionModal
+      open={correctionSale != null}
+      sale={correctionSale}
+      invoiceId={inv.id!}
+      event={event}
+      currencySymbol={sym}
+      onClose={() => setCorrectionSale(null)}
+      onSaved={() => onSuccess?.("Sale updated.")}
+      onError={onError}
+    />
+    </>
   );
 }

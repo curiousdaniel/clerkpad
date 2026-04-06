@@ -5,6 +5,7 @@ export type ConsignorCsvRow = {
   name: string;
   email?: string;
   phone?: string;
+  mailingAddress?: string;
   notes?: string;
   /** 0–100 when present */
   commissionPct?: number;
@@ -22,6 +23,10 @@ const ALIASES: Record<string, keyof ConsignorCsvRow | "commissionPct"> = {
   email: "email",
   phone: "phone",
   notes: "notes",
+  mailingaddress: "mailingAddress",
+  mailing_address: "mailingAddress",
+  address: "mailingAddress",
+  mailing: "mailingAddress",
   commission: "commissionPct",
   commission_pct: "commissionPct",
   commissionpercent: "commissionPct",
@@ -30,7 +35,7 @@ const ALIASES: Record<string, keyof ConsignorCsvRow | "commissionPct"> = {
 
 function colIndex(
   headers: string[],
-  key: keyof ConsignorCsvRow | "commissionPct"
+  key: keyof ConsignorCsvRow | "commissionPct" | "mailingAddress"
 ): number {
   const norm = headers.map(normalizeHeaderKey);
   for (let i = 0; i < norm.length; i++) {
@@ -64,13 +69,14 @@ export function parseConsignorCsv(text: string): {
   const iEmail = colIndex(headers, "email");
   const iPhone = colIndex(headers, "phone");
   const iNotes = colIndex(headers, "notes");
+  const iAddr = colIndex(headers, "mailingAddress");
   const iComm = colIndex(headers, "commissionPct");
 
   if (iNum < 0 || iName < 0) {
     issues.push({
       rowIndex: 0,
       message:
-        "CSV must include consignorNumber (or number) and name. Optional: email, phone, notes, commission (%).",
+        "CSV must include consignorNumber (or number) and name. Optional: email, phone, mailingAddress, notes, commission (%).",
     });
     return { rows: [], issues };
   }
@@ -86,6 +92,7 @@ export function parseConsignorCsv(text: string): {
     const email = iEmail >= 0 ? (line[iEmail] ?? "").trim() : "";
     const phone = iPhone >= 0 ? (line[iPhone] ?? "").trim() : "";
     const notes = iNotes >= 0 ? (line[iNotes] ?? "").trim() : "";
+    const mailingAddress = iAddr >= 0 ? (line[iAddr] ?? "").trim() : "";
     const commRaw = iComm >= 0 ? (line[iComm] ?? "").trim() : "";
 
     if (!numStr && !name) continue;
@@ -132,6 +139,7 @@ export function parseConsignorCsv(text: string): {
       name,
       email: email || undefined,
       phone: phone || undefined,
+      mailingAddress: mailingAddress || undefined,
       notes: notes || undefined,
       commissionPct,
     });

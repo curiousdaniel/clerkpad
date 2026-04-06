@@ -56,4 +56,12 @@ describe("parseConsignorCsv", () => {
     expect(issues).toHaveLength(0);
     expect(rows[0]?.commissionPct).toBe(12.5);
   });
+
+  it("parses mailing address column", () => {
+    const csv = `consignorNumber,name,mailingAddress
+8,Bob,PO Box 1`;
+    const { rows, issues } = parseConsignorCsv(csv);
+    expect(issues).toHaveLength(0);
+    expect(rows[0]?.mailingAddress).toBe("PO Box 1");
+  });
 });

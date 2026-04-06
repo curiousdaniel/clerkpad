@@ -34,6 +34,9 @@ export function ConsignorTable({
             <th scope="col" className="px-3 py-2 text-left font-medium text-ink dark:text-slate-100">
               Contact
             </th>
+            <th scope="col" className="px-3 py-2 text-left font-medium text-ink dark:text-slate-100">
+              Mailing address
+            </th>
             <th scope="col" className="px-3 py-2 text-right font-medium text-ink dark:text-slate-100">
               Actions
             </th>
@@ -42,7 +45,7 @@ export function ConsignorTable({
         <tbody>
           {rows.length === 0 ? (
             <tr>
-              <td colSpan={5} className="px-3 py-6 text-center text-muted">
+              <td colSpan={6} className="px-3 py-6 text-center text-muted">
                 No consignors yet.
               </td>
             </tr>
@@ -63,6 +66,9 @@ export function ConsignorTable({
                 </td>
                 <td className="max-w-[200px] truncate px-3 py-2 text-muted">
                   {[c.email, c.phone].filter(Boolean).join(" · ") || "—"}
+                </td>
+                <td className="max-w-[180px] truncate px-3 py-2 text-muted" title={c.mailingAddress}>
+                  {c.mailingAddress?.trim() ? c.mailingAddress.trim().split(/\r?\n/)[0] : "—"}
                 </td>
                 <td className="px-3 py-2 text-right">
                   <div className="flex justify-end gap-1">

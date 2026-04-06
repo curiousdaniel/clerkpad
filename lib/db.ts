@@ -41,6 +41,10 @@ const STORE_DEF_V7 = {
   ...STORE_DEF_V6,
 } as const;
 
+const STORE_DEF_V8 = {
+  ...STORE_DEF_V7,
+} as const;
+
 export function sanitizeUserIdForDbName(userId: string): string {
   return userId.replace(/[^a-zA-Z0-9_-]/g, "_");
 }
@@ -170,6 +174,8 @@ export interface Consignor {
   name: string;
   email?: string;
   phone?: string;
+  /** Mailing address for checks or correspondence (multiline OK). */
+  mailingAddress?: string;
   notes?: string;
   /** 0–1; when set, overrides event defaultConsignorCommissionRate for this consignor. */
   commissionRate?: number;
@@ -294,6 +300,7 @@ export class AuctionDB extends Dexie {
         }
       });
     this.version(7).stores(STORE_DEF_V7);
+    this.version(8).stores(STORE_DEF_V8);
   }
 }
 

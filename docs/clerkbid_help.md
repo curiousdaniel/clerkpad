@@ -15,6 +15,8 @@ Changes since the last major refresh of this Help page:
 - **Invoices — detail view** — The invoice detail dialog is wider so line items, descriptions, and line totals are easier to read without horizontal scrolling.
 - **Invoices — mark as unpaid** — If you marked an invoice paid by mistake, open its detail from [Invoices](/invoices/) and use **Mark as unpaid** (with confirmation). That clears payment method and date and sets the invoice back to unpaid so you can record payment again. Totals and lines on the invoice are unchanged.
 - **Reports — buyer’s premium** — The event summary includes **Buyer’s premium (invoiced)**. The **bidder totals** table and its CSV export include a buyer’s premium column; figures follow invoice totals when invoices exist, and otherwise follow the same basis as invoice generation from your event rates.
+- **Invoices — correct or remove hammer lines** — On **unpaid** invoices, each clerking line can be **Correct** (edit description, quantity, hammer, paddle/bidder, consignor, initials) or **Remove from invoice** (sale stays on file unallocated; regenerate invoices to attach it again). **Paid** invoices cannot be edited this way—use **Mark as unpaid** first if you must fix totals, then correct and mark paid again.
+- **Consignors — mailing address** — Optional **mailing address** on each consignor (and in CSV import) for checks or mail; it appears on **statement PDFs** when filled in.
 
 ## Events
 
@@ -28,9 +30,9 @@ Deleting an event removes its bidders, consignors, lots, sales, and invoices for
 
 ## Consignors and commission
 
-[Consignors](/consignors/) holds a **registry** (consignor number, name, contact, optional **commission override**). **Default commission** for the event is set under [Settings](/settings/) (current event). If a consignor has no override, the event default applies; if they do, that percentage is used for their lines on **statements** and **commission reports**.
+[Consignors](/consignors/) holds a **registry** (consignor number, name, contact, optional **mailing address** for sending checks or mail, optional **commission override**). **Default commission** for the event is set under [Settings](/settings/) (current event). If a consignor has no override, the event default applies; if they do, that percentage is used for their lines on **statements** and **commission reports**.
 
-You can import consignors from CSV, add them manually, open a **statement PDF** per consignor, and use [Reports](/reports/) for totals and CSV export. Sales can be **linked** to a registered consignor from the clerking screen; free-text labels still work for display and matching when no link is set.
+You can import consignors from CSV (optional `mailingAddress` column, or `address`), add them manually, open a **statement PDF** per consignor (mailing address prints under the name when present), and use [Reports](/reports/) for totals and CSV export. Sales can be **linked** to a registered consignor from the clerking screen; free-text labels still work for display and matching when no link is set.
 
 ## Clerking
 
@@ -43,6 +45,8 @@ After a sale, a short **undo** window may appear—use it immediately if you nee
 [Invoices](/invoices/) are built **per bidder** for the current event. A bidder can have **several invoice numbers** over time: new sales after an invoice is **paid** are gathered into a **new** unpaid invoice the next time you generate. **Unpaid** invoices are updated when you generate so they include any sales not yet on an invoice. Each **PDF** only includes lines for **that** invoice. For **unpaid** invoices you can optionally override **buyer’s premium** and **tax rates** (otherwise the event defaults from Settings apply), and add **manual lines**—positive amounts for extra charges or unrecorded purchases, negative for discounts or credits. Those lines are calculated **after** buyer’s premium and **before** tax. **Paid** invoices stay fixed; you cannot change their rates or manual lines afterward.
 
 Click a row to open **invoice detail**: a wider layout shows the full line-item table. From there you can print the PDF, **Mark as paid** (unpaid invoices), or **Mark as unpaid** (paid invoices) if you need to reverse a mistaken payment—after confirming, payment method and date are cleared and you can mark paid again.
+
+For **unpaid** invoices only, each **hammer** line (from clerking) has **Correct** and **Remove**. **Correct** opens a form to fix description, quantity, unit hammer, paddle (and thus winning bidder), consignor fields, and clerk initials; totals and PDF update after save. Changing paddle moves the sale to that bidder’s open unpaid invoice the next time invoices are generated or refreshed for them. **Remove** takes the line off this invoice but **does not delete** the underlying sale—it becomes unallocated until you run **Generate / refresh invoices** for the relevant bidder(s). **Paid** invoices do not offer these actions; mark unpaid first if you must adjust hammer lines.
 
 ## Reports
 

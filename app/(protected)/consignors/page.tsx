@@ -42,7 +42,7 @@ export default function ConsignorsPage() {
     if (!q) return rows;
     return rows.filter((c) => {
       const num = String(c.consignorNumber);
-      const blob = `${c.name} ${c.email ?? ""} ${c.phone ?? ""}`.toLowerCase();
+      const blob = `${c.name} ${c.email ?? ""} ${c.phone ?? ""} ${c.mailingAddress ?? ""}`.toLowerCase();
       return num.includes(q) || blob.includes(q);
     });
   }, [rows, search]);
@@ -128,6 +128,7 @@ export default function ConsignorsPage() {
                         name: r.name,
                         email: r.email,
                         phone: r.phone,
+                        mailingAddress: r.mailingAddress,
                         notes: r.notes,
                         createdAt: now,
                         updatedAt: now,
@@ -172,10 +173,19 @@ export default function ConsignorsPage() {
                   "name",
                   "email",
                   "phone",
+                  "mailingAddress",
                   "notes",
                   "commission",
                 ], [
-                  [1, "Sample Consignor", "a@example.com", "555-0100", "", "15"],
+                  [
+                    1,
+                    "Sample Consignor",
+                    "a@example.com",
+                    "555-0100",
+                    "123 Main St\nSpringfield ST 62701",
+                    "",
+                    "15",
+                  ],
                 ])
               }
             >
