@@ -2,8 +2,8 @@
 
 import { useMemo, useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
-import { ChevronDown, ChevronRight, Ban } from "lucide-react";
-import type { Sale } from "@/lib/db";
+import { ChevronDown, ChevronRight, Ban, Pencil } from "lucide-react";
+import type { AuctionEvent, Sale } from "@/lib/db";
 import { useUserDb } from "@/components/providers/UserDbProvider";
 import { parseLotDisplay } from "@/lib/clerking/lotParse";
 import { saleLineQuantity, saleUnitHammer } from "@/lib/services/saleLineTotals";
@@ -11,19 +11,25 @@ import { formatCurrency } from "@/lib/utils/formatCurrency";
 import { formatDateTime } from "@/lib/utils/formatDate";
 import { Button } from "@/components/ui/Button";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { SaleCorrectionModal } from "@/components/invoices/SaleCorrectionModal";
 import { liveQueryGuard } from "@/lib/dexie/liveQueryGuard";
 
 type Row = Sale & { baseLot: number };
 
 export function RecentSales({
-  eventId,
+  event,
   currencySymbol,
   onVoided,
+  onSuccess,
+  onError,
 }: {
-  eventId: number;
+  event: AuctionEvent;
   currencySymbol: string;
   onVoided?: () => void;
+  onSuccess?: (message: string) => void;
+  onError?: (message: string) => void;
 }) {
+  const eventId = event.id!;
   const { db, ready } = useUserDb();
   const sales = useLiveQuery(
     async () =>
@@ -47,6 +53,7 @@ export function RecentSales({
 
   const [openId, setOpenId] = useState<number | null>(null);
   const [voidSale, setVoidSale] = useState<Sale | null>(null);
+  const [editingSale, setEditingSale] = useState<Sale | null>(null);
 
   const groups = useMemo(() => {
     if (!sales?.length) return [];
@@ -142,7 +149,16 @@ export function RecentSales({
                       </span>
                     </button>
                     {expanded ? (
-                      <div className="border-t border-navy/5 px-3 py-2 pl-10">
+                      <div className="flex flex-wrap gap-2 border-t border-navy/5 px-3 py-2 pl-10">
+                        <Button
+                          variant="secondary"
+                          type="button"
+                          className="inline-flex items-center gap-1 text-sm"
+                          onClick={() => setEditingSale(s)}
+                        >
+                          <Pencil className="h-4 w-4" />
+                          Edit sale
+                        </Button>
                         <Button
                           variant="danger"
                           type="button"
@@ -174,6 +190,16 @@ export function RecentSales({
         danger
         onClose={() => setVoidSale(null)}
         onConfirm={() => void confirmVoid()}
+      />
+
+      <SaleCorrectionModal
+        open={editingSale != null}
+        sale={editingSale}
+        event={event}
+        currencySymbol={currencySymbol}
+        onClose={() => setEditingSale(null)}
+        onSaved={() => onSuccess?.("Sale updated.")}
+        onError={(message) => onError?.(message)}
       />
     </>
   );

@@ -16,9 +16,10 @@ import { Input } from "@/components/ui/Input";
 type Props = {
   open: boolean;
   sale: Sale | null;
-  invoiceId: number;
   event: AuctionEvent;
   currencySymbol: string;
+  /** When set (invoice detail), sale must still belong to this invoice. */
+  anchorInvoiceId?: number;
   onClose: () => void;
   onSaved: () => void;
   onError: (message: string) => void;
@@ -27,9 +28,9 @@ type Props = {
 export function SaleCorrectionModal({
   open,
   sale,
-  invoiceId,
   event,
   currencySymbol,
+  anchorInvoiceId,
   onClose,
   onSaved,
   onError,
@@ -108,16 +109,22 @@ export function SaleCorrectionModal({
 
     setSaving(true);
     try {
-      await persistSaleCorrection(db, event, sale.id, invoiceId, {
-        description,
-        quantity: qty,
-        amount,
-        paddleNumber: paddle,
-        bidderId: bidder.id,
-        consignor: consignor.trim() || undefined,
-        consignorId: linkedConsignorId,
-        clerkInitials,
-      });
+      await persistSaleCorrection(
+        db,
+        event,
+        sale.id,
+        {
+          description,
+          quantity: qty,
+          amount,
+          paddleNumber: paddle,
+          bidderId: bidder.id,
+          consignor: consignor.trim() || undefined,
+          consignorId: linkedConsignorId,
+          clerkInitials,
+        },
+        anchorInvoiceId != null ? { anchorInvoiceId } : undefined
+      );
       onSaved();
       onClose();
     } catch (err) {
@@ -156,6 +163,13 @@ export function SaleCorrectionModal({
           Lot number is fixed to this catalog line. To move the sale to another
           bidder, change the paddle number — the line will move to that
           bidder&apos;s open unpaid invoice when you refresh or generate invoices.
+          {!sale.invoiceId ? (
+            <>
+              {" "}
+              This sale is not on an invoice yet; totals will reflect it after
+              you generate or refresh invoices.
+            </>
+          ) : null}
         </p>
         <Input
           id="corr-desc"

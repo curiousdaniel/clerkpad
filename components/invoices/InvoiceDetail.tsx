@@ -562,7 +562,7 @@ export function InvoiceDetailModal({
     <SaleCorrectionModal
       open={correctionSale != null}
       sale={correctionSale}
-      invoiceId={inv.id!}
+      anchorInvoiceId={inv.id}
       event={event}
       currencySymbol={sym}
       onClose={() => setCorrectionSale(null)}

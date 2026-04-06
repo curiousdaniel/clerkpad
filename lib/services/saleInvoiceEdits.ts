@@ -35,37 +35,24 @@ export type SaleCorrectionInput = {
   clerkInitials: string;
 };
 
-/**
- * Updates a sale from invoice detail. Unpaid invoice only.
- * If the bidder changes, the sale is unallocated and re-attached via upsertInvoiceForBidder.
- */
-export async function persistSaleCorrection(
-  db: AuctionDB,
-  event: AuctionEvent,
-  saleId: number,
-  viewingInvoiceId: number,
+export type PersistSaleCorrectionOptions = {
+  /**
+   * When editing from a specific invoice modal, require `sale.invoiceId` to match.
+   * Omit when editing from clerking (recent sales) so unallocated lines work.
+   */
+  anchorInvoiceId?: number;
+};
+
+function buildCorrectedSaleRow(
+  sale: Sale,
   input: SaleCorrectionInput
-): Promise<void> {
-  const inv = await db.invoices.get(viewingInvoiceId);
-  if (inv?.id == null) throw new Error("Invoice not found.");
-  if (inv.status === "paid") {
-    throw new Error("Mark the invoice unpaid before editing sale lines.");
-  }
-
-  const sale = await db.sales.get(saleId);
-  if (sale?.id == null) throw new Error("Sale not found.");
-  if (sale.invoiceId !== viewingInvoiceId) {
-    throw new Error("This sale is no longer on this invoice. Close and reopen the invoice.");
-  }
-
+): { next: Sale; bidderChanged: boolean } {
   const qty = Math.max(1, Math.floor(Number(input.quantity)) || 1);
   const amount = roundMoney(input.amount);
   if (!Number.isFinite(amount) || amount < 0) {
     throw new Error("Line total must be a non-negative number.");
   }
-
   const bidderChanged = input.bidderId !== sale.bidderId;
-
   const next: Sale = {
     ...sale,
     description: input.description.trim(),
@@ -81,6 +68,61 @@ export async function persistSaleCorrection(
   } else {
     delete next.consignorId;
   }
+  return { next, bidderChanged };
+}
+
+/**
+ * Updates a sale (clerking recent sales or invoice detail).
+ * - Unallocated (`invoiceId` null): save only; if bidder changes, `upsertInvoiceForBidder` for the new bidder.
+ * - On unpaid invoice: recalc that invoice; bidder change unallocates then recalc + upsert new bidder.
+ * - On paid invoice: throws (mark unpaid first).
+ * Use `anchorInvoiceId` when opened from invoice detail so stale rows are rejected.
+ */
+export async function persistSaleCorrection(
+  db: AuctionDB,
+  event: AuctionEvent,
+  saleId: number,
+  input: SaleCorrectionInput,
+  options?: PersistSaleCorrectionOptions
+): Promise<void> {
+  const sale = await db.sales.get(saleId);
+  if (sale?.id == null) throw new Error("Sale not found.");
+
+  if (options?.anchorInvoiceId != null) {
+    if (sale.invoiceId !== options.anchorInvoiceId) {
+      throw new Error(
+        "This sale is no longer on this invoice. Close and reopen the invoice."
+      );
+    }
+  }
+
+  const { next, bidderChanged } = buildCorrectedSaleRow(sale, input);
+
+  const attachedId = sale.invoiceId;
+
+  if (attachedId == null) {
+    await db.sales.put(next);
+    if (bidderChanged) {
+      await upsertInvoiceForBidder(db, event, input.bidderId);
+    }
+    return;
+  }
+
+  const inv = await db.invoices.get(attachedId);
+  if (inv?.id == null) {
+    next.invoiceId = null;
+    await db.sales.put(next);
+    if (bidderChanged) {
+      await upsertInvoiceForBidder(db, event, input.bidderId);
+    }
+    return;
+  }
+
+  if (inv.status === "paid") {
+    throw new Error(
+      "Mark the invoice unpaid before editing this sale (Invoices → invoice detail → Mark as unpaid)."
+    );
+  }
 
   if (bidderChanged) {
     next.invoiceId = null;
@@ -89,9 +131,9 @@ export async function persistSaleCorrection(
   await db.sales.put(next);
 
   if (bidderChanged) {
-    await recalculateAndPersistInvoice(db, viewingInvoiceId, event);
+    await recalculateAndPersistInvoice(db, attachedId, event);
     await upsertInvoiceForBidder(db, event, input.bidderId);
   } else {
-    await recalculateAndPersistInvoice(db, viewingInvoiceId, event);
+    await recalculateAndPersistInvoice(db, attachedId, event);
   }
 }
