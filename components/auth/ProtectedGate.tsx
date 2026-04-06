@@ -3,23 +3,10 @@
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { OFFLINE_SESSION_STORAGE_KEY } from "@/lib/auth/offlineSession";
-
-function readOfflineCache(): boolean {
-  if (typeof window === "undefined") return false;
-  if (navigator.onLine) return false;
-  try {
-    const raw = sessionStorage.getItem(OFFLINE_SESSION_STORAGE_KEY);
-    if (!raw) return false;
-    const { expires, user } = JSON.parse(raw) as {
-      expires: string;
-      user?: unknown;
-    };
-    return Boolean(user && new Date(expires) > new Date());
-  } catch {
-    return false;
-  }
-}
+import {
+  readOfflineGateAllowed,
+  writeOfflineSessionSnapshot,
+} from "@/lib/auth/offlineSession";
 
 export function ProtectedGate({ children }: { children: React.ReactNode }) {
   const { data: session, status } = useSession();
@@ -29,24 +16,17 @@ export function ProtectedGate({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     setMounted(true);
-    setOfflineOk(readOfflineCache());
+    setOfflineOk(readOfflineGateAllowed());
   }, []);
 
   useEffect(() => {
     if (session) {
-      try {
-        sessionStorage.setItem(
-          OFFLINE_SESSION_STORAGE_KEY,
-          JSON.stringify({ expires: session.expires, user: session.user })
-        );
-      } catch {
-        /* ignore quota / private mode */
-      }
+      writeOfflineSessionSnapshot(session);
     }
   }, [session]);
 
   useEffect(() => {
-    const sync = () => setOfflineOk(readOfflineCache());
+    const sync = () => setOfflineOk(readOfflineGateAllowed());
     window.addEventListener("online", sync);
     window.addEventListener("offline", sync);
     return () => {

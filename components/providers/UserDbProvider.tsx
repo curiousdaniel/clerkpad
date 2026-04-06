@@ -15,7 +15,7 @@ import {
   type AuctionDB,
 } from "@/lib/db";
 import { ensureSettingsRow } from "@/lib/settings";
-import { OFFLINE_SESSION_STORAGE_KEY } from "@/lib/auth/offlineSession";
+import { readOfflineUserId } from "@/lib/auth/offlineSession";
 
 export type UserDbContextValue = {
   db: AuctionDB | null;
@@ -24,19 +24,6 @@ export type UserDbContextValue = {
 };
 
 const UserDbContext = createContext<UserDbContextValue | null>(null);
-
-function readOfflineUserId(): string | null {
-  if (typeof window === "undefined") return null;
-  try {
-    const raw = sessionStorage.getItem(OFFLINE_SESSION_STORAGE_KEY);
-    if (!raw) return null;
-    const { user } = JSON.parse(raw) as { user?: { id?: string } };
-    const id = user?.id;
-    return id != null && String(id).length > 0 ? String(id) : null;
-  } catch {
-    return null;
-  }
-}
 
 export function UserDbProvider({ children }: { children: ReactNode }) {
   const { data: session } = useSession();

@@ -1,8 +1,6 @@
 import { ProtectedShell } from "./ProtectedShell";
 
-/** Avoid long-lived CDN/static HTML for authenticated routes. */
-export const dynamic = "force-dynamic";
-
+/** Default caching so the PWA service worker can store app shells for offline navigations. */
 export default function ProtectedLayout({
   children,
 }: {

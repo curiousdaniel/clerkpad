@@ -20,7 +20,7 @@ import {
 } from "lucide-react";
 import { signOut, useSession } from "next-auth/react";
 import { isSuperAdminUserIdAndEmail } from "@/lib/auth/superAdmin";
-import { OFFLINE_SESSION_STORAGE_KEY } from "@/lib/auth/offlineSession";
+import { clearOfflineSessionSnapshot } from "@/lib/auth/offlineSession";
 import { closeAndClearAuctionDbCache } from "@/lib/db";
 import { useCloudSync } from "@/components/providers/CloudSyncProvider";
 import { EventSwitcher } from "./EventSwitcher";
@@ -151,11 +151,7 @@ export function Sidebar({
               try {
                 const ok = await ensureCloudBackupBeforeSignOut();
                 if (!ok) return;
-                try {
-                  sessionStorage.removeItem(OFFLINE_SESSION_STORAGE_KEY);
-                } catch {
-                  /* ignore */
-                }
+                clearOfflineSessionSnapshot();
                 closeAndClearAuctionDbCache();
                 await signOut({ callbackUrl: "/" });
               } finally {

@@ -13,6 +13,25 @@
         --ink: #1a1a1a;
         --muted: #5c6570;
       }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --surface: #0f172a;
+          --ink: #f1f5f9;
+          --muted: #94a3b8;
+        }
+        .brand {
+          color: #e2e8f0 !important;
+        }
+        .brand span {
+          color: var(--gold) !important;
+        }
+        h1 {
+          color: #e2e8f0 !important;
+        }
+        .icon {
+          color: #94a3b8 !important;
+        }
+      }
       * {
         box-sizing: border-box;
       }
@@ -29,7 +48,7 @@
         padding: 1.5rem;
       }
       main {
-        max-width: 22rem;
+        max-width: 24rem;
         text-align: center;
       }
       .brand {
@@ -87,12 +106,14 @@
       </svg>
       <h1>You&rsquo;re offline</h1>
       <p>
-        ClerkBid needs a network connection the first time after you install,
-        so it can save pages for offline use.
+        This page appears when nothing is cached yet for the address you opened.
+        Connect once, sign in, and visit <strong>Dashboard</strong> (and the
+        sections you use) so the installed app can save them for offline use.
       </p>
       <p>
-        When you&rsquo;re back online, open the app once while signed in, then
-        you can use it without Wi‑Fi until your session expires.
+        After that, you can work without Wi‑Fi until your sign-in session
+        expires. When you&rsquo;re back online, open the app once while signed
+        in to refresh.
       </p>
     </main>
     <script>
