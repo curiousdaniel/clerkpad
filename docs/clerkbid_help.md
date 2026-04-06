@@ -36,7 +36,7 @@ You can import consignors from CSV, add them manually, open a **statement PDF** 
 
 [Clerking](/clerking/) is where you **record sales**: lot number, hammer price, paddle, quantity, description, optional notes and consignor, and clerk initials. **Enter** submits; **Shift+Enter** with pass-out enabled creates suffix lines (e.g. 12A, 12B). **Esc** clears the form.
 
-After a sale, a short **undo** window may appear—use it immediately if you need to reverse the last action. Configure **tab order** for the sale fields from the clerking page if your workflow differs.
+After a sale, a short **undo** window may appear—use it immediately if you need to reverse the last action. Open **Field order (tab sequence) and requirements** on the clerking page to change **Tab** order and which fields must be filled before a sale is accepted. **Lot number** and **description** cannot both be optional (one must stay required for invoicing and reporting); unchecking one turns the other on automatically. If lot number is optional and left blank, the app uses the **suggested next lot** when you submit (you still need a description in that case). **Paddle number** is always required to record a sale. **Pass lot (no sale)** always needs a valid catalog lot number; clerk initials follow your initials requirement setting.
 
 ## Invoices
 

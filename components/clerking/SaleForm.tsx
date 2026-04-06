@@ -37,10 +37,10 @@ import {
   writeSuggestNextLot,
 } from "@/lib/clerkFormPrefs";
 import {
-  DEFAULT_SALE_FIELD_ORDER,
   isNarrowSaleField,
-  readSaleFieldOrder,
+  readSaleFormPrefs,
   SALE_FIELD_ORDER_CHANGED,
+  SERVER_DEFAULT_SALE_FORM_PREFS,
   type SaleFieldId,
   tabOrderHelpFragment,
 } from "@/lib/saleFormOrder";
@@ -138,11 +138,13 @@ export function SaleForm({
     {}
   );
 
-  const fieldOrder = useSyncExternalStore(
+  const saleFormPrefs = useSyncExternalStore(
     subscribeSaleFieldOrder,
-    readSaleFieldOrder,
-    () => DEFAULT_SALE_FIELD_ORDER
+    readSaleFormPrefs,
+    () => SERVER_DEFAULT_SALE_FORM_PREFS
   );
+  const fieldOrder = saleFormPrefs.order;
+  const fieldRequired = saleFormPrefs.required;
 
   const suggestNextLotEnabled = useSyncExternalStore(
     subscribeSuggestNextLot,
@@ -368,11 +370,12 @@ export function SaleForm({
       return;
     }
 
-    const initials = clerkInitials.trim().toUpperCase().slice(0, 3);
-    if (initials.length < 2) {
+    const initialsRaw = clerkInitials.trim().toUpperCase().slice(0, 3);
+    if (fieldRequired.initials && initialsRaw.length < 2) {
       setFormError("Clerk initials are required (2–3 characters).");
       return;
     }
+    const initials = initialsRaw;
 
     const existingLot = await findLotByEventBaseAndSuffix(
       db,
@@ -463,23 +466,54 @@ export function SaleForm({
       setPassOutEnabled(true);
     }
 
-    const parsed = parseLotDisplay(lotNumber);
-    if (!parsed) {
-      setFormError("Enter a valid lot number (e.g. 1 or 1A).");
-      return;
+    const titleTrim = title.trim();
+    let parsed = parseLotDisplay(lotNumber);
+    let lotInputForDisplay = lotNumber;
+
+    if (fieldRequired.lot) {
+      if (!parsed) {
+        setFormError("Enter a valid lot number (e.g. 1 or 1A).");
+        return;
+      }
+    } else if (lotNumber.trim() !== "") {
+      if (!parsed) {
+        setFormError(
+          "Enter a valid lot number, or leave blank to use the suggested next lot."
+        );
+        return;
+      }
+    } else {
+      if (!titleTrim) {
+        setFormError(
+          "Description / title is required when lot is left blank."
+        );
+        return;
+      }
+      const suggested = await getNextSuggestedLotDisplay(db, eventId);
+      const p2 = parseLotDisplay(suggested);
+      if (!p2) {
+        setFormError("Could not assign a lot number. Enter a lot manually.");
+        return;
+      }
+      parsed = p2;
+      lotInputForDisplay = suggested;
     }
 
-    const titleTrim = title.trim();
-    if (!titleTrim) {
+    if (fieldRequired.description && !titleTrim) {
       setFormError("Description / title is required.");
       return;
     }
 
     const priceRawInner = sellPrice.trim().replace(/[^0-9.-]/g, "");
-    const unitHammer = parseFloat(priceRawInner);
-    if (!Number.isFinite(unitHammer) || unitHammer < 0) {
-      setFormError("Enter a valid hammer price per unit.");
-      return;
+    let unitHammer: number;
+    if (!fieldRequired.price && priceRawInner === "") {
+      unitHammer = 0;
+    } else {
+      unitHammer = parseFloat(priceRawInner);
+      if (!Number.isFinite(unitHammer) || unitHammer < 0) {
+        setFormError("Enter a valid hammer price per unit.");
+        return;
+      }
     }
 
     const paddle = parseInt(paddleNumber.trim(), 10);
@@ -497,11 +531,12 @@ export function SaleForm({
       return;
     }
 
-    const initials = clerkInitials.trim().toUpperCase().slice(0, 3);
-    if (initials.length < 2) {
+    const initialsRaw = clerkInitials.trim().toUpperCase().slice(0, 3);
+    if (fieldRequired.initials && initialsRaw.length < 2) {
       setFormError("Clerk initials are required (2–3 characters).");
       return;
     }
+    const initials = initialsRaw;
 
     if (!passOutActive && parsed.suffix) {
       setFormError(
@@ -514,10 +549,11 @@ export function SaleForm({
     const newSuffix = passOutActive
       ? await computeNewPassOutLotSuffix(db, eventId, baseNum)
       : "";
-    const baseDigits = lotDisplayBaseDigits(lotNumber) ?? String(baseNum);
+    const baseDigits =
+      lotDisplayBaseDigits(lotInputForDisplay) ?? String(baseNum);
     const displayStr = passOutActive
       ? baseDigits + newSuffix
-      : formatLotDisplayFromInput(lotNumber) ?? baseDigits;
+      : formatLotDisplayFromInput(lotInputForDisplay) ?? baseDigits;
 
     const existingLot = await findLotByEventBaseAndSuffix(
       db,
@@ -526,16 +562,47 @@ export function SaleForm({
       newSuffix
     );
 
-    const qty = Math.max(1, parseInt(quantity.trim(), 10) || 1);
-    const now = new Date();
+    const effectiveDescription = titleTrim
+      ? titleTrim
+      : existingLot?.description?.trim() || `Lot ${displayStr}`;
+
+    const qtyParsed = parseInt(quantity.trim(), 10);
+    if (fieldRequired.quantity) {
+      if (!Number.isFinite(qtyParsed) || qtyParsed < 1) {
+        setFormError("Enter a valid quantity (at least 1).");
+        return;
+      }
+    }
+    const qty = fieldRequired.quantity
+      ? qtyParsed
+      : Math.max(1, parseInt(quantity.trim(), 10) || 1);
+
     const notesTrim = lotNotes.trim();
-    const consignorTrim = consignor.trim() || undefined;
+    if (fieldRequired.notes && !notesTrim) {
+      setFormError("Lot notes are required.");
+      return;
+    }
+
+    const consignorTrimBody = consignor.trim();
+    if (
+      fieldRequired.consignor &&
+      !consignorTrimBody &&
+      linkedConsignorId == null
+    ) {
+      setFormError(
+        "Consignor is required — choose a registered consignor or enter a label."
+      );
+      return;
+    }
+    const consignorTrim = consignorTrimBody || undefined;
+
+    const now = new Date();
 
     const lotMarkSold: Pick<
       Lot,
       "description" | "consignor" | "notes" | "quantity" | "status" | "updatedAt"
     > = {
-      description: titleTrim,
+      description: effectiveDescription,
       consignor: consignorTrim,
       notes: notesTrim || undefined,
       quantity: qty,
@@ -554,7 +621,7 @@ export function SaleForm({
         bidderId,
         displayLotNumber: displayStr,
         paddleNumber: paddle,
-        description: titleTrim,
+        description: effectiveDescription,
         consignor: consignorTrim,
         quantity: qty,
         amount: lineHammer,
@@ -748,6 +815,10 @@ export function SaleForm({
       fieldRefs.current[id] = el;
     };
 
+  function fieldLabel(id: SaleFieldId, text: string) {
+    return fieldRequired[id] ? text : `${text} (optional)`;
+  }
+
   function renderField(id: SaleFieldId) {
     switch (id) {
       case "lot":
@@ -758,7 +829,7 @@ export function SaleForm({
               setRef("lot")(el);
             }}
             id="sale-lot"
-            label="Lot number"
+            label={fieldLabel("lot", "Lot number")}
             value={lotNumber}
             onChange={(e) => setLotNumber(e.target.value)}
             onBlur={() => void autofillFromLot()}
@@ -774,7 +845,10 @@ export function SaleForm({
                 setRef("price")(el);
               }}
               id="sale-price"
-              label={`Hammer per unit (${currencySymbol})`}
+              label={fieldLabel(
+                "price",
+                `Hammer per unit (${currencySymbol})`
+              )}
               inputMode="decimal"
               value={sellPrice}
               onChange={(e) => setSellPrice(e.target.value)}
@@ -809,7 +883,7 @@ export function SaleForm({
               setRef("paddle")(el);
             }}
             id="sale-paddle"
-            label="Paddle number"
+            label={fieldLabel("paddle", "Paddle number")}
             inputMode="numeric"
             value={paddleNumber}
             onChange={(e) => setPaddleNumber(e.target.value)}
@@ -825,7 +899,7 @@ export function SaleForm({
               setRef("quantity")(el);
             }}
             id="sale-qty"
-            label="Quantity"
+            label={fieldLabel("quantity", "Quantity")}
             inputMode="numeric"
             value={quantity}
             onChange={(e) => setQuantity(e.target.value)}
@@ -840,7 +914,7 @@ export function SaleForm({
               setRef("description")(el);
             }}
             id="sale-title"
-            label="Lot description / title"
+            label={fieldLabel("description", "Lot description / title")}
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             autoComplete="off"
@@ -851,9 +925,9 @@ export function SaleForm({
           <div key="notes">
             <label
               htmlFor="sale-lot-notes"
-              className="mb-1 block text-sm font-medium text-ink"
+              className="mb-1 block text-sm font-medium text-ink dark:text-slate-200"
             >
-              Lot notes / ring (optional)
+              {fieldLabel("notes", "Lot notes / ring")}
             </label>
             <textarea
               ref={(el) => {
@@ -876,7 +950,7 @@ export function SaleForm({
                 htmlFor="sale-consignor-registry"
                 className="mb-1 block text-sm font-medium text-ink dark:text-slate-100"
               >
-                Registered consignor
+                {fieldLabel("consignor", "Registered consignor")}
               </label>
               <select
                 id="sale-consignor-registry"
@@ -913,7 +987,7 @@ export function SaleForm({
                 setRef("consignor")(el);
               }}
               id="sale-consignor"
-              label="Consignor label (optional)"
+              label={fieldLabel("consignor", "Consignor label")}
               value={consignor}
               onChange={(e) => {
                 const v = e.target.value;
@@ -937,7 +1011,7 @@ export function SaleForm({
               setRef("initials")(el);
             }}
             id="sale-initials"
-            label="Clerk initials"
+            label={fieldLabel("initials", "Clerk initials")}
             value={clerkInitials}
             onChange={(e) =>
               setClerkInitials(e.target.value.toUpperCase().slice(0, 3))
@@ -1051,8 +1125,11 @@ export function SaleForm({
           Record sale
         </Button>
         <p className="text-center text-xs text-muted sm:text-left">
-          Same as pressing Enter — use after lot, price, paddle, and initials
-          are filled (and pass-out if needed).
+          Same as pressing Enter — fill fields marked required in{" "}
+          <strong className="font-medium text-ink dark:text-slate-200">
+            Field order and requirements
+          </strong>{" "}
+          (and pass-out if needed).
         </p>
       </div>
 
@@ -1062,8 +1139,9 @@ export function SaleForm({
         </Button>
         <p className="max-w-xl text-xs text-muted">
           Marks this catalog lot as passed when it does not sell. Passed lots are
-          skipped by the next-lot suggestion. Requires clerk initials; does not
-          record a sale or use hammer price / paddle.
+          skipped by the next-lot suggestion. Requires a valid lot number; clerk
+          initials follow your requirements setting. Does not record a sale or use
+          hammer price / paddle.
         </p>
       </div>
 
