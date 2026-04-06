@@ -17,6 +17,7 @@ Changes since the last major refresh of this Help page:
 - **Reports — buyer’s premium** — The event summary includes **Buyer’s premium (invoiced)**. The **bidder totals** table and its CSV export include a buyer’s premium column; figures follow invoice totals when invoices exist, and otherwise follow the same basis as invoice generation from your event rates.
 - **Invoices — correct or remove hammer lines** — On **unpaid** invoices, each clerking line can be **Correct** (edit description, quantity, hammer, paddle/bidder, consignor, initials) or **Remove from invoice** (sale stays on file unallocated; regenerate invoices to attach it again). **Paid** invoices cannot be edited this way—use **Mark as unpaid** first if you must fix totals, then correct and mark paid again.
 - **Consignors — mailing address** — Optional **mailing address** on each consignor (and in CSV import) for checks or mail; it appears on **statement PDFs** when filled in.
+- **Clerking — edit recent sales** — In **Recent sales**, expand a row and use **Edit sale** to open the same correction form used in invoice detail. This works for unallocated lines too; if the line is already on a paid invoice, mark that invoice unpaid first before editing.
 
 ## Events
 
