@@ -31,7 +31,7 @@ const features = [
   },
   {
     title: "Works when the hall is noisy",
-    body: "Install ClerkBid as a PWA and clerk offline; when you are signed in online, events back up to your account in the cloud so you can move between devices.",
+    body: "Install ClerkBid as a PWA for quick launch from your home screen. After you sign in while online, a dropped connection often won’t stop you—your work stays on the device and can sync when you’re back online. Don’t count on starting cold with no internet; sign-in and routine use need connectivity.",
   },
 ];
 

@@ -1,12 +1,12 @@
 ## Getting started
 
-ClerkBid runs in your browser and stores auction data on **this device** (IndexedDB) for your signed-in account. Pick an **event** in the sidebar to work with bidders, lots, clerking, invoices, and reports. Switch events anytime; each event has its own catalog and sales.
+ClerkBid runs in your browser and stores auction data on **this device** (IndexedDB) for your signed-in account. You need an **internet connection to sign in** and to use cloud backup reliably. If you are **already signed in** and the connection drops, you can **often keep clerking** on that device until you are back online—**do not plan on using ClerkBid entirely offline** (for example opening the app for the first time with no network). Pick an **event** in the sidebar to work with bidders, lots, clerking, invoices, and reports. Switch events anytime; each event has its own catalog and sales.
 
 If you use **cloud backup/sync** (optional, from [Settings](/settings/)), event snapshots are stored on the server **for your whole organization**—everyone who signs in under the same vendor shares the same cloud copies, so clerk and cashier can use different logins and devices. Invoice **logo images** and some branding fields stay **local only** and are not included in JSON export.
 
 **Organization & team** (Settings): an **admin** can send an invitation to a teammate’s email (clerk or cashier role). They receive a sign-up link by email when your site has **Resend** configured (same as password reset); you can also copy the link from Settings if email is not available. Invited people complete sign-up on the join page; they do not create a separate organization.
 
-**Offline and multiple devices:** while offline, each device keeps its own copy; changes are not visible to teammates until you reconnect and sync. If two devices both change data offline, you may need **Restore from cloud** or **Overwrite cloud copy** in Settings after reconnect. At a venue with poor connectivity, a **phone hotspot** or local Wi‑Fi with internet often works better than expecting devices to sync without any shared network path to the server.
+**Connection loss and multiple devices:** after you have signed in online, a dropped connection on one device usually still lets you work from the local copy on that device until you reconnect. While disconnected, each device keeps its own copy; changes are not visible to teammates until you reconnect and sync. If two devices both change data without syncing in between, you may need **Restore from cloud** or **Overwrite cloud copy** in Settings after reconnect. At a venue with poor connectivity, a **phone hotspot** or local Wi‑Fi with internet often works better than assuming you can coordinate devices with no path to the server.
 
 ## Recent updates
 

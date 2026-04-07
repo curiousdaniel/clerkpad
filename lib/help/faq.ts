@@ -4,7 +4,7 @@ export const helpFaqs: HelpFaqItem[] = [
   {
     question: "Where is my data stored?",
     answer:
-      "Auction data is stored locally in your browser (IndexedDB) and ClerkBid continuously attempts to sync event data to ClerkBid cloud services whenever the device has an internet connection. Offline changes stay local until connection returns. Some assets (like invoice logo images) remain local-only.",
+      "Auction data is stored locally in your browser (IndexedDB) and ClerkBid continuously attempts to sync event data to ClerkBid cloud services whenever the device has an internet connection. If you lose connectivity after you are already signed in, you can usually keep working on this device until you reconnect; changes made while disconnected stay local until sync runs again. Do not depend on ClerkBid to work entirely offline—you need the network to sign in and for reliable cloud backup. Some assets (like invoice logo images) remain local-only.",
   },
   {
     question: "Why do I need to select an event?",

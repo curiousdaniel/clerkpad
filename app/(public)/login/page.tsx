@@ -41,8 +41,12 @@ export default function LoginPage() {
       <Card className="w-full max-w-md">
         <h1 className="text-xl font-bold text-navy">Sign in to ClerkBid</h1>
         <p className="mt-1 text-sm text-muted">
-          Use the account for your organization. After signing in, you can
-          install the app and work offline until your session expires.
+          Use the account for your organization. After you sign in online, you
+          can install the app for quick access—if the connection drops while
+          you&apos;re still signed in, you can often keep working with data on
+          this device until you&apos;re back online. Don&apos;t rely on the app
+          for fully offline use from scratch (you need the network to sign in
+          and for cloud backup).
         </p>
         <form className="mt-6 space-y-4" onSubmit={handleSubmit}>
           {error ? (

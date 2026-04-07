@@ -446,9 +446,12 @@ export default function SettingsPage() {
             <span className="font-semibold text-navy dark:text-slate-100">
               ClerkBid
             </span>{" "}
-            — auction
-            clerking for live sales, designed to work even when the network is
-            spotty. You can install it like an app; optional cloud backup is
+            — auction clerking for live sales. Data lives on this device; if
+            you lose connectivity after you&apos;re already signed in, you can
+            often keep clerking until the network returns. You still need the
+            internet to sign in, register, and use cloud backup—don&apos;t plan
+            on using ClerkBid entirely offline from a cold start. You can
+            install it like an app for quick launch; optional cloud backup is
             available when you&apos;re signed in.
           </p>
           <p className="rounded-lg border border-gold/30 bg-amber-50/60 px-3 py-2.5 text-muted dark:border-amber-900/40 dark:bg-amber-950/25 dark:text-slate-300">
@@ -503,7 +506,11 @@ export default function SettingsPage() {
               <p className="text-green-700">Running as installed app.</p>
             ) : canInstall ? (
               <div className="flex flex-wrap items-center gap-3">
-                <p className="text-muted">Install ClerkBid for quick offline access.</p>
+                <p className="text-muted">
+                  Install ClerkBid for quick launch from your home screen or
+                  dock (same app; easier to reopen if the connection drops mid
+                  session).
+                </p>
                 <Button type="button" onClick={() => void promptInstall()}>
                   Install app
                 </Button>
