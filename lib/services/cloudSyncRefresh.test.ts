@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  hasUnpushedLocalEventMetadataEdits,
   isServerSnapshotNewerThanLocalBaseline,
   shouldBlockAutoSnapshotReplace,
 } from "@/lib/services/cloudSync";
@@ -62,6 +63,41 @@ describe("isServerSnapshotNewerThanLocalBaseline", () => {
         undefined
       )
     ).toBe(false);
+  });
+});
+
+describe("hasUnpushedLocalEventMetadataEdits", () => {
+  it("is false when never snapshot-pushed (use server baseline only)", () => {
+    expect(
+      hasUnpushedLocalEventMetadataEdits({
+        updatedAt: new Date("2026-01-02T12:00:00.000Z"),
+      })
+    ).toBe(false);
+  });
+
+  it("is false when updatedAt is not after last push", () => {
+    const t = new Date("2026-01-01T12:00:00.000Z");
+    expect(
+      hasUnpushedLocalEventMetadataEdits({
+        updatedAt: t,
+        lastCloudPushAt: t,
+      })
+    ).toBe(false);
+    expect(
+      hasUnpushedLocalEventMetadataEdits({
+        updatedAt: new Date("2026-01-01T11:00:00.000Z"),
+        lastCloudPushAt: t,
+      })
+    ).toBe(false);
+  });
+
+  it("is true when event row was saved after last successful push", () => {
+    expect(
+      hasUnpushedLocalEventMetadataEdits({
+        updatedAt: new Date("2026-01-02T12:00:00.000Z"),
+        lastCloudPushAt: new Date("2026-01-01T12:00:00.000Z"),
+      })
+    ).toBe(true);
   });
 });
 

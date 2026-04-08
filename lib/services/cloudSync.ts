@@ -33,6 +33,21 @@ export function isServerSnapshotNewerThanLocalBaseline(
   return false;
 }
 
+/**
+ * True when the local `events` row was modified after the last successful cloud
+ * snapshot push (e.g. name/description/settings save). In that window, auto-pull
+ * must not replace the whole event or teammate edits appear to "revert" until
+ * our debounced push lands. Child-table edits (bidders, etc.) do not bump this
+ * `updatedAt`, so they still rely on the server-newer baseline check.
+ */
+export function hasUnpushedLocalEventMetadataEdits(ev: {
+  updatedAt: Date;
+  lastCloudPushAt?: Date;
+}): boolean {
+  if (ev.lastCloudPushAt == null) return false;
+  return ev.updatedAt.getTime() > ev.lastCloudPushAt.getTime();
+}
+
 /** Op-sync outbox rows must not be dropped by a full snapshot replace. */
 export function shouldBlockAutoSnapshotReplace(
   syncOpsEnabled: boolean,
@@ -61,7 +76,8 @@ export type RefreshEventFromCloudResult =
         | "no_sync_id"
         | "outbox_pending"
         | "fetch_failed"
-        | "not_newer";
+        | "not_newer"
+        | "local_unpushed_edit";
     };
 
 /**
@@ -79,6 +95,9 @@ export async function refreshEventFromCloudIfServerNewer(
   if (!syncId) return { refreshed: false, reason: "no_sync_id" };
   if (!(await canAutoReplaceSnapshotForEvent(db, syncId))) {
     return { refreshed: false, reason: "outbox_pending" };
+  }
+  if (hasUnpushedLocalEventMetadataEdits(ev)) {
+    return { refreshed: false, reason: "local_unpushed_edit" };
   }
   const snap = await fetchEventSnapshot(syncId);
   if (!snap.ok) return { refreshed: false, reason: "fetch_failed" };
@@ -132,6 +151,10 @@ export async function refreshStaleLocalEventsFromList(
       continue;
     }
     if (!(await canAutoReplaceSnapshotForEvent(db, entry.eventSyncId))) {
+      skipped += 1;
+      continue;
+    }
+    if (hasUnpushedLocalEventMetadataEdits(local)) {
       skipped += 1;
       continue;
     }
@@ -278,7 +301,9 @@ export async function recordSuccessfulPush(
   updatedAtIso: string
 ): Promise<void> {
   const t = new Date(updatedAtIso);
-  await db.events.update(eventId, { lastCloudPushAt: t });
+  // Align row tip with server so hasUnpushedLocalEventMetadataEdits stays false after
+  // push (avoids client clock ahead of server blocking snapshot refresh forever).
+  await db.events.update(eventId, { lastCloudPushAt: t, updatedAt: t });
   await ensureSettingsRow(db);
   await db.settings.update(1, { lastCloudPushAt: t });
 }
