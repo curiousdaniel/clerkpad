@@ -55,7 +55,9 @@ export function publishEventSyncNudge(
     .get(name)
     .publish("sync", payload)
     .catch((err: unknown) => {
-      console.error("[ably] publish failed", name, err);
+      // Best-effort only; HTTP sync still succeeded. Avoid console.error so Vercel
+      // `level:error` is not flooded when Ably REST times out (e.g. cold start / network).
+      console.warn("[ably] sync nudge publish failed (non-fatal)", name, err);
     });
 }
 
@@ -66,6 +68,6 @@ export function publishGlobalAnnounce(payload: GlobalAnnouncePayload): void {
     .get(GLOBAL_ANNOUNCE_CHANNEL)
     .publish("announce", payload)
     .catch((err: unknown) => {
-      console.error("[ably] global announce publish failed", err);
+      console.warn("[ably] global announce publish failed (non-fatal)", err);
     });
 }

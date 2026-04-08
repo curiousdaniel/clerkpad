@@ -10,22 +10,19 @@ import type {
 } from "@/lib/db";
 import { isCloudSyncApplying } from "@/lib/db/syncApplyGuard";
 
-async function touchParentEvent(
-  trans: Transaction,
-  eventId: number | undefined
-): Promise<void> {
+/**
+ * Must be synchronous and return `undefined`. Dexie's creating/updating hook chains
+ * treat any non-undefined return as data (generated primary key / modification diff);
+ * an `async` subscriber returns a Promise and breaks add/put/update.
+ */
+function touchParentEvent(trans: Transaction, eventId: number | undefined): void {
   if (isCloudSyncApplying()) return;
   if (trans.mode === "versionchange") return;
   if (eventId == null || !Number.isFinite(eventId)) return;
 
   const db = trans.db as AuctionDB;
-  // Implicit tx from e.g. `db.bidders.add()` only includes `bidders`; touching `events`
-  // on `trans` throws. When `events` is in scope, update atomically; otherwise bump after commit.
-  if (trans.storeNames.includes("events")) {
-    await trans.table("events").update(eventId, { updatedAt: new Date() });
-    return;
-  }
-
+  // Never call `trans.table("events")` here unless that store is in this IDB tx (implicit
+  // add/put txs are single-store). Always bump after Dexie marks the write tx complete.
   trans.on("complete", () => {
     void db.events.update(eventId, { updatedAt: new Date() });
   });
