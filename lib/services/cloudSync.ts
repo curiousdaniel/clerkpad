@@ -172,6 +172,11 @@ export async function pullCloudEventsMissingLocally(
   return { imported, alreadyLocal, fetchFailures };
 }
 
+export type SnapshotPushConflict = {
+  eventId: number;
+  serverUpdatedAt?: string;
+};
+
 export type PushAllSummary = {
   okCount: number;
   conflictCount: number;
@@ -180,6 +185,10 @@ export type PushAllSummary = {
   serverUnavailable: boolean;
   /** Latest server updatedAt from any successful push, for UI. */
   lastUpdatedAt: string | null;
+  /** Snapshot 409s by local event id (for UI: real save conflicts only). */
+  snapshotConflicts: SnapshotPushConflict[];
+  /** Event ids that successfully snapshot-pushed in this batch. */
+  snapshotPushedOkEventIds: number[];
 };
 
 /**
@@ -196,6 +205,8 @@ export async function pushAllLocalEvents(
   let failCount = 0;
   let serverUnavailable = false;
   let lastUpdatedAt: string | null = null;
+  const snapshotConflicts: SnapshotPushConflict[] = [];
+  const snapshotPushedOkEventIds: number[] = [];
 
   for (const ev of rows) {
     const id = ev.id;
@@ -206,8 +217,13 @@ export async function pushAllLocalEvents(
       okCount += 1;
       await recordSuccessfulPush(db, id, result.updatedAt);
       lastUpdatedAt = result.updatedAt;
+      snapshotPushedOkEventIds.push(id);
     } else if (result.conflict) {
       conflictCount += 1;
+      snapshotConflicts.push({
+        eventId: id,
+        serverUpdatedAt: result.serverUpdatedAt,
+      });
     } else {
       failCount += 1;
       if (result.status === 503) serverUnavailable = true;
@@ -220,5 +236,7 @@ export async function pushAllLocalEvents(
     failCount,
     serverUnavailable,
     lastUpdatedAt,
+    snapshotConflicts,
+    snapshotPushedOkEventIds,
   };
 }

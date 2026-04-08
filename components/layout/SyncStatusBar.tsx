@@ -31,6 +31,13 @@ export function SyncStatusIndicator() {
   const busy = syncPhase === "pushing" || syncPhase === "pulling";
   const newerRemote =
     remoteCloudSnapshotAt != null && remoteCloudSnapshotAt.length > 0;
+  const conflictServerTimeLabel =
+    newerRemote && remoteCloudSnapshotAt !== "unknown"
+      ? (() => {
+          const d = new Date(remoteCloudSnapshotAt);
+          return Number.isNaN(d.getTime()) ? null : d.toLocaleString();
+        })()
+      : null;
 
   let dotClass =
     "bg-emerald-500 shadow-[0_0_0_1px_rgba(255,255,255,0.4)] dark:shadow-[0_0_0_1px_rgba(0,0,0,0.35)]";
@@ -51,7 +58,8 @@ export function SyncStatusIndicator() {
   }
 
   if (newerRemote && cloudSyncAvailable && online) {
-    label += ". Newer cloud backup on the account for this event — open tooltip for actions.";
+    label +=
+      ". Cloud rejected a snapshot save (server copy is newer) — open tooltip for actions.";
   }
 
   const tooltipId = "cloud-sync-status-tooltip";
@@ -83,11 +91,15 @@ export function SyncStatusIndicator() {
         {newerRemote && cloudSyncAvailable ? (
           <div className="mb-3 border-b border-navy/10 pb-3 dark:border-slate-600">
             <p className="font-medium text-amber-900 dark:text-amber-200">
-              Newer cloud backup
+              Snapshot save blocked
             </p>
             <p className="mt-1 text-muted dark:text-slate-400">
-              Server {new Date(remoteCloudSnapshotAt).toLocaleString()}. Restore
-              to use the account copy, or push to replace it with this device.
+              The server already has a newer snapshot for this event
+              {conflictServerTimeLabel
+                ? ` (server ${conflictServerTimeLabel})`
+                : ""}
+              . Restore to match the account, or push to replace it with this
+              device.
             </p>
             <div className="mt-2 flex flex-wrap gap-2">
               <Button
