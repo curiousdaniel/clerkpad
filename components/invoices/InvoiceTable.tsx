@@ -31,8 +31,12 @@ export function InvoiceTable({
   const sym = currencySymbol;
 
   return (
-    <div className="overflow-x-auto rounded-xl border border-navy/10 bg-white dark:border-slate-700 dark:bg-slate-900">
-      <table className="w-full min-w-[980px] text-sm">
+    <div
+      className="w-full min-w-0 max-w-full overflow-x-auto overscroll-x-contain rounded-xl border border-navy/10 bg-white [-webkit-overflow-scrolling:touch] dark:border-slate-700 dark:bg-slate-900 max-sm:-mx-4 max-sm:px-4 sm:mx-0 sm:px-0"
+      role="region"
+      aria-label="Invoice list"
+    >
+      <table className="w-full min-w-[720px] text-sm sm:min-w-[880px] md:min-w-[980px]">
         <thead className="border-b border-navy/10 bg-surface dark:border-slate-700 dark:bg-slate-800/80">
           <tr>
             <th className="px-3 py-2 text-left font-semibold text-navy dark:text-slate-200">

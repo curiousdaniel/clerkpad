@@ -80,11 +80,11 @@ export function AppShell({
           </div>
           <DisplayPrefsRoot />
         </div>
-        <main className="flex-1 overflow-auto p-4 sm:p-6 md:p-8 lg:p-10">
+        <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-auto p-4 sm:p-6 md:p-8 lg:p-10">
           {topBanner ? (
-            <div className="mx-auto mb-4 max-w-6xl">{topBanner}</div>
+            <div className="mx-auto mb-4 w-full min-w-0 max-w-6xl">{topBanner}</div>
           ) : null}
-          <div className="mx-auto max-w-6xl">{children}</div>
+          <div className="mx-auto w-full min-w-0 max-w-6xl">{children}</div>
         </main>
         <PoweredByFooter />
       </div>
