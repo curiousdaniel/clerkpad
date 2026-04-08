@@ -1,4 +1,5 @@
 import Dexie, { type Table } from "dexie";
+import { newEntitySyncKey } from "@/lib/utils/clientSyncKey";
 import { newEventSyncId } from "@/lib/utils/syncId";
 
 /** Pre–per-user DB; migrated once into the signed-in user's database. */
@@ -43,6 +44,17 @@ const STORE_DEF_V7 = {
 
 const STORE_DEF_V8 = {
   ...STORE_DEF_V7,
+} as const;
+
+const STORE_DEF_V9 = {
+  ...STORE_DEF_V8,
+  sales:
+    "++id, eventId, lotId, bidderId, displayLotNumber, paddleNumber, consignorId, invoiceId, syncKey",
+  invoices:
+    "++id, eventId, bidderId, status, invoiceNumber, syncKey",
+  syncOutbox: "++id, eventSyncId, opId, createdAt",
+  syncState: "&eventSyncId, lastServerOpId",
+  syncConflicts: "++id, eventSyncId, dismissedAt",
 } as const;
 
 export function sanitizeUserIdForDbName(userId: string): string {
@@ -119,6 +131,8 @@ export interface Sale {
   createdAt: Date;
   /** Which invoice owns this line; null/undefined = not yet allocated. */
   invoiceId?: number | null;
+  /** Stable id for operation-level sync (UUID). */
+  syncKey?: string;
 }
 
 /** Manual invoice line (fees, credits, unrecorded purchases); post–buyer's premium, pre-tax. */
@@ -150,6 +164,36 @@ export interface Invoice {
   taxRate?: number | null;
   /** Adjustments after BP, before tax. */
   manualLines?: InvoiceManualLine[];
+  /** Stable id for operation-level sync (UUID). */
+  syncKey?: string;
+}
+
+/** Pending ops to push to the server op log. */
+export interface SyncOutboxRow {
+  id?: number;
+  eventSyncId: string;
+  opId: string;
+  opType: string;
+  body: unknown;
+  createdAt: Date;
+}
+
+/** Per-event cursor into the server op log (`event_sync_ops.id`). */
+export interface SyncStateRow {
+  eventSyncId: string;
+  lastServerOpId: string;
+  updatedAt: Date;
+}
+
+/** Recorded merge/sync conflicts for review in Settings. */
+export interface SyncConflictRow {
+  id?: number;
+  eventSyncId: string;
+  opType: string;
+  detail: string;
+  payload?: unknown;
+  createdAt: Date;
+  dismissedAt?: Date;
 }
 
 export interface AppSettings {
@@ -201,6 +245,9 @@ export class AuctionDB extends Dexie {
   invoices!: Table<Invoice>;
   settings!: Table<AppSettings>;
   eventLocalBranding!: Table<EventLocalBranding>;
+  syncOutbox!: Table<SyncOutboxRow>;
+  syncState!: Table<SyncStateRow>;
+  syncConflicts!: Table<SyncConflictRow>;
 
   constructor(userId: string | number) {
     super(userDexieDatabaseName(userId));
@@ -301,6 +348,22 @@ export class AuctionDB extends Dexie {
       });
     this.version(7).stores(STORE_DEF_V7);
     this.version(8).stores(STORE_DEF_V8);
+    this.version(9)
+      .stores(STORE_DEF_V9)
+      .upgrade(async (tx) => {
+        const salesTable = tx.table("sales");
+        const invTable = tx.table("invoices");
+        await salesTable.toCollection().modify((s: Sale) => {
+          if (s.syncKey == null || s.syncKey === "") {
+            s.syncKey = newEntitySyncKey();
+          }
+        });
+        await invTable.toCollection().modify((inv: Invoice) => {
+          if (inv.syncKey == null || inv.syncKey === "") {
+            inv.syncKey = newEntitySyncKey();
+          }
+        });
+      });
   }
 }
 

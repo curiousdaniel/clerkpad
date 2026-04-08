@@ -4,6 +4,10 @@ import {
   roundMoney,
   upsertInvoiceForBidder,
 } from "@/lib/services/invoiceLogic";
+import {
+  enqueueInvoicePut,
+  enqueueSalePut,
+} from "@/lib/sync/ops/enqueueOps";
 
 export async function removeSaleFromInvoice(
   db: AuctionDB,
@@ -20,7 +24,14 @@ export async function removeSaleFromInvoice(
     throw new Error("This line is not on the current invoice.");
   }
   await db.sales.update(saleId, { invoiceId: null });
+  const saleAfter = await db.sales.get(saleId);
+  if (saleAfter && event.syncId) {
+    await enqueueSalePut(db, event.syncId, saleAfter);
+  }
   await recalculateAndPersistInvoice(db, invoiceId, event);
+  if (event.syncId) {
+    await enqueueInvoicePut(db, event.syncId, invoiceId);
+  }
 }
 
 export type SaleCorrectionInput = {
@@ -102,6 +113,10 @@ export async function persistSaleCorrection(
 
   if (attachedId == null) {
     await db.sales.put(next);
+    if (event.syncId) {
+      const fresh = await db.sales.get(saleId);
+      if (fresh) await enqueueSalePut(db, event.syncId, fresh);
+    }
     if (bidderChanged) {
       await upsertInvoiceForBidder(db, event, input.bidderId);
     }
@@ -112,6 +127,10 @@ export async function persistSaleCorrection(
   if (inv?.id == null) {
     next.invoiceId = null;
     await db.sales.put(next);
+    if (event.syncId) {
+      const fresh = await db.sales.get(saleId);
+      if (fresh) await enqueueSalePut(db, event.syncId, fresh);
+    }
     if (bidderChanged) {
       await upsertInvoiceForBidder(db, event, input.bidderId);
     }
@@ -135,5 +154,10 @@ export async function persistSaleCorrection(
     await upsertInvoiceForBidder(db, event, input.bidderId);
   } else {
     await recalculateAndPersistInvoice(db, attachedId, event);
+  }
+  if (event.syncId) {
+    const fresh = await db.sales.get(saleId);
+    if (fresh) await enqueueSalePut(db, event.syncId, fresh);
+    await enqueueInvoicePut(db, event.syncId, attachedId);
   }
 }

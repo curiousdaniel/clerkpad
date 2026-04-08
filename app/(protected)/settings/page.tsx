@@ -14,7 +14,8 @@ import { useCurrentEvent } from "@/lib/hooks/useCurrentEvent";
 import { usePwaInstall } from "@/lib/hooks/usePwaInstall";
 import { useToast } from "@/components/providers/ToastProvider";
 import { useCloudSync } from "@/components/providers/CloudSyncProvider";
-import type { AuctionDB } from "@/lib/db";
+import type { AuctionDB, SyncConflictRow } from "@/lib/db";
+import { isSyncOpsEnabled } from "@/lib/sync/syncOpsFlag";
 import { useUserDb } from "@/components/providers/UserDbProvider";
 import { ensureSettingsRow } from "@/lib/settings";
 import {
@@ -61,6 +62,26 @@ export default function SettingsPage() {
         await ensureSettingsRow(db);
         return db.settings.get(1);
       }, undefined),
+    [dbReady, db]
+  );
+
+  const syncConflicts = useLiveQuery(
+    async () =>
+      liveQueryGuard(
+        "settings.page.syncConflicts",
+        async () => {
+          if (!dbReady || !db || !isSyncOpsEnabled()) return [];
+          const rows = await db.syncConflicts
+            .filter((c) => c.dismissedAt == null)
+            .toArray();
+          rows.sort(
+            (a, b) =>
+              (b.createdAt?.getTime?.() ?? 0) - (a.createdAt?.getTime?.() ?? 0)
+          );
+          return rows;
+        },
+        []
+      ),
     [dbReady, db]
   );
 
@@ -354,6 +375,65 @@ export default function SettingsPage() {
           </div>
         </Card>
       </section>
+
+      {isSyncOpsEnabled() ? (
+        <section>
+          <h2 className="mb-3 text-lg font-semibold text-navy dark:text-slate-100">
+            Operation sync — needs review
+          </h2>
+          <Card className="space-y-3">
+            <p className="text-sm text-muted">
+              When two devices edit the same sale or invoice in conflicting
+              ways, we record it here. Dismiss after you&apos;ve fixed the data
+              on this device (or restored from cloud).
+            </p>
+            {!dbReady || !db ? (
+              <p className="text-sm text-muted">Loading…</p>
+            ) : (syncConflicts?.length ?? 0) === 0 ? (
+              <p className="text-sm text-muted">No open conflicts.</p>
+            ) : (
+              <ul className="space-y-3">
+                {(syncConflicts as SyncConflictRow[]).map((c) => (
+                  <li
+                    key={c.id ?? `${c.eventSyncId}-${c.createdAt}`}
+                    className="rounded-lg border border-navy/10 p-3 text-sm dark:border-slate-600"
+                  >
+                    <p className="font-mono text-xs text-muted">
+                      {c.eventSyncId} · {c.opType}
+                    </p>
+                    <p className="mt-1 text-ink dark:text-slate-100">
+                      {c.detail}
+                    </p>
+                    <p className="mt-1 text-xs text-muted">
+                      {c.createdAt
+                        ? formatDateTime(c.createdAt)
+                        : ""}
+                    </p>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      className="mt-2"
+                      disabled={c.id == null}
+                      onClick={() => {
+                        if (c.id == null || !db) return;
+                        void db.syncConflicts.update(c.id, {
+                          dismissedAt: new Date(),
+                        });
+                        showToast({
+                          kind: "success",
+                          message: "Conflict dismissed.",
+                        });
+                      }}
+                    >
+                      Dismiss
+                    </Button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Card>
+        </section>
+      ) : null}
 
       <section>
         <h2 className="mb-3 text-lg font-semibold text-navy dark:text-slate-100">Data management</h2>

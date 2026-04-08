@@ -16,6 +16,7 @@ import { formatCurrency } from "@/lib/utils/formatCurrency";
 import { formatDateOnly, formatDateTime } from "@/lib/utils/formatDate";
 import { PAYMENT_METHODS } from "@/lib/utils/constants";
 import { removeSaleFromInvoice } from "@/lib/services/saleInvoiceEdits";
+import { enqueueInvoicePut } from "@/lib/sync/ops/enqueueOps";
 import { SaleCorrectionModal } from "@/components/invoices/SaleCorrectionModal";
 
 function paymentLabel(value: string | undefined): string {
@@ -99,6 +100,9 @@ export function InvoiceDetailModal({
       try {
         await db.invoices.update(invoice.id, patch);
         await recalculateAndPersistInvoice(db, invoice.id, event);
+        if (event.syncId) {
+          await enqueueInvoicePut(db, event.syncId, invoice.id);
+        }
       } catch (e) {
         onError(e instanceof Error ? e.message : "Could not save invoice.");
       } finally {
@@ -192,6 +196,9 @@ export function InvoiceDetailModal({
         delete row.paymentDate;
       });
       await yieldToPaint();
+      if (event.syncId) {
+        await enqueueInvoicePut(db, event.syncId, inv.id);
+      }
       onUnpaid?.();
     } catch (e) {
       onError(e instanceof Error ? e.message : "Could not update invoice.");

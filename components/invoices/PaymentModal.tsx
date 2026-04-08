@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import type { Invoice } from "@/lib/db";
 import { useUserDb } from "@/components/providers/UserDbProvider";
+import { enqueueInvoicePut } from "@/lib/sync/ops/enqueueOps";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { PAYMENT_METHODS } from "@/lib/utils/constants";
@@ -32,6 +33,11 @@ export function PaymentModal({
       paymentMethod: method as "cash" | "check" | "credit_card" | "other",
       paymentDate: new Date(),
     });
+    const inv = await db.invoices.get(invoice.id);
+    const ev = inv ? await db.events.get(inv.eventId) : null;
+    if (inv?.id != null && ev?.syncId) {
+      await enqueueInvoicePut(db, ev.syncId, inv.id);
+    }
     onPaid(invoice);
     onClose();
   }

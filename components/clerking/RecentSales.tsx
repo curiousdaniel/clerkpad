@@ -13,6 +13,12 @@ import { Button } from "@/components/ui/Button";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { SaleCorrectionModal } from "@/components/invoices/SaleCorrectionModal";
 import { liveQueryGuard } from "@/lib/dexie/liveQueryGuard";
+import { recalculateAndPersistInvoice } from "@/lib/services/invoiceLogic";
+import {
+  enqueueInvoicePut,
+  enqueueSaleDelete,
+  ensureSaleSyncKey,
+} from "@/lib/sync/ops/enqueueOps";
 
 type Row = Sale & { baseLot: number };
 
@@ -71,9 +77,12 @@ export function RecentSales({
 
   async function confirmVoid() {
     if (voidSale?.id == null || voidSale.lotId == null || !db) return;
-    const saleId = voidSale.id;
-    const lotId = voidSale.lotId;
+    const saleRow = voidSale;
+    const saleId = saleRow.id!;
+    const lotId = saleRow.lotId;
+    const invoiceId = saleRow.invoiceId;
     setVoidSale(null);
+    const saleSyncKey = await ensureSaleSyncKey(db, saleId);
     await db.transaction("rw", [db.lots, db.sales], async () => {
       await db.sales.delete(saleId);
       await db.lots.update(lotId, {
@@ -81,6 +90,15 @@ export function RecentSales({
         updatedAt: new Date(),
       });
     });
+    if (invoiceId != null) {
+      await recalculateAndPersistInvoice(db, invoiceId, event);
+      if (event.syncId) {
+        await enqueueInvoicePut(db, event.syncId, invoiceId);
+      }
+    }
+    if (event.syncId && saleSyncKey) {
+      await enqueueSaleDelete(db, event.syncId, saleSyncKey);
+    }
     onVoided?.();
   }
 

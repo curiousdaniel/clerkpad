@@ -10,6 +10,7 @@ import { LotLookup } from "@/components/clerking/LotLookup";
 import { BidderQuickLookup } from "@/components/clerking/BidderQuickLookup";
 import { useCurrentEvent } from "@/lib/hooks/useCurrentEvent";
 import { useToast } from "@/components/providers/ToastProvider";
+import { useCloudSync } from "@/components/providers/CloudSyncProvider";
 
 const linkSecondary =
   "inline-flex items-center justify-center gap-2 rounded-lg border border-navy/15 bg-surface px-4 py-2 text-sm font-medium text-ink transition hover:border-navy/30 focus:outline-none focus-visible:ring-2 focus-visible:ring-navy focus-visible:ring-offset-2 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:hover:border-slate-500 dark:focus-visible:ring-offset-slate-950";
@@ -17,6 +18,7 @@ const linkSecondary =
 export default function ClerkingPage() {
   const { currentEvent, currentEventId } = useCurrentEvent();
   const { showToast } = useToast();
+  const { scheduleCloudPush } = useCloudSync();
   const sym = currentEvent?.currencySymbol ?? "$";
 
   if (currentEventId == null || !currentEvent) {
@@ -64,6 +66,7 @@ export default function ClerkingPage() {
               <RecentSales
                 event={currentEvent}
                 currencySymbol={sym}
+                onVoided={() => scheduleCloudPush()}
                 onSuccess={(message) =>
                   showToast({ kind: "success", message })
                 }

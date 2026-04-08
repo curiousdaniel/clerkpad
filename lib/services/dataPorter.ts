@@ -8,11 +8,14 @@ import type {
   Sale,
 } from "@/lib/db";
 import { APP_VERSION } from "@/lib/utils/constants";
+import { newEntitySyncKey } from "@/lib/utils/clientSyncKey";
 import { toDate } from "@/lib/utils/coerceDate";
 import { newEventSyncId } from "@/lib/utils/syncId";
 import { roundMoney } from "@/lib/services/invoiceLogic";
 
-export const EXPORT_VERSION = 5;
+export const EXPORT_VERSION = 6;
+/** Previous export (no sale/invoice syncKey). */
+export const EXPORT_VERSION_5 = 5;
 export const EXPORT_VERSION_LEGACY = 1;
 /** Still accepted for import (consignors array optional). */
 export const EXPORT_VERSION_2 = 2;
@@ -75,6 +78,8 @@ export type EventExportPayload = {
       /** Source sale id — links to legacyInvoiceId on import (v4+). */
       legacyId?: number;
       legacyInvoiceId?: number;
+      /** Stable sync id (v6+). */
+      syncKey?: string;
     }
   >;
   invoices: Array<
@@ -87,6 +92,8 @@ export type EventExportPayload = {
       legacyBidderId?: number;
       /** Source invoice id — links from sale.legacyInvoiceId (v4+). */
       legacyId?: number;
+      /** Stable sync id (v6+). */
+      syncKey?: string;
     }
   >;
 };
@@ -182,6 +189,7 @@ export async function buildEventExport(
         legacyLotId: lotId,
         legacyBidderId: bidderId,
         legacyId: sid,
+        ...(s.syncKey ? { syncKey: s.syncKey } : {}),
         ...(consignorId != null ? { legacyConsignorId: consignorId } : {}),
         ...(invoiceId != null ? { legacyInvoiceId: invoiceId } : {}),
       };
@@ -196,6 +204,7 @@ export async function buildEventExport(
           : undefined,
         legacyBidderId: bidderId,
         legacyId: iid,
+        ...(inv.syncKey ? { syncKey: inv.syncKey } : {}),
       };
     }),
   };
@@ -227,6 +236,7 @@ export function parseEventExportPayload(raw: unknown): EventExportPayload {
   const v = o.exportVersion;
   if (
     v !== EXPORT_VERSION &&
+    v !== EXPORT_VERSION_5 &&
     v !== EXPORT_VERSION_4 &&
     v !== EXPORT_VERSION_3 &&
     v !== EXPORT_VERSION_2 &&
@@ -488,6 +498,7 @@ async function insertChildrenForEvent(
       legacyInvoiceId: _li,
       createdAt,
       invoiceId: _invPayload,
+      syncKey: saleSyncKey,
       ...rest
     } = s as typeof s & { invoiceId?: number };
     const lotId =
@@ -508,6 +519,10 @@ async function insertChildrenForEvent(
       eventId,
       lotId,
       bidderId,
+      syncKey:
+        typeof saleSyncKey === "string" && saleSyncKey.length > 0
+          ? saleSyncKey
+          : newEntitySyncKey(),
       ...(mappedConsignorId != null ? { consignorId: mappedConsignorId } : {}),
       createdAt: parseDate(createdAt),
     })) as number;
@@ -529,6 +544,7 @@ async function insertChildrenForEvent(
       taxAmount,
       total,
       buyersPremiumAmount,
+      syncKey: invoiceSyncKey,
       ...meta
     } = inv;
     const bidderId =
@@ -549,6 +565,10 @@ async function insertChildrenForEvent(
       ...amounts,
       eventId,
       bidderId,
+      syncKey:
+        typeof invoiceSyncKey === "string" && invoiceSyncKey.length > 0
+          ? invoiceSyncKey
+          : newEntitySyncKey(),
       generatedAt: parseDate(generatedAt),
       paymentDate: paymentDate ? parseDate(paymentDate) : undefined,
     })) as number;
@@ -657,10 +677,29 @@ export async function replaceEventFromPayload(
 ): Promise<ImportSummary> {
   return db.transaction(
     "rw",
-    [db.events, db.bidders, db.consignors, db.lots, db.sales, db.invoices],
+    [
+      db.events,
+      db.bidders,
+      db.consignors,
+      db.lots,
+      db.sales,
+      db.invoices,
+      db.syncOutbox,
+      db.syncState,
+      db.syncConflicts,
+    ],
     async () => {
       const existing = await db.events.get(eventId);
       if (existing == null) throw new Error("Event not found");
+
+      const payloadSyncId =
+        typeof payload.event.syncId === "string" &&
+        payload.event.syncId.length > 0
+          ? payload.event.syncId
+          : existing.syncId;
+      await db.syncOutbox.where("eventSyncId").equals(payloadSyncId).delete();
+      await db.syncState.delete(payloadSyncId);
+      await db.syncConflicts.where("eventSyncId").equals(payloadSyncId).delete();
 
       await db.invoices.where("eventId").equals(eventId).delete();
       await db.sales.where("eventId").equals(eventId).delete();

@@ -25,6 +25,11 @@ import {
   recordSuccessfulPush,
   restoreEventFromCloud,
 } from "@/lib/services/cloudSync";
+import {
+  pushAllPendingOps,
+  runOperationLevelSync,
+} from "@/lib/services/opSyncClient";
+import { isSyncOpsEnabled } from "@/lib/sync/syncOpsFlag";
 import { ensureSettingsRow } from "@/lib/settings";
 import { dateGetTime } from "@/lib/utils/coerceDate";
 
@@ -210,6 +215,9 @@ export function CloudSyncProvider({ children }: { children: ReactNode }) {
 
     setSyncPhase("pushing");
     try {
+      if (isSyncOpsEnabled()) {
+        await pushAllPendingOps(db);
+      }
       const summary = await pushAllLocalEvents(db);
       if (summary.serverUnavailable) setCloudSyncAvailable(false);
       if (summary.lastUpdatedAt) {
@@ -277,6 +285,9 @@ export function CloudSyncProvider({ children }: { children: ReactNode }) {
     }
     setSyncPhase("pushing");
     try {
+      if (isSyncOpsEnabled()) {
+        await pushAllPendingOps(db);
+      }
       const summary = await pushAllLocalEvents(db);
       if (summary.serverUnavailable) {
         setCloudSyncAvailable(false);
@@ -363,6 +374,12 @@ export function CloudSyncProvider({ children }: { children: ReactNode }) {
     syncCycleLockRef.current = true;
     try {
       await runPullAndMaybeSwitchEvent();
+      if (db && isSyncOpsEnabled()) {
+        const opSummary = await runOperationLevelSync(db);
+        if (opSummary.pulledApplied > 0) {
+          refresh();
+        }
+      }
       await runPushAllSilent();
     } finally {
       syncCycleLockRef.current = false;
@@ -374,6 +391,7 @@ export function CloudSyncProvider({ children }: { children: ReactNode }) {
     online,
     runPullAndMaybeSwitchEvent,
     runPushAllSilent,
+    refresh,
   ]);
 
   /**
@@ -517,6 +535,9 @@ export function CloudSyncProvider({ children }: { children: ReactNode }) {
       }
       setSyncPhase("pushing");
       try {
+        if (isSyncOpsEnabled()) {
+          await pushAllPendingOps(db);
+        }
         const summary = await pushAllLocalEvents(db, options);
         if (summary.serverUnavailable) setCloudSyncAvailable(false);
         if (summary.lastUpdatedAt) {

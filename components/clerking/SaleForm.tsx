@@ -31,6 +31,11 @@ import { useToast } from "@/components/providers/ToastProvider";
 import { useCloudSync } from "@/components/providers/CloudSyncProvider";
 import { formatCurrency } from "@/lib/utils/formatCurrency";
 import { roundMoney } from "@/lib/services/invoiceLogic";
+import { newEntitySyncKey } from "@/lib/utils/clientSyncKey";
+import {
+  enqueueSaleDelete,
+  enqueueSalePut,
+} from "@/lib/sync/ops/enqueueOps";
 import {
   readSuggestNextLot,
   subscribeSuggestNextLot,
@@ -66,6 +71,7 @@ type SaleUndoSlice = Pick<
   | "amount"
   | "clerkInitials"
   | "createdAt"
+  | "syncKey"
 >;
 
 type UndoState = {
@@ -302,7 +308,12 @@ export function SaleForm({
           if (salesOnLot !== 1) {
             throw new Error("Cannot undo — lot has multiple sales.");
           }
+          const toRemove = await db.sales.get(saleId);
+          const evUndo = await db.events.get(eventId);
           await db.sales.delete(saleId);
+          if (toRemove?.syncKey && evUndo?.syncId) {
+            await enqueueSaleDelete(db, evUndo.syncId, toRemove.syncKey);
+          }
           await db.lots.delete(lotId);
           return;
         }
@@ -311,7 +322,12 @@ export function SaleForm({
           if (!restoredLot) {
             throw new Error("Cannot undo — missing restore snapshot.");
           }
+          const toRemove = await db.sales.get(saleId);
+          const evUndo = await db.events.get(eventId);
           await db.sales.delete(saleId);
+          if (toRemove?.syncKey && evUndo?.syncId) {
+            await enqueueSaleDelete(db, evUndo.syncId, toRemove.syncKey);
+          }
           const curLot = await db.lots.get(lotId);
           if (curLot) {
             const next: Lot = {
@@ -334,6 +350,11 @@ export function SaleForm({
             const nextS: Sale = { ...curS, ...restoredSale };
             if (restoredSale.consignorId == null) delete nextS.consignorId;
             await db.sales.put(nextS);
+            const evUndo = await db.events.get(eventId);
+            if (evUndo?.syncId) {
+              const fresh = await db.sales.get(saleId);
+              if (fresh) await enqueueSalePut(db, evUndo.syncId, fresh);
+            }
           }
           const curLot = await db.lots.get(lotId);
           if (curLot) {
@@ -597,6 +618,7 @@ export function SaleForm({
     const consignorTrim = consignorTrimBody || undefined;
 
     const now = new Date();
+    const pendingSaleSyncKey = newEntitySyncKey();
 
     const lotMarkSold: Pick<
       Lot,
@@ -614,7 +636,7 @@ export function SaleForm({
 
     const lineHammer = roundMoney(unitHammer * qty);
 
-    function buildSaleRow(lotId: number): Omit<Sale, "id"> {
+    function buildSaleRow(lotId: number, saleSyncKey: string): Omit<Sale, "id"> {
       const row: Omit<Sale, "id"> = {
         eventId,
         lotId,
@@ -627,6 +649,7 @@ export function SaleForm({
         amount: lineHammer,
         clerkInitials: initials,
         createdAt: now,
+        syncKey: saleSyncKey,
       };
       if (linkedConsignorId != null) row.consignorId = linkedConsignorId;
       return row;
@@ -649,7 +672,9 @@ export function SaleForm({
           };
           if (linkedConsignorId != null) newLotRow.consignorId = linkedConsignorId;
           newLotId = (await db.lots.add(newLotRow)) as number;
-          newSaleId = (await db.sales.add(buildSaleRow(newLotId))) as number;
+          newSaleId = (await db.sales.add(
+            buildSaleRow(newLotId, pendingSaleSyncKey)
+          )) as number;
         });
         nextUndo = {
           mode: "createdLot",
@@ -702,7 +727,9 @@ export function SaleForm({
               lotMarkSold,
               linkedConsignorId
             );
-            newSaleId = (await db.sales.add(buildSaleRow(lotId))) as number;
+            newSaleId = (await db.sales.add(
+              buildSaleRow(lotId, pendingSaleSyncKey)
+            )) as number;
           });
           nextUndo = {
             mode: "reusedUnsold",
@@ -724,6 +751,7 @@ export function SaleForm({
             amount: prevSale.amount,
             clerkInitials: prevSale.clerkInitials,
             createdAt: prevSale.createdAt,
+            syncKey: prevSale.syncKey,
           };
           await db.transaction("rw", [db.lots, db.sales], async () => {
             await patchLotWithConsignor(
@@ -732,7 +760,10 @@ export function SaleForm({
               lotMarkSold,
               linkedConsignorId
             );
-            const salePatch = buildSaleRow(lotId);
+            const salePatch = buildSaleRow(
+              lotId,
+              prevSale.syncKey ?? pendingSaleSyncKey
+            );
             const curS = await db.sales.get(prevSale.id!);
             if (curS) {
               const nextS: Sale = { ...curS, ...salePatch };
@@ -757,7 +788,9 @@ export function SaleForm({
               lotMarkSold,
               linkedConsignorId
             );
-            newSaleId = (await db.sales.add(buildSaleRow(lotId))) as number;
+            newSaleId = (await db.sales.add(
+              buildSaleRow(lotId, pendingSaleSyncKey)
+            )) as number;
           });
           nextUndo = {
             mode: "reusedUnsold",
@@ -781,6 +814,12 @@ export function SaleForm({
       sessionStorage.setItem(CLERK_KEY, initials);
     } catch {
       /* ignore */
+    }
+
+    const evCloud = await db.events.get(eventId);
+    if (evCloud?.syncId) {
+      const s = await db.sales.get(nextUndo.saleId);
+      if (s) await enqueueSalePut(db, evCloud.syncId, s);
     }
 
     showToast({ kind: "success", message: `Sale recorded — ${displayStr}` });

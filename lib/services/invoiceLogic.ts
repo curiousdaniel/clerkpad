@@ -6,6 +6,8 @@ import type {
   InvoiceManualLine,
   Sale,
 } from "@/lib/db";
+import { newEntitySyncKey } from "@/lib/utils/clientSyncKey";
+import { enqueueInvoicePut } from "@/lib/sync/ops/enqueueOps";
 import type { InvoicePdfInput } from "@/lib/services/invoicePdf";
 import {
   resolveInvoiceBrandingForPdf,
@@ -193,6 +195,9 @@ export async function upsertInvoiceForBidder(
     await recalculateAndPersistInvoice(db, unpaid.id, event, {
       touchGeneratedAt: true,
     });
+    if (event.syncId) {
+      await enqueueInvoicePut(db, event.syncId, unpaid.id);
+    }
     return { kind: "updated", invoiceId: unpaid.id };
   }
 
@@ -209,6 +214,7 @@ export async function upsertInvoiceForBidder(
       total: 0,
       status: "unpaid",
       generatedAt: now,
+      syncKey: newEntitySyncKey(),
     })) as number;
     for (const s of unallocated) {
       if (s.id != null) {
@@ -218,6 +224,9 @@ export async function upsertInvoiceForBidder(
     await recalculateAndPersistInvoice(db, id, event, {
       touchGeneratedAt: true,
     });
+    if (event.syncId) {
+      await enqueueInvoicePut(db, event.syncId, id);
+    }
     return { kind: "created", invoiceId: id };
   }
 
