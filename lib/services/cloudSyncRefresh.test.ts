@@ -1,33 +1,67 @@
 import { describe, expect, it } from "vitest";
 import {
-  isServerSnapshotNewerThanLocalPull,
+  isServerSnapshotNewerThanLocalBaseline,
   shouldBlockAutoSnapshotReplace,
 } from "@/lib/services/cloudSync";
 
-describe("isServerSnapshotNewerThanLocalPull", () => {
+describe("isServerSnapshotNewerThanLocalBaseline", () => {
   it("returns false for invalid server time", () => {
     expect(
-      isServerSnapshotNewerThanLocalPull("not-a-date", undefined)
+      isServerSnapshotNewerThanLocalBaseline("not-a-date", undefined, undefined)
     ).toBe(false);
   });
 
-  it("returns true when local never pulled", () => {
+  it("when lastCloudPullAt is set, compares only to that (strict newer)", () => {
+    const pull = new Date("2026-01-01T12:00:00.000Z");
     expect(
-      isServerSnapshotNewerThanLocalPull("2026-01-01T12:00:00.000Z", undefined)
+      isServerSnapshotNewerThanLocalBaseline(
+        "2026-01-01T11:59:59.999Z",
+        pull,
+        undefined
+      )
+    ).toBe(false);
+    expect(
+      isServerSnapshotNewerThanLocalBaseline(
+        "2026-01-01T12:00:00.000Z",
+        pull,
+        undefined
+      )
+    ).toBe(false);
+    expect(
+      isServerSnapshotNewerThanLocalBaseline(
+        "2026-01-01T12:00:00.001Z",
+        pull,
+        undefined
+      )
     ).toBe(true);
   });
 
-  it("returns true only when server is strictly newer", () => {
-    const local = new Date("2026-01-01T12:00:00.000Z");
+  it("when never pulled, uses lastCloudPushAt so equal server time is not newer", () => {
+    const push = new Date("2026-01-01T12:00:00.000Z");
     expect(
-      isServerSnapshotNewerThanLocalPull("2026-01-01T11:59:59.999Z", local)
+      isServerSnapshotNewerThanLocalBaseline(
+        "2026-01-01T12:00:00.000Z",
+        undefined,
+        push
+      )
     ).toBe(false);
     expect(
-      isServerSnapshotNewerThanLocalPull("2026-01-01T12:00:00.000Z", local)
-    ).toBe(false);
-    expect(
-      isServerSnapshotNewerThanLocalPull("2026-01-01T12:00:00.001Z", local)
+      isServerSnapshotNewerThanLocalBaseline(
+        "2026-01-01T12:00:00.001Z",
+        undefined,
+        push
+      )
     ).toBe(true);
+  });
+
+  it("when neither pull nor push baseline, does not treat server as newer", () => {
+    expect(
+      isServerSnapshotNewerThanLocalBaseline(
+        "2026-01-01T12:00:00.000Z",
+        undefined,
+        undefined
+      )
+    ).toBe(false);
   });
 });
 

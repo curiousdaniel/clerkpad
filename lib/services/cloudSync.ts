@@ -11,15 +11,26 @@ import { isSyncOpsEnabled } from "@/lib/sync/syncOpsFlag";
 
 export type SyncListEntry = { eventSyncId: string; updatedAt: string };
 
-/** True when server snapshot time is newer than the last time we applied a pull for this event (or we never pulled). */
-export function isServerSnapshotNewerThanLocalPull(
+/**
+ * True when the server snapshot is strictly newer than our local merge baseline.
+ * Uses `lastCloudPullAt` when set (normal case). If we never pulled, uses
+ * `lastCloudPushAt` so we do not replace local Dexie with an older server copy
+ * right after adding rows (push is still debounced). If both are missing, false.
+ */
+export function isServerSnapshotNewerThanLocalBaseline(
   serverUpdatedAtIso: string,
-  localLastCloudPullAt: Date | undefined
+  localLastCloudPullAt: Date | undefined,
+  localLastCloudPushAt: Date | undefined
 ): boolean {
   const serverMs = new Date(serverUpdatedAtIso).getTime();
   if (!Number.isFinite(serverMs)) return false;
-  if (localLastCloudPullAt == null) return true;
-  return serverMs > localLastCloudPullAt.getTime();
+  if (localLastCloudPullAt != null) {
+    return serverMs > localLastCloudPullAt.getTime();
+  }
+  if (localLastCloudPushAt != null) {
+    return serverMs > localLastCloudPushAt.getTime();
+  }
+  return false;
 }
 
 /** Op-sync outbox rows must not be dropped by a full snapshot replace. */
@@ -54,8 +65,8 @@ export type RefreshEventFromCloudResult =
     };
 
 /**
- * If the server snapshot for this local event is newer than `lastCloudPullAt`,
- * replace local event data from the cloud (bidders, lots, sales, etc.).
+ * If the server snapshot is newer than our baseline (`lastCloudPullAt`, else
+ * `lastCloudPushAt`), replace local event data from the cloud (bidders, lots, sales, etc.).
  * Skips when op-sync is on and this event has pending outbox rows (would lose ops).
  */
 export async function refreshEventFromCloudIfServerNewer(
@@ -71,7 +82,13 @@ export async function refreshEventFromCloudIfServerNewer(
   }
   const snap = await fetchEventSnapshot(syncId);
   if (!snap.ok) return { refreshed: false, reason: "fetch_failed" };
-  if (!isServerSnapshotNewerThanLocalPull(snap.updatedAt, ev.lastCloudPullAt)) {
+  if (
+    !isServerSnapshotNewerThanLocalBaseline(
+      snap.updatedAt,
+      ev.lastCloudPullAt,
+      ev.lastCloudPushAt
+    )
+  ) {
     return { refreshed: false, reason: "not_newer" };
   }
   await replaceEventFromPayload(db, eventId, snap.payload);
@@ -105,9 +122,10 @@ export async function refreshStaleLocalEventsFromList(
       continue;
     }
     if (
-      !isServerSnapshotNewerThanLocalPull(
+      !isServerSnapshotNewerThanLocalBaseline(
         entry.updatedAt,
-        local.lastCloudPullAt
+        local.lastCloudPullAt,
+        local.lastCloudPushAt
       )
     ) {
       skipped += 1;
@@ -123,7 +141,11 @@ export async function refreshStaleLocalEventsFromList(
       continue;
     }
     if (
-      !isServerSnapshotNewerThanLocalPull(snap.updatedAt, local.lastCloudPullAt)
+      !isServerSnapshotNewerThanLocalBaseline(
+        snap.updatedAt,
+        local.lastCloudPullAt,
+        local.lastCloudPushAt
+      )
     ) {
       skipped += 1;
       continue;
