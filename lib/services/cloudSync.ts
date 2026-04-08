@@ -35,10 +35,10 @@ export function isServerSnapshotNewerThanLocalBaseline(
 
 /**
  * True when the local `events` row was modified after the last successful cloud
- * snapshot push (e.g. name/description/settings save). In that window, auto-pull
- * must not replace the whole event or teammate edits appear to "revert" until
- * our debounced push lands. Child-table edits (bidders, etc.) do not bump this
- * `updatedAt`, so they still rely on the server-newer baseline check.
+ * snapshot push. That includes event metadata saves and child-table writes
+ * (bidders, lots, etc.) via Dexie hooks that bump `events.updatedAt`. In that
+ * window, auto-pull must not replace the whole snapshot or local edits appear to
+ * "revert" until our debounced push lands.
  */
 export function hasUnpushedLocalEventMetadataEdits(ev: {
   updatedAt: Date;

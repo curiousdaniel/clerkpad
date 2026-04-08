@@ -7,6 +7,7 @@ import type {
   Lot,
   Sale,
 } from "@/lib/db";
+import { withCloudSyncApply } from "@/lib/db/syncApplyGuard";
 import { APP_VERSION } from "@/lib/utils/constants";
 import { newEntitySyncKey } from "@/lib/utils/clientSyncKey";
 import { toDate } from "@/lib/utils/coerceDate";
@@ -627,10 +628,11 @@ export async function importEventFromPayload(
   db: AuctionDB,
   payload: EventExportPayload
 ): Promise<ImportSummary> {
-  return db.transaction(
-    "rw",
-    [db.events, db.bidders, db.consignors, db.lots, db.sales, db.invoices],
-    async () => {
+  return withCloudSyncApply(() =>
+    db.transaction(
+      "rw",
+      [db.events, db.bidders, db.consignors, db.lots, db.sales, db.invoices],
+      async () => {
       const ev = payload.event;
       const now = new Date();
       const syncId =
@@ -663,6 +665,7 @@ export async function importEventFromPayload(
 
       return insertChildrenForEvent(db, eventId, payload, buyersPremiumRate);
     }
+    )
   );
 }
 
@@ -675,20 +678,21 @@ export async function replaceEventFromPayload(
   eventId: number,
   payload: EventExportPayload
 ): Promise<ImportSummary> {
-  return db.transaction(
-    "rw",
-    [
-      db.events,
-      db.bidders,
-      db.consignors,
-      db.lots,
-      db.sales,
-      db.invoices,
-      db.syncOutbox,
-      db.syncState,
-      db.syncConflicts,
-    ],
-    async () => {
+  return withCloudSyncApply(() =>
+    db.transaction(
+      "rw",
+      [
+        db.events,
+        db.bidders,
+        db.consignors,
+        db.lots,
+        db.sales,
+        db.invoices,
+        db.syncOutbox,
+        db.syncState,
+        db.syncConflicts,
+      ],
+      async () => {
       const existing = await db.events.get(eventId);
       if (existing == null) throw new Error("Event not found");
 
@@ -741,5 +745,6 @@ export async function replaceEventFromPayload(
 
       return insertChildrenForEvent(db, eventId, payload, buyersPremiumRate);
     }
+    )
   );
 }

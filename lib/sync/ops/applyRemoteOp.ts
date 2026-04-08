@@ -1,4 +1,5 @@
 import type { AuctionDB, AuctionEvent, Invoice, Sale } from "@/lib/db";
+import { withCloudSyncApply } from "@/lib/db/syncApplyGuard";
 import {
   computeInvoiceTotalsFromParts,
   recalculateAndPersistInvoice,
@@ -59,6 +60,18 @@ function recordConflict(
 }
 
 export async function applyRemoteOp(
+  db: AuctionDB,
+  event: AuctionEvent,
+  eventSyncId: string,
+  opType: string,
+  body: unknown
+): Promise<ApplyRemoteOpResult> {
+  return withCloudSyncApply(() =>
+    applyRemoteOpImpl(db, event, eventSyncId, opType, body)
+  );
+}
+
+async function applyRemoteOpImpl(
   db: AuctionDB,
   event: AuctionEvent,
   eventSyncId: string,

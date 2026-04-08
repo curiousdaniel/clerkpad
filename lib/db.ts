@@ -1,4 +1,6 @@
 import Dexie, { type Table } from "dexie";
+import { registerParentEventTouchHooks } from "@/lib/db/parentEventTouchHooks";
+import { withCloudSyncApply } from "@/lib/db/syncApplyGuard";
 import { newEntitySyncKey } from "@/lib/utils/clientSyncKey";
 import { newEventSyncId } from "@/lib/utils/syncId";
 
@@ -364,6 +366,7 @@ export class AuctionDB extends Dexie {
           }
         });
       });
+    registerParentEventTouchHooks(this);
   }
 }
 
@@ -451,28 +454,30 @@ export async function migrateLegacyToUserDb(userDb: AuctionDB): Promise<void> {
       "settings",
     ] as const;
 
-    await userDb.transaction("rw", userDb.tables, async () => {
-      for (const name of tableNames) {
-        const rows = await legacy.table(name).toArray();
-        if (rows.length === 0) continue;
-        if (name === "events") {
-          for (const r of rows as Record<string, unknown>[]) {
-            if (r.syncId == null || r.syncId === "") {
-              r.syncId = newEventSyncId();
+    await withCloudSyncApply(async () => {
+      await userDb.transaction("rw", userDb.tables, async () => {
+        for (const name of tableNames) {
+          const rows = await legacy.table(name).toArray();
+          if (rows.length === 0) continue;
+          if (name === "events") {
+            for (const r of rows as Record<string, unknown>[]) {
+              if (r.syncId == null || r.syncId === "") {
+                r.syncId = newEventSyncId();
+              }
+              if (r.buyersPremiumRate == null) r.buyersPremiumRate = 0;
+              if (r.defaultConsignorCommissionRate == null) {
+                r.defaultConsignorCommissionRate = 0;
+              }
+              await userDb.table(name).add(r as never);
             }
-            if (r.buyersPremiumRate == null) r.buyersPremiumRate = 0;
-            if (r.defaultConsignorCommissionRate == null) {
-              r.defaultConsignorCommissionRate = 0;
-            }
-            await userDb.table(name).add(r as never);
+          } else {
+            await userDb.table(name).bulkAdd(rows as never[]);
           }
-        } else {
-          await userDb.table(name).bulkAdd(rows as never[]);
         }
-      }
-    });
+      });
 
-    await normalizeInvoicesMissingBuyersPremium(userDb);
+      await normalizeInvoicesMissingBuyersPremium(userDb);
+    });
 
     await legacy.delete();
   } finally {
