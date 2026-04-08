@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import type { Consignor } from "@/lib/db";
 import { useUserDb } from "@/components/providers/UserDbProvider";
+import { useCloudSync } from "@/components/providers/CloudSyncProvider";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
@@ -24,6 +25,7 @@ export function ConsignorForm({
   editing,
 }: Props) {
   const { db } = useUserDb();
+  const { scheduleCloudPush } = useCloudSync();
   const [consignorNumber, setConsignorNumber] = useState("");
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
@@ -132,6 +134,7 @@ export function ConsignorForm({
       if (commissionRate !== undefined) row.commissionRate = commissionRate;
       await db.consignors.add(row);
     }
+    scheduleCloudPush();
     onSaved();
     onClose();
   }

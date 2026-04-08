@@ -107,6 +107,9 @@ export function CloudSyncProvider({ children }: { children: ReactNode }) {
   const debouncedPushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
     null
   );
+  const ablyPeerNudgeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null
+  );
   const runPushAllSilentRef = useRef<() => Promise<void>>(async () => {});
   const runBackgroundSyncCycleRef = useRef<() => Promise<void>>(async () => {});
   const ablyDebounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
@@ -115,6 +118,12 @@ export function CloudSyncProvider({ children }: { children: ReactNode }) {
   /** Latest selected event id (sync; avoids stale id after `await`). */
   const currentEventIdRef = useRef<number | null>(null);
   currentEventIdRef.current = currentEventId;
+  /** Current event sync id for debounced Ably nudge (ref avoids stale closure). */
+  const ablyEventSyncIdRef = useRef<string | null>(null);
+  ablyEventSyncIdRef.current =
+    currentEvent?.syncId?.trim() && currentEvent.syncId.trim().length > 0
+      ? currentEvent.syncId.trim()
+      : null;
 
   const updateSnapshotConflictHintFromPushSummary = useCallback(
     (summary: PushAllSummary) => {
@@ -238,8 +247,36 @@ export function CloudSyncProvider({ children }: { children: ReactNode }) {
     runPushAllSilentRef.current = runPushAllSilent;
   }, [runPushAllSilent]);
 
+  useEffect(() => {
+    return () => {
+      if (ablyPeerNudgeTimerRef.current) {
+        clearTimeout(ablyPeerNudgeTimerRef.current);
+        ablyPeerNudgeTimerRef.current = null;
+      }
+    };
+  }, []);
+
   const scheduleCloudPush = useCallback(() => {
     if (status !== "authenticated" || !online) return;
+    if (isAblyRealtimeSyncEnabled()) {
+      const syncId = ablyEventSyncIdRef.current;
+      if (syncId) {
+        if (ablyPeerNudgeTimerRef.current) {
+          clearTimeout(ablyPeerNudgeTimerRef.current);
+        }
+        ablyPeerNudgeTimerRef.current = setTimeout(() => {
+          ablyPeerNudgeTimerRef.current = null;
+          const sid = ablyEventSyncIdRef.current;
+          if (!sid) return;
+          void fetch("/api/ably/publish-event-nudge", {
+            method: "POST",
+            credentials: "include",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ eventSyncId: sid, scope: "data" }),
+          }).catch(() => {});
+        }, 350);
+      }
+    }
     if (debouncedPushTimerRef.current) {
       clearTimeout(debouncedPushTimerRef.current);
     }

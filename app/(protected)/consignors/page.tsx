@@ -14,6 +14,7 @@ import {
 } from "@/lib/hooks/useConsignors";
 import { useToast } from "@/components/providers/ToastProvider";
 import { useUserDb } from "@/components/providers/UserDbProvider";
+import { useCloudSync } from "@/components/providers/CloudSyncProvider";
 import { downloadCsv } from "@/lib/services/csvExporter";
 import { parseConsignorCsv } from "@/lib/services/csvImportConsignors";
 import {
@@ -27,6 +28,7 @@ const linkSecondary =
 
 export default function ConsignorsPage() {
   const { db } = useUserDb();
+  const { scheduleCloudPush } = useCloudSync();
   const { currentEvent, currentEventId } = useCurrentEvent();
   const { showToast } = useToast();
   const csvRef = useRef<HTMLInputElement>(null);
@@ -155,6 +157,7 @@ export default function ConsignorsPage() {
                     kind: ok ? "success" : toAdd.length > 0 ? "info" : "error",
                     message: parts.join(" ") || "Nothing imported.",
                   });
+                  if (toAdd.length > 0) scheduleCloudPush();
                 } catch (err) {
                   showToast({
                     kind: "error",
@@ -277,6 +280,7 @@ export default function ConsignorsPage() {
           }
           setDeleteTarget(null);
           await db.consignors.delete(id);
+          scheduleCloudPush();
           showToast({ kind: "success", message: "Consignor removed." });
         }}
       />

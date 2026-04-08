@@ -9,6 +9,7 @@ import {
   recalculateAndPersistInvoice,
 } from "@/lib/services/invoiceLogic";
 import { useUserDb } from "@/components/providers/UserDbProvider";
+import { useCloudSync } from "@/components/providers/CloudSyncProvider";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
@@ -86,6 +87,7 @@ export function InvoiceDetailModal({
   onSuccess?: (message: string) => void;
 }) {
   const { db } = useUserDb();
+  const { scheduleCloudPush } = useCloudSync();
   const [saving, setSaving] = useState(false);
   const [correctionSale, setCorrectionSale] = useState<Sale | null>(null);
 
@@ -103,13 +105,14 @@ export function InvoiceDetailModal({
         if (event.syncId) {
           await enqueueInvoicePut(db, event.syncId, invoice.id);
         }
+        scheduleCloudPush();
       } catch (e) {
         onError(e instanceof Error ? e.message : "Could not save invoice.");
       } finally {
         setSaving(false);
       }
     },
-    [db, event, invoice?.id, invoice?.status, onError]
+    [db, event, invoice?.id, invoice?.status, onError, scheduleCloudPush]
   );
 
   if (!invoice) return null;
@@ -199,6 +202,7 @@ export function InvoiceDetailModal({
       if (event.syncId) {
         await enqueueInvoicePut(db, event.syncId, inv.id);
       }
+      scheduleCloudPush();
       onUnpaid?.();
     } catch (e) {
       onError(e instanceof Error ? e.message : "Could not update invoice.");
@@ -221,6 +225,7 @@ export function InvoiceDetailModal({
     try {
       await removeSaleFromInvoice(db, event, s.id, inv.id);
       await yieldToPaint();
+      scheduleCloudPush();
       onSuccess?.("Line removed from invoice.");
     } catch (e) {
       onError(

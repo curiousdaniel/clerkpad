@@ -9,6 +9,7 @@ import { persistSaleCorrection } from "@/lib/services/saleInvoiceEdits";
 import { saleUnitHammer } from "@/lib/services/saleLineTotals";
 import { roundMoney } from "@/lib/services/invoiceLogic";
 import { useUserDb } from "@/components/providers/UserDbProvider";
+import { useCloudSync } from "@/components/providers/CloudSyncProvider";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
@@ -36,6 +37,7 @@ export function SaleCorrectionModal({
   onError,
 }: Props) {
   const { db } = useUserDb();
+  const { scheduleCloudPush } = useCloudSync();
   const eventId = event.id!;
   const [description, setDescription] = useState("");
   const [quantity, setQuantity] = useState("1");
@@ -125,6 +127,7 @@ export function SaleCorrectionModal({
         },
         anchorInvoiceId != null ? { anchorInvoiceId } : undefined
       );
+      scheduleCloudPush();
       onSaved();
       onClose();
     } catch (err) {

@@ -11,6 +11,7 @@ import { PaymentModal } from "@/components/invoices/PaymentModal";
 import { useCurrentEvent } from "@/lib/hooks/useCurrentEvent";
 import { useToast } from "@/components/providers/ToastProvider";
 import { useUserDb } from "@/components/providers/UserDbProvider";
+import { useCloudSync } from "@/components/providers/CloudSyncProvider";
 import {
   bidderIdsPendingFirstInvoice,
   generateAllInvoicesForEvent,
@@ -34,6 +35,7 @@ export default function InvoicesPage() {
   const { db, ready: dbReady } = useUserDb();
   const { currentEvent, currentEventId } = useCurrentEvent();
   const { showToast } = useToast();
+  const { scheduleCloudPush } = useCloudSync();
   const [filter, setFilter] = useState<Filter>("all");
   const [detailInv, setDetailInv] = useState<InvoiceWithBidder | null>(null);
   const [payInv, setPayInv] = useState<InvoiceWithBidder | null>(null);
@@ -117,6 +119,7 @@ export default function InvoicesPage() {
         kind: "success",
         message: `Invoices: ${r.created} created, ${r.updated} updated${r.skippedPaid ? `, ${r.skippedPaid} unchanged (all sales already invoiced)` : ""}.`,
       });
+      if (r.created > 0 || r.updated > 0) scheduleCloudPush();
     } catch (e) {
       showToast({
         kind: "error",
@@ -129,6 +132,7 @@ export default function InvoicesPage() {
     if (!currentEvent || !db) return;
     const r = await upsertInvoiceForBidder(db, currentEvent, bidderId);
     if (r.kind === "created" || r.kind === "updated") {
+      scheduleCloudPush();
       showToast({ kind: "success", message: "Invoice created." });
     } else if (r.kind === "skipped_paid") {
       showToast({

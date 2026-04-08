@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import type { Invoice } from "@/lib/db";
 import { useUserDb } from "@/components/providers/UserDbProvider";
+import { useCloudSync } from "@/components/providers/CloudSyncProvider";
 import { enqueueInvoicePut } from "@/lib/sync/ops/enqueueOps";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
@@ -20,6 +21,7 @@ export function PaymentModal({
   onPaid: (invoice: Invoice) => void;
 }) {
   const { db } = useUserDb();
+  const { scheduleCloudPush } = useCloudSync();
   const [method, setMethod] = useState<string>("cash");
 
   useEffect(() => {
@@ -38,6 +40,7 @@ export function PaymentModal({
     if (inv?.id != null && ev?.syncId) {
       await enqueueInvoicePut(db, ev.syncId, inv.id);
     }
+    scheduleCloudPush();
     onPaid(invoice);
     onClose();
   }

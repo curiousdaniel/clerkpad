@@ -238,6 +238,7 @@ export default function BiddersPage() {
           }
           setDeleteTarget(null);
           await db.bidders.delete(id);
+          scheduleCloudPush();
           showToast({ kind: "success", message: "Bidder removed." });
         }}
       />

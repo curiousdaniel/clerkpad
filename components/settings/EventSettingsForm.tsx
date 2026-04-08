@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import type { AuctionEvent, EventLocalBranding } from "@/lib/db";
 import { useUserDb } from "@/components/providers/UserDbProvider";
+import { useCloudSync } from "@/components/providers/CloudSyncProvider";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
@@ -18,6 +19,7 @@ export function EventSettingsForm({
   onSaved: () => void;
 }) {
   const { db } = useUserDb();
+  const { scheduleCloudPush } = useCloudSync();
   const eventLogoInputRef = useRef<HTMLInputElement>(null);
   const [organizationName, setOrganizationName] = useState("");
   const [taxRatePct, setTaxRatePct] = useState("0");
@@ -184,6 +186,7 @@ export function EventSettingsForm({
     await persistEventBranding(event.id);
     setPendingLogo(null);
     setRemoveEventLogo(false);
+    scheduleCloudPush();
     onSaved();
   }
 
