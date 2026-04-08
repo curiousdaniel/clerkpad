@@ -22,6 +22,7 @@ import {
   openConsignorStatementPdf,
 } from "@/lib/services/consignorStatementPdf";
 import type { Consignor } from "@/lib/db";
+import { mutateWithParentEventTouch } from "@/lib/db/mutateWithParentEventTouch";
 
 const linkSecondary =
   "inline-flex items-center justify-center gap-2 rounded-lg border border-navy/15 bg-surface px-4 py-2 text-sm font-medium text-ink transition hover:border-navy/30 focus:outline-none focus-visible:ring-2 focus-visible:ring-navy focus-visible:ring-offset-2 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:hover:border-slate-500 dark:focus-visible:ring-offset-slate-950";
@@ -122,25 +123,30 @@ export default function ConsignorsPage() {
                     return true;
                   });
                   const now = new Date();
-                  await db.transaction("rw", db.consignors, async () => {
-                    for (const r of toAdd) {
-                      const row: Consignor = {
-                        eventId: currentEventId,
-                        consignorNumber: r.consignorNumber,
-                        name: r.name,
-                        email: r.email,
-                        phone: r.phone,
-                        mailingAddress: r.mailingAddress,
-                        notes: r.notes,
-                        createdAt: now,
-                        updatedAt: now,
-                      };
-                      if (r.commissionPct != null) {
-                        row.commissionRate = r.commissionPct / 100;
+                  await mutateWithParentEventTouch(
+                    db,
+                    currentEventId,
+                    "consignors",
+                    async () => {
+                      for (const r of toAdd) {
+                        const row: Consignor = {
+                          eventId: currentEventId,
+                          consignorNumber: r.consignorNumber,
+                          name: r.name,
+                          email: r.email,
+                          phone: r.phone,
+                          mailingAddress: r.mailingAddress,
+                          notes: r.notes,
+                          createdAt: now,
+                          updatedAt: now,
+                        };
+                        if (r.commissionPct != null) {
+                          row.commissionRate = r.commissionPct / 100;
+                        }
+                        await db.consignors.add(row);
                       }
-                      await db.consignors.add(row);
                     }
-                  });
+                  );
                   const parts: string[] = [];
                   if (toAdd.length) parts.push(`Imported ${toAdd.length} consignor(s).`);
                   if (issues.length)
@@ -278,8 +284,11 @@ export default function ConsignorsPage() {
             setDeleteTarget(null);
             return;
           }
+          const evId = deleteTarget.eventId;
           setDeleteTarget(null);
-          await db.consignors.delete(id);
+          await mutateWithParentEventTouch(db, evId, "consignors", async () => {
+            await db.consignors.delete(id);
+          });
           scheduleCloudPush();
           showToast({ kind: "success", message: "Consignor removed." });
         }}

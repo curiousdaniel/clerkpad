@@ -19,6 +19,7 @@ import { useCloudSync } from "@/components/providers/CloudSyncProvider";
 import { useUserDb } from "@/components/providers/UserDbProvider";
 import { downloadCsv } from "@/lib/services/csvExporter";
 import { parseBidderCsv } from "@/lib/services/csvImportBidders";
+import { mutateWithParentEventTouch } from "@/lib/db/mutateWithParentEventTouch";
 
 const linkSecondary =
   "inline-flex items-center justify-center gap-2 rounded-lg border border-navy/15 bg-surface px-4 py-2 text-sm font-medium text-ink transition hover:border-navy/30 focus:outline-none focus-visible:ring-2 focus-visible:ring-navy focus-visible:ring-offset-2 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:hover:border-slate-500 dark:focus-visible:ring-offset-slate-950";
@@ -107,20 +108,25 @@ export default function BiddersPage() {
                     return true;
                   });
                   const now = new Date();
-                  await db.transaction("rw", db.bidders, async () => {
-                    for (const r of toAdd) {
-                      await db.bidders.add({
-                        eventId: currentEventId,
-                        paddleNumber: r.paddleNumber,
-                        firstName: r.firstName,
-                        lastName: r.lastName,
-                        email: r.email,
-                        phone: r.phone,
-                        createdAt: now,
-                        updatedAt: now,
-                      });
+                  await mutateWithParentEventTouch(
+                    db,
+                    currentEventId,
+                    "bidders",
+                    async () => {
+                      for (const r of toAdd) {
+                        await db.bidders.add({
+                          eventId: currentEventId,
+                          paddleNumber: r.paddleNumber,
+                          firstName: r.firstName,
+                          lastName: r.lastName,
+                          email: r.email,
+                          phone: r.phone,
+                          createdAt: now,
+                          updatedAt: now,
+                        });
+                      }
                     }
-                  });
+                  );
                   if (toAdd.length > 0) scheduleCloudPush();
                   const parts: string[] = [];
                   if (toAdd.length) parts.push(`Imported ${toAdd.length} bidder(s).`);
@@ -237,7 +243,14 @@ export default function BiddersPage() {
             return;
           }
           setDeleteTarget(null);
-          await db.bidders.delete(id);
+          await mutateWithParentEventTouch(
+            db,
+            currentEventId,
+            "bidders",
+            async () => {
+              await db.bidders.delete(id);
+            }
+          );
           scheduleCloudPush();
           showToast({ kind: "success", message: "Bidder removed." });
         }}

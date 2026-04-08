@@ -8,6 +8,7 @@ import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { getSuggestedPaddleNumber } from "@/lib/hooks/useBidders";
+import { mutateWithParentEventTouch } from "@/lib/db/mutateWithParentEventTouch";
 
 type Props = {
   open: boolean;
@@ -79,27 +80,29 @@ export function BidderForm({
       return;
     }
     const now = new Date();
-    if (editing?.id != null) {
-      await db.bidders.update(editing.id, {
-        paddleNumber: paddle,
-        firstName: fn,
-        lastName: ln,
-        phone: phone.trim() || undefined,
-        email: email.trim() || undefined,
-        updatedAt: now,
-      });
-    } else {
-      await db.bidders.add({
-        eventId,
-        paddleNumber: paddle,
-        firstName: fn,
-        lastName: ln,
-        phone: phone.trim() || undefined,
-        email: email.trim() || undefined,
-        createdAt: now,
-        updatedAt: now,
-      });
-    }
+    await mutateWithParentEventTouch(db, eventId, "bidders", async () => {
+      if (editing?.id != null) {
+        await db.bidders.update(editing.id, {
+          paddleNumber: paddle,
+          firstName: fn,
+          lastName: ln,
+          phone: phone.trim() || undefined,
+          email: email.trim() || undefined,
+          updatedAt: now,
+        });
+      } else {
+        await db.bidders.add({
+          eventId,
+          paddleNumber: paddle,
+          firstName: fn,
+          lastName: ln,
+          phone: phone.trim() || undefined,
+          email: email.trim() || undefined,
+          createdAt: now,
+          updatedAt: now,
+        });
+      }
+    });
     scheduleCloudPush();
     onSaved();
     onClose();

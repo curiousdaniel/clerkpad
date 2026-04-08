@@ -8,6 +8,7 @@ import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { getSuggestedConsignorNumber } from "@/lib/hooks/useConsignors";
+import { mutateWithParentEventTouch } from "@/lib/db/mutateWithParentEventTouch";
 
 type Props = {
   open: boolean;
@@ -117,7 +118,9 @@ export function ConsignorForm({
       else delete next.mailingAddress;
       if (commissionRate !== undefined) next.commissionRate = commissionRate;
       else delete next.commissionRate;
-      await db.consignors.put(next);
+      await mutateWithParentEventTouch(db, eventId, "consignors", async () => {
+        await db.consignors.put(next);
+      });
     } else {
       const row: Consignor = {
         eventId,
@@ -132,7 +135,9 @@ export function ConsignorForm({
       const maNew = mailingAddress.trim();
       if (maNew) row.mailingAddress = maNew;
       if (commissionRate !== undefined) row.commissionRate = commissionRate;
-      await db.consignors.add(row);
+      await mutateWithParentEventTouch(db, eventId, "consignors", async () => {
+        await db.consignors.add(row);
+      });
     }
     scheduleCloudPush();
     onSaved();
