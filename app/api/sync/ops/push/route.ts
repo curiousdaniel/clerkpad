@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth/options";
 import { sql } from "@/lib/db/postgres";
 import { SYNC_OP_TYPES } from "@/lib/sync/ops/types";
+import { publishEventSyncNudge } from "@/lib/ably/publishEventSync";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -106,6 +107,10 @@ export async function POST(req: Request) {
         }
         throw e;
       }
+    }
+
+    if (acceptedOpIds.length > 0) {
+      publishEventSyncNudge(vendorId, eventSyncId);
     }
 
     return NextResponse.json({ acceptedOpIds });

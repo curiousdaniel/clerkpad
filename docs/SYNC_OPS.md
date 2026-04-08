@@ -19,6 +19,10 @@ This mode augments **snapshot** cloud backup with an **append-only op log** so t
 
 Destructive or identity clashes (e.g. same sale `syncKey` but different lot/bidder) append rows to `syncConflicts` and appear under **Settings → Operation sync — needs review**. Dismiss after you fix data locally.
 
+## Ably realtime nudge (optional)
+
+When `ABLY_API_KEY` and `NEXT_PUBLIC_ABLY_SYNC=1` are set, the server publishes a lightweight message on channel `vendor:{vendorId}:event:{eventSyncId}` after successful snapshot or op-log pushes. Open ClerkBid tabs subscribe (token auth via `POST /api/ably/auth/`) and debounce-trigger the same background sync cycle used by polling, so teammates often see changes within sub-seconds instead of waiting for the ~25s interval. Polling remains the source of truth if Ably is disabled or unreachable.
+
 ## Rollback
 
 1. Unset `NEXT_PUBLIC_SYNC_OPS` and `SYNC_OPS` and redeploy.

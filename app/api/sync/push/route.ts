@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth/options";
 import { sql } from "@/lib/db/postgres";
+import { publishEventSyncNudge } from "@/lib/ably/publishEventSync";
 import { EXPORT_VERSION } from "@/lib/services/dataPorter";
 
 export const runtime = "nodejs";
@@ -90,6 +91,7 @@ export async function POST(req: Request) {
     `;
 
     const updated = rows[0];
+    publishEventSyncNudge(vendorId, eventSyncId);
     return NextResponse.json({
       ok: true,
       updatedAt: updated

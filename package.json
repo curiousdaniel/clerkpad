@@ -12,6 +12,7 @@
   "dependencies": {
     "@vercel/analytics": "^2.0.1",
     "@vercel/postgres": "^0.10.0",
+    "ably": "^2.21.0",
     "bcryptjs": "^2.4.3",
     "dexie": "^4.0.10",
     "dexie-react-hooks": "^1.1.7",

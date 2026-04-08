@@ -29,7 +29,10 @@ import {
   pushAllPendingOps,
   runOperationLevelSync,
 } from "@/lib/services/opSyncClient";
+import { isAblyRealtimeSyncEnabled } from "@/lib/ably/ablySyncFlag";
+import { eventSyncChannelName } from "@/lib/ably/channels";
 import { isSyncOpsEnabled } from "@/lib/sync/syncOpsFlag";
+import Ably from "ably";
 import { ensureSettingsRow } from "@/lib/settings";
 import { dateGetTime } from "@/lib/utils/coerceDate";
 
@@ -102,6 +105,10 @@ export function CloudSyncProvider({ children }: { children: ReactNode }) {
     null
   );
   const runPushAllSilentRef = useRef<() => Promise<void>>(async () => {});
+  const runBackgroundSyncCycleRef = useRef<() => Promise<void>>(async () => {});
+  const ablyDebounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null
+  );
 
   useEffect(() => {
     if (!dbReady || !db) return;
@@ -393,6 +400,76 @@ export function CloudSyncProvider({ children }: { children: ReactNode }) {
     runPushAllSilent,
     refresh,
   ]);
+
+  useEffect(() => {
+    runBackgroundSyncCycleRef.current = runBackgroundSyncCycle;
+  }, [runBackgroundSyncCycle]);
+
+  useEffect(() => {
+    if (!isAblyRealtimeSyncEnabled()) return;
+    if (status !== "authenticated" || !online) return;
+    const vendorRaw = session?.user?.vendorId;
+    const syncId = currentEvent?.syncId?.trim();
+    if (!vendorRaw || !syncId) return;
+    const vendorId = parseInt(vendorRaw, 10);
+    if (!Number.isFinite(vendorId)) return;
+
+    const channelName = eventSyncChannelName(vendorId, syncId);
+
+    const scheduleNudgedSync = () => {
+      if (ablyDebounceTimerRef.current) {
+        clearTimeout(ablyDebounceTimerRef.current);
+      }
+      ablyDebounceTimerRef.current = setTimeout(() => {
+        ablyDebounceTimerRef.current = null;
+        void runBackgroundSyncCycleRef.current();
+      }, 400);
+    };
+
+    const realtime = new Ably.Realtime({
+      authCallback: (_tokenParams, callback) => {
+        void (async () => {
+          try {
+            const res = await fetch("/api/ably/auth", {
+              method: "POST",
+              credentials: "include",
+            });
+            if (!res.ok) {
+              callback(`Ably auth failed (${res.status})`, null);
+              return;
+            }
+            const tokenRequest = await res.json();
+            callback(null, tokenRequest as never);
+          } catch (e) {
+            callback(
+              e instanceof Error ? e.message : "Ably auth request failed",
+              null
+            );
+          }
+        })();
+      },
+    });
+
+    const channel = realtime.channels.get(channelName);
+    const onSync = () => {
+      scheduleNudgedSync();
+    };
+
+    void channel
+      .subscribe("sync", onSync)
+      .catch((e: unknown) => {
+        console.error("[ably] subscribe failed", e);
+      });
+
+    return () => {
+      if (ablyDebounceTimerRef.current) {
+        clearTimeout(ablyDebounceTimerRef.current);
+        ablyDebounceTimerRef.current = null;
+      }
+      channel.unsubscribe("sync", onSync);
+      realtime.close();
+    };
+  }, [status, online, session?.user?.vendorId, currentEvent?.syncId]);
 
   /**
    * As soon as the signed-in user’s Dexie DB is ready, run one full sync cycle.
