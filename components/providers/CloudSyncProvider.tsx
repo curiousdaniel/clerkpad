@@ -13,7 +13,6 @@ import {
 import { useSession } from "next-auth/react";
 import { ImpersonationBanner } from "@/components/admin/ImpersonationBanner";
 import { AppShell } from "@/components/layout/AppShell";
-import { Button } from "@/components/ui/Button";
 import { useEventContext } from "@/components/providers/EventProvider";
 import { useToast } from "@/components/providers/ToastProvider";
 import { useUserDb } from "@/components/providers/UserDbProvider";
@@ -64,6 +63,14 @@ export type CloudSyncContextValue = {
    * (no events, or every event saved successfully).
    */
   ensureCloudBackupBeforeSignOut: () => Promise<boolean>;
+  /**
+   * When set, the server’s snapshot for the current event is newer than this
+   * device’s last successful cloud save (ISO string). Shown next to the sync
+   * status control, not as a full-page banner.
+   */
+  remoteCloudSnapshotAt: string | null;
+  /** Hide the remote-newer hint until the next server check (may return). */
+  dismissRemoteCloudSnapshotHint: () => void;
 };
 
 const CloudSyncContext = createContext<CloudSyncContextValue | null>(null);
@@ -89,9 +96,9 @@ export function CloudSyncProvider({ children }: { children: ReactNode }) {
   const [online, setOnline] = useState(
     typeof navigator !== "undefined" ? navigator.onLine : true
   );
-  const [remoteBanner, setRemoteBanner] = useState<{
-    serverUpdatedAt: string;
-  } | null>(null);
+  const [remoteCloudSnapshotAt, setRemoteCloudSnapshotAt] = useState<
+    string | null
+  >(null);
   const [lastPushAt, setLastPushAt] = useState<Date | null>(null);
   const [lastPullAt, setLastPullAt] = useState<Date | null>(null);
   const [syncPhase, setSyncPhase] = useState<SyncPhase>("idle");
@@ -129,7 +136,7 @@ export function CloudSyncProvider({ children }: { children: ReactNode }) {
   const checkRemoteNewer = useCallback(async () => {
     if (status !== "authenticated" || !dbReady || !db || !online) {
       checkRemoteBannerGenRef.current += 1;
-      setRemoteBanner(null);
+      setRemoteCloudSnapshotAt(null);
       return;
     }
 
@@ -140,7 +147,7 @@ export function CloudSyncProvider({ children }: { children: ReactNode }) {
       if (myGen !== checkRemoteBannerGenRef.current) return;
 
       if (!list.ok) {
-        setRemoteBanner(null);
+        setRemoteCloudSnapshotAt(null);
         if (list.status === 503) setCloudSyncAvailable(false);
         return;
       }
@@ -148,7 +155,7 @@ export function CloudSyncProvider({ children }: { children: ReactNode }) {
 
       const liveEventId = currentEventIdRef.current;
       if (liveEventId == null) {
-        setRemoteBanner(null);
+        setRemoteCloudSnapshotAt(null);
         return;
       }
 
@@ -156,28 +163,28 @@ export function CloudSyncProvider({ children }: { children: ReactNode }) {
       if (myGen !== checkRemoteBannerGenRef.current) return;
 
       if (!row) {
-        setRemoteBanner(null);
+        setRemoteCloudSnapshotAt(null);
         return;
       }
 
       const syncId = row.syncId?.trim();
       if (!syncId) {
-        setRemoteBanner(null);
+        setRemoteCloudSnapshotAt(null);
         return;
       }
 
       const mine = list.events.find((e) => e.eventSyncId === syncId);
       if (!mine) {
-        setRemoteBanner(null);
+        setRemoteCloudSnapshotAt(null);
         return;
       }
 
       const remoteT = new Date(mine.updatedAt).getTime();
       const lastPush = dateGetTime(row.lastCloudPushAt);
       if (lastPush == null || remoteT > lastPush) {
-        setRemoteBanner({ serverUpdatedAt: mine.updatedAt });
+        setRemoteCloudSnapshotAt(mine.updatedAt);
       } else {
-        setRemoteBanner(null);
+        setRemoteCloudSnapshotAt(null);
       }
     } catch {
       if (myGen !== checkRemoteBannerGenRef.current) return;
@@ -256,8 +263,8 @@ export function CloudSyncProvider({ children }: { children: ReactNode }) {
           setLastSyncError("Cloud backup failed. Try Settings → Sync now.");
         }
       }
-      // Do not clear the “newer cloud backup” banner just because some *other*
-      // event saved — re-check the *current* event against the list.
+      // Re-check the *current* event against the list (not only when another
+      // event saved) so the header snapshot hint stays accurate.
       if (summary.lastUpdatedAt || summary.conflictCount > 0) {
         await checkRemoteNewer();
       }
@@ -585,7 +592,7 @@ export function CloudSyncProvider({ children }: { children: ReactNode }) {
             lastCloudPushAt: new Date(result.updatedAt),
           });
           refresh();
-          setRemoteBanner(null);
+          setRemoteCloudSnapshotAt(null);
           setLastSyncError(null);
           return { ok: true };
         }
@@ -654,7 +661,7 @@ export function CloudSyncProvider({ children }: { children: ReactNode }) {
           if (summary.conflictCount > 0) {
             showToast({
               kind: "success",
-              message: `${summary.okCount} event(s) saved. ${summary.conflictCount} conflict(s): another copy on the server is newer — use the banner or Settings (Restore / Overwrite).`,
+              message: `${summary.okCount} event(s) saved. ${summary.conflictCount} conflict(s): another copy on the server is newer — use the sync status control (amber dot) or Settings (Restore / Overwrite).`,
             });
           } else {
             showToast({
@@ -704,7 +711,7 @@ export function CloudSyncProvider({ children }: { children: ReactNode }) {
       await db.settings.update(1, { lastCloudPullAt: new Date(r.updatedAt) });
       setLastPullAt(new Date(r.updatedAt));
       refresh();
-      setRemoteBanner(null);
+      setRemoteCloudSnapshotAt(null);
       setLastSyncError(null);
       showToast({
         kind: "success",
@@ -717,19 +724,10 @@ export function CloudSyncProvider({ children }: { children: ReactNode }) {
     }
   }, [db, currentEventId, currentEvent?.syncId, refresh, showToast]);
 
-  const dismissBanner = useCallback(() => setRemoteBanner(null), []);
-
-  const forcePush = useCallback(async () => {
-    const r = await runPushCurrent({ force: true });
-    if (r.ok) {
-      showToast({
-        kind: "success",
-        message: "Cloud backup updated from this device.",
-      });
-    } else {
-      showToast({ kind: "error", message: r.message });
-    }
-  }, [runPushCurrent, showToast]);
+  const dismissRemoteCloudSnapshotHint = useCallback(
+    () => setRemoteCloudSnapshotAt(null),
+    []
+  );
 
   const ctxValue = useMemo<CloudSyncContextValue>(
     () => ({
@@ -743,6 +741,8 @@ export function CloudSyncProvider({ children }: { children: ReactNode }) {
       cloudSyncAvailable,
       scheduleCloudPush,
       ensureCloudBackupBeforeSignOut,
+      remoteCloudSnapshotAt,
+      dismissRemoteCloudSnapshotHint,
     }),
     [
       pushNow,
@@ -755,47 +755,17 @@ export function CloudSyncProvider({ children }: { children: ReactNode }) {
       cloudSyncAvailable,
       scheduleCloudPush,
       ensureCloudBackupBeforeSignOut,
+      remoteCloudSnapshotAt,
+      dismissRemoteCloudSnapshotHint,
     ]
   );
 
   const impersonationBanner =
     session?.impersonatedByUserId != null ? <ImpersonationBanner /> : null;
 
-  const syncConflictBanner =
-    remoteBanner && currentEventId != null ? (
-      <div
-        className="flex flex-col gap-3 rounded-xl border border-gold/40 bg-gold/10 px-4 py-3 text-sm text-ink sm:flex-row sm:items-center sm:justify-between"
-        role="status"
-      >
-        <p>
-          <span className="font-semibold text-navy dark:text-slate-100">
-            Newer cloud backup
-          </span>{" "}
-          for this event (server{" "}
-          {new Date(remoteBanner.serverUpdatedAt).toLocaleString()}). Restore to
-          use it, or push to replace the server copy.
-        </p>
-        <div className="flex flex-wrap gap-2">
-          <Button type="button" onClick={() => void restoreFromCloud()}>
-            Restore from cloud
-          </Button>
-          <Button type="button" variant="secondary" onClick={() => void forcePush()}>
-            Push this device
-          </Button>
-          <Button type="button" variant="secondary" onClick={dismissBanner}>
-            Dismiss
-          </Button>
-        </div>
-      </div>
-    ) : null;
-
-  const topBanner =
-    impersonationBanner || syncConflictBanner ? (
-      <div className="space-y-3">
-        {impersonationBanner}
-        {syncConflictBanner}
-      </div>
-    ) : null;
+  const topBanner = impersonationBanner ? (
+    <div className="space-y-3">{impersonationBanner}</div>
+  ) : null;
 
   return (
     <CloudSyncContext.Provider value={ctxValue}>

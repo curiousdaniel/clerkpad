@@ -1,6 +1,7 @@
 "use client";
 
 import { useCloudSync } from "@/components/providers/CloudSyncProvider";
+import { Button } from "@/components/ui/Button";
 
 function formatRelative(d: Date | null): string {
   if (d == null) return "—";
@@ -12,7 +13,7 @@ function formatRelative(d: Date | null): string {
   return `${Math.floor(sec / 86400)}d ago`;
 }
 
-/** Compact cloud sync status in the header; hover or focus for details. */
+/** Compact cloud sync status in the display header; hover or focus for details. */
 export function SyncStatusIndicator() {
   const {
     online,
@@ -21,9 +22,15 @@ export function SyncStatusIndicator() {
     lastPullAt,
     lastSyncError,
     cloudSyncAvailable,
+    remoteCloudSnapshotAt,
+    dismissRemoteCloudSnapshotHint,
+    restoreFromCloud,
+    pushNow,
   } = useCloudSync();
 
   const busy = syncPhase === "pushing" || syncPhase === "pulling";
+  const newerRemote =
+    remoteCloudSnapshotAt != null && remoteCloudSnapshotAt.length > 0;
 
   let dotClass =
     "bg-emerald-500 shadow-[0_0_0_1px_rgba(255,255,255,0.4)] dark:shadow-[0_0_0_1px_rgba(0,0,0,0.35)]";
@@ -43,13 +50,17 @@ export function SyncStatusIndicator() {
     label = "Cloud sync error";
   }
 
+  if (newerRemote && cloudSyncAvailable && online) {
+    label += ". Newer cloud backup on the account for this event — open tooltip for actions.";
+  }
+
   const tooltipId = "cloud-sync-status-tooltip";
 
   return (
     <div className="group relative flex items-center">
       <button
         type="button"
-        className="flex h-8 w-8 items-center justify-center rounded-md border border-transparent text-navy outline-none ring-navy/20 transition hover:bg-navy/5 focus-visible:ring-2 dark:text-slate-200 dark:hover:bg-slate-800 dark:ring-slate-500/40"
+        className="flex h-8 min-w-8 items-center justify-center gap-0.5 rounded-md border border-transparent px-1 text-navy outline-none ring-navy/20 transition hover:bg-navy/5 focus-visible:ring-2 dark:text-slate-200 dark:hover:bg-slate-800 dark:ring-slate-500/40"
         aria-describedby={tooltipId}
         aria-label={label}
       >
@@ -57,12 +68,59 @@ export function SyncStatusIndicator() {
           className={`h-2.5 w-2.5 shrink-0 rounded-full ${dotClass}`}
           aria-hidden
         />
+        {newerRemote ? (
+          <span
+            className="h-2.5 w-2.5 shrink-0 rounded-full bg-amber-500 shadow-[0_0_0_1px_rgba(255,255,255,0.35)] dark:shadow-[0_0_0_1px_rgba(0,0,0,0.4)]"
+            aria-hidden
+          />
+        ) : null}
       </button>
       <div
         id={tooltipId}
         role="tooltip"
-        className="pointer-events-none invisible absolute right-0 top-full z-50 mt-1 w-max max-w-[min(22rem,calc(100vw-2rem))] translate-y-0 rounded-md border border-navy/15 bg-white p-3 text-left text-xs text-ink opacity-0 shadow-lg transition-opacity duration-150 group-focus-within:visible group-focus-within:opacity-100 group-hover:visible group-hover:opacity-100 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
+        className="pointer-events-auto invisible absolute right-0 top-full z-50 mt-1 w-max max-w-[min(22rem,calc(100vw-2rem))] translate-y-0 rounded-md border border-navy/15 bg-white p-3 text-left text-xs text-ink opacity-0 shadow-lg transition-opacity duration-150 group-focus-within:visible group-focus-within:opacity-100 group-hover:visible group-hover:opacity-100 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
       >
+        {newerRemote && cloudSyncAvailable ? (
+          <div className="mb-3 border-b border-navy/10 pb-3 dark:border-slate-600">
+            <p className="font-medium text-amber-900 dark:text-amber-200">
+              Newer cloud backup
+            </p>
+            <p className="mt-1 text-muted dark:text-slate-400">
+              Server {new Date(remoteCloudSnapshotAt).toLocaleString()}. Restore
+              to use the account copy, or push to replace it with this device.
+            </p>
+            <div className="mt-2 flex flex-wrap gap-2">
+              <Button
+                variant="primary"
+                className="px-3 py-1.5 text-xs"
+                disabled={!online}
+                onClick={() => void restoreFromCloud()}
+              >
+                Restore
+              </Button>
+              <Button
+                variant="secondary"
+                className="px-3 py-1.5 text-xs"
+                disabled={!online}
+                onClick={() => void pushNow({ force: true })}
+              >
+                Push this device
+              </Button>
+              <Button
+                variant="ghost"
+                className="px-3 py-1.5 text-xs"
+                onClick={dismissRemoteCloudSnapshotHint}
+              >
+                Dismiss
+              </Button>
+            </div>
+            {!online ? (
+              <p className="mt-2 text-rose-800 dark:text-rose-200">
+                Reconnect to restore or push.
+              </p>
+            ) : null}
+          </div>
+        ) : null}
         {!cloudSyncAvailable ? (
           <p className="text-amber-900 dark:text-amber-200">
             Cloud backup is not available on this server (database not
