@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import Ably from "ably";
 import { authOptions } from "@/lib/auth/options";
-import { vendorEventSubscribeCapability } from "@/lib/ably/channels";
+import { ablyClientSubscribeCapability } from "@/lib/ably/channels";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -30,7 +30,7 @@ export async function POST() {
     const tokenRequest = await rest.auth.createTokenRequest({
       // Omit clientId so multiple tabs for the same user can subscribe without
       // Ably disconnecting earlier connections (same clientId is single-connection).
-      capability: vendorEventSubscribeCapability(vendorId) as Record<
+      capability: ablyClientSubscribeCapability(vendorId) as Record<
         string,
         ["subscribe"]
       >,

@@ -7,8 +7,149 @@ import {
   replaceEventFromPayload,
   type EventExportPayload,
 } from "@/lib/services/dataPorter";
+import { isSyncOpsEnabled } from "@/lib/sync/syncOpsFlag";
 
 export type SyncListEntry = { eventSyncId: string; updatedAt: string };
+
+/** True when server snapshot time is newer than the last time we applied a pull for this event (or we never pulled). */
+export function isServerSnapshotNewerThanLocalPull(
+  serverUpdatedAtIso: string,
+  localLastCloudPullAt: Date | undefined
+): boolean {
+  const serverMs = new Date(serverUpdatedAtIso).getTime();
+  if (!Number.isFinite(serverMs)) return false;
+  if (localLastCloudPullAt == null) return true;
+  return serverMs > localLastCloudPullAt.getTime();
+}
+
+/** Op-sync outbox rows must not be dropped by a full snapshot replace. */
+export function shouldBlockAutoSnapshotReplace(
+  syncOpsEnabled: boolean,
+  pendingOutboxCount: number
+): boolean {
+  return syncOpsEnabled && pendingOutboxCount > 0;
+}
+
+async function canAutoReplaceSnapshotForEvent(
+  db: AuctionDB,
+  eventSyncId: string
+): Promise<boolean> {
+  const pending = await db.syncOutbox
+    .where("eventSyncId")
+    .equals(eventSyncId)
+    .count();
+  return !shouldBlockAutoSnapshotReplace(isSyncOpsEnabled(), pending);
+}
+
+export type RefreshEventFromCloudResult =
+  | { refreshed: true }
+  | {
+      refreshed: false;
+      reason:
+        | "no_event"
+        | "no_sync_id"
+        | "outbox_pending"
+        | "fetch_failed"
+        | "not_newer";
+    };
+
+/**
+ * If the server snapshot for this local event is newer than `lastCloudPullAt`,
+ * replace local event data from the cloud (bidders, lots, sales, etc.).
+ * Skips when op-sync is on and this event has pending outbox rows (would lose ops).
+ */
+export async function refreshEventFromCloudIfServerNewer(
+  db: AuctionDB,
+  eventId: number
+): Promise<RefreshEventFromCloudResult> {
+  const ev = await db.events.get(eventId);
+  if (ev?.id == null) return { refreshed: false, reason: "no_event" };
+  const syncId = ev.syncId?.trim();
+  if (!syncId) return { refreshed: false, reason: "no_sync_id" };
+  if (!(await canAutoReplaceSnapshotForEvent(db, syncId))) {
+    return { refreshed: false, reason: "outbox_pending" };
+  }
+  const snap = await fetchEventSnapshot(syncId);
+  if (!snap.ok) return { refreshed: false, reason: "fetch_failed" };
+  if (!isServerSnapshotNewerThanLocalPull(snap.updatedAt, ev.lastCloudPullAt)) {
+    return { refreshed: false, reason: "not_newer" };
+  }
+  await replaceEventFromPayload(db, eventId, snap.payload);
+  const serverTime = new Date(snap.updatedAt);
+  await db.events.update(eventId, {
+    lastCloudPullAt: serverTime,
+    updatedAt: new Date(),
+  });
+  return { refreshed: true };
+}
+
+/**
+ * For each cloud list entry that matches a local event, pull the snapshot when the server
+ * copy is newer than `lastCloudPullAt`. Used after sync list fetch (throttled interval).
+ */
+export async function refreshStaleLocalEventsFromList(
+  db: AuctionDB,
+  listEntries: SyncListEntry[]
+): Promise<{ refreshed: number; skipped: number; latestPullAt: Date | null }> {
+  let refreshed = 0;
+  let skipped = 0;
+  let latestPullAt: Date | null = null;
+
+  for (const entry of listEntries) {
+    const local = await db.events
+      .where("syncId")
+      .equals(entry.eventSyncId)
+      .first();
+    if (local?.id == null) {
+      skipped += 1;
+      continue;
+    }
+    if (
+      !isServerSnapshotNewerThanLocalPull(
+        entry.updatedAt,
+        local.lastCloudPullAt
+      )
+    ) {
+      skipped += 1;
+      continue;
+    }
+    if (!(await canAutoReplaceSnapshotForEvent(db, entry.eventSyncId))) {
+      skipped += 1;
+      continue;
+    }
+    const snap = await fetchEventSnapshot(entry.eventSyncId);
+    if (!snap.ok) {
+      skipped += 1;
+      continue;
+    }
+    if (
+      !isServerSnapshotNewerThanLocalPull(snap.updatedAt, local.lastCloudPullAt)
+    ) {
+      skipped += 1;
+      continue;
+    }
+    await replaceEventFromPayload(db, local.id, snap.payload);
+    const serverTime = new Date(snap.updatedAt);
+    await db.events.update(local.id, {
+      lastCloudPullAt: serverTime,
+      updatedAt: new Date(),
+    });
+    refreshed += 1;
+    if (
+      latestPullAt == null ||
+      serverTime.getTime() > latestPullAt.getTime()
+    ) {
+      latestPullAt = serverTime;
+    }
+  }
+
+  if (latestPullAt != null) {
+    await ensureSettingsRow(db);
+    await db.settings.update(1, { lastCloudPullAt: latestPullAt });
+  }
+
+  return { refreshed, skipped, latestPullAt };
+}
 
 export async function fetchSyncList(): Promise<
   { ok: true; events: SyncListEntry[] } | { ok: false; status: number }

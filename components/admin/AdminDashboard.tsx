@@ -1,12 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type FormEvent } from "react";
 import { signIn } from "next-auth/react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { Header } from "@/components/layout/Header";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
+import { Input } from "@/components/ui/Input";
 import type { AdminUserRow } from "@/lib/admin/userStats";
 import { formatDateTime } from "@/lib/utils/formatDate";
 import { isSuperAdminUserIdAndEmail } from "@/lib/auth/superAdmin";
@@ -22,6 +23,15 @@ export function AdminDashboard({
   const router = useRouter();
   const [pendingId, setPendingId] = useState<number | null>(null);
   const [deletingId, setDeletingId] = useState<number | null>(null);
+
+  const [announceTitle, setAnnounceTitle] = useState("");
+  const [announceBody, setAnnounceBody] = useState("");
+  const [announceSeverity, setAnnounceSeverity] = useState<
+    "info" | "warning"
+  >("info");
+  const [announceSending, setAnnounceSending] = useState(false);
+  const [announceError, setAnnounceError] = useState<string | null>(null);
+  const [announceOk, setAnnounceOk] = useState<string | null>(null);
 
   const showAdmin =
     status === "authenticated" &&
@@ -97,6 +107,41 @@ export function AdminDashboard({
     }
   }
 
+  async function sendAnnouncement(e: FormEvent) {
+    e.preventDefault();
+    setAnnounceError(null);
+    setAnnounceOk(null);
+    const body = announceBody.trim();
+    if (!body) {
+      setAnnounceError("Message is required.");
+      return;
+    }
+    setAnnounceSending(true);
+    try {
+      const res = await fetch("/api/admin/ably-announce/", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: announceTitle.trim() || undefined,
+          body,
+          severity: announceSeverity,
+        }),
+      });
+      const data = (await res.json()) as { error?: string; id?: string };
+      if (!res.ok) {
+        setAnnounceError(data.error ?? "Request failed.");
+        return;
+      }
+      setAnnounceOk(`Sent (id ${data.id ?? "?"})`);
+      setAnnounceBody("");
+      setAnnounceTitle("");
+    } catch {
+      setAnnounceError("Something went wrong.");
+    } finally {
+      setAnnounceSending(false);
+    }
+  }
+
   if (status === "loading") {
     return (
       <div>
@@ -127,6 +172,87 @@ export function AdminDashboard({
           {loadError}
         </Card>
       ) : null}
+
+      <Card className="mt-6 p-4">
+        <h2 className="text-sm font-semibold text-ink dark:text-slate-100">
+          Global in-app announcement
+        </h2>
+        <p className="mt-1 text-xs text-muted">
+          Delivers a toast to signed-in ClerkBid users via Ably channel{" "}
+          <code className="rounded bg-surface-muted px-1 font-mono text-[11px]">
+            clerkbid:announce
+          </code>
+          . Clients need{" "}
+          <code className="rounded bg-surface-muted px-1 font-mono text-[11px]">
+            NEXT_PUBLIC_ABLY_SYNC=1
+          </code>{" "}
+          and the server needs{" "}
+          <code className="rounded bg-surface-muted px-1 font-mono text-[11px]">
+            ABLY_API_KEY
+          </code>
+          .
+        </p>
+        <form className="mt-4 space-y-3" onSubmit={(ev) => void sendAnnouncement(ev)}>
+          <Input
+            id="announce-title"
+            label="Title (optional)"
+            value={announceTitle}
+            onChange={(ev) => setAnnounceTitle(ev.target.value)}
+            maxLength={120}
+            placeholder="e.g. Scheduled maintenance"
+            disabled={announceSending}
+          />
+          <div className="w-full">
+            <label
+              htmlFor="announce-body"
+              className="mb-1 block text-sm font-medium text-ink dark:text-slate-200"
+            >
+              Message
+            </label>
+            <textarea
+              id="announce-body"
+              value={announceBody}
+              onChange={(ev) => setAnnounceBody(ev.target.value)}
+              maxLength={2000}
+              rows={4}
+              disabled={announceSending}
+              placeholder="Shown as an in-app toast for all signed-in users."
+              className="w-full rounded-lg border border-navy/20 bg-white px-3 py-2 text-sm text-ink placeholder:text-muted focus:border-navy focus:outline-none focus:ring-1 focus:ring-navy dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:placeholder:text-slate-500"
+            />
+          </div>
+          <div className="flex flex-wrap items-center gap-3">
+            <label className="flex items-center gap-2 text-sm text-ink dark:text-slate-200">
+              <span className="text-muted">Severity</span>
+              <select
+                value={announceSeverity}
+                onChange={(ev) =>
+                  setAnnounceSeverity(
+                    ev.target.value === "warning" ? "warning" : "info"
+                  )
+                }
+                disabled={announceSending}
+                className="rounded-lg border border-navy/20 bg-white px-2 py-1.5 text-sm dark:border-slate-600 dark:bg-slate-800"
+              >
+                <option value="info">Info</option>
+                <option value="warning">Warning</option>
+              </select>
+            </label>
+            <Button type="submit" disabled={announceSending}>
+              {announceSending ? "Sending…" : "Send announcement"}
+            </Button>
+          </div>
+          {announceError ? (
+            <p className="text-sm text-danger" role="alert">
+              {announceError}
+            </p>
+          ) : null}
+          {announceOk ? (
+            <p className="text-sm text-success dark:text-emerald-400">
+              {announceOk}
+            </p>
+          ) : null}
+        </form>
+      </Card>
 
       <Card className="mt-6 overflow-x-auto p-0">
         <table className="w-full min-w-[880px] text-left text-sm">

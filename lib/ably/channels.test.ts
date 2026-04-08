@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
+  ablyClientSubscribeCapability,
   eventSyncChannelName,
+  GLOBAL_ANNOUNCE_CHANNEL,
   vendorEventSubscribeCapability,
 } from "@/lib/ably/channels";
 
@@ -20,6 +22,15 @@ describe("vendorEventSubscribeCapability", () => {
   it("scopes wildcard to vendor", () => {
     expect(vendorEventSubscribeCapability(42)).toEqual({
       "vendor:42:event:*": ["subscribe"],
+    });
+  });
+});
+
+describe("ablyClientSubscribeCapability", () => {
+  it("includes vendor events and global announce channel", () => {
+    expect(ablyClientSubscribeCapability(42)).toEqual({
+      "vendor:42:event:*": ["subscribe"],
+      [GLOBAL_ANNOUNCE_CHANNEL]: ["subscribe"],
     });
   });
 });

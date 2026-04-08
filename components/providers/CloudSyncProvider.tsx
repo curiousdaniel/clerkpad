@@ -22,6 +22,8 @@ import {
   pushCurrentEvent,
   pullCloudEventsMissingLocally,
   recordSuccessfulPush,
+  refreshEventFromCloudIfServerNewer,
+  refreshStaleLocalEventsFromList,
   restoreEventFromCloud,
   type PushAllSummary,
 } from "@/lib/services/cloudSync";
@@ -30,7 +32,11 @@ import {
   runOperationLevelSync,
 } from "@/lib/services/opSyncClient";
 import { isAblyRealtimeSyncEnabled } from "@/lib/ably/ablySyncFlag";
-import { eventSyncChannelName } from "@/lib/ably/channels";
+import {
+  eventSyncChannelName,
+  GLOBAL_ANNOUNCE_CHANNEL,
+} from "@/lib/ably/channels";
+import { handleAblyAnnounceMessage } from "@/lib/ably/handleClientAnnounce";
 import { isSyncOpsEnabled } from "@/lib/sync/syncOpsFlag";
 import Ably from "ably";
 import { ensureSettingsRow } from "@/lib/settings";
@@ -125,6 +131,11 @@ export function CloudSyncProvider({ children }: { children: ReactNode }) {
       ? currentEvent.syncId.trim()
       : null;
 
+  const dbRef = useRef(db);
+  dbRef.current = db;
+  const refreshForSyncRef = useRef(refresh);
+  refreshForSyncRef.current = refresh;
+
   const updateSnapshotConflictHintFromPushSummary = useCallback(
     (summary: PushAllSummary) => {
       const liveId = currentEventIdRef.current;
@@ -184,8 +195,9 @@ export function CloudSyncProvider({ children }: { children: ReactNode }) {
     setSyncPhase("pulling");
     try {
       const r = await pullCloudEventsMissingLocally(db, list.events);
+      const stale = await refreshStaleLocalEventsFromList(db, list.events);
       setLastPullAt(new Date());
-      if (r.imported > 0 || list.events.length > 0) {
+      if (r.imported > 0 || stale.refreshed > 0 || list.events.length > 0) {
         refresh();
       }
       if (r.imported > 0) {
@@ -283,7 +295,7 @@ export function CloudSyncProvider({ children }: { children: ReactNode }) {
     debouncedPushTimerRef.current = setTimeout(() => {
       debouncedPushTimerRef.current = null;
       void runPushAllSilentRef.current();
-    }, 1200);
+    }, 500);
   }, [status, online]);
 
   const ensureCloudBackupBeforeSignOut = useCallback(async (): Promise<boolean> => {
@@ -429,12 +441,9 @@ export function CloudSyncProvider({ children }: { children: ReactNode }) {
     if (!isAblyRealtimeSyncEnabled()) return;
     if (status !== "authenticated" || !online) return;
     const vendorRaw = session?.user?.vendorId;
-    const syncId = currentEvent?.syncId?.trim();
-    if (!vendorRaw || !syncId) return;
+    if (!vendorRaw) return;
     const vendorId = parseInt(vendorRaw, 10);
     if (!Number.isFinite(vendorId)) return;
-
-    const channelName = eventSyncChannelName(vendorId, syncId);
 
     const scheduleNudgedSync = () => {
       if (ablyDebounceTimerRef.current) {
@@ -442,7 +451,15 @@ export function CloudSyncProvider({ children }: { children: ReactNode }) {
       }
       ablyDebounceTimerRef.current = setTimeout(() => {
         ablyDebounceTimerRef.current = null;
-        void runBackgroundSyncCycleRef.current();
+        void (async () => {
+          const d = dbRef.current;
+          const eid = currentEventIdRef.current;
+          if (d && eid != null) {
+            const rr = await refreshEventFromCloudIfServerNewer(d, eid);
+            if (rr.refreshed) refreshForSyncRef.current();
+          }
+          await runBackgroundSyncCycleRef.current();
+        })();
       }, 400);
     };
 
@@ -470,26 +487,39 @@ export function CloudSyncProvider({ children }: { children: ReactNode }) {
       },
     });
 
-    const channel = realtime.channels.get(channelName);
+    const announceCh = realtime.channels.get(GLOBAL_ANNOUNCE_CHANNEL);
+    const onAnnounce = (msg: { data?: unknown }) => {
+      handleAblyAnnounceMessage(msg.data, showToast);
+    };
+    void announceCh.subscribe("announce", onAnnounce).catch((e: unknown) => {
+      console.error("[ably] announce subscribe failed", e);
+    });
+
+    const syncId = currentEvent?.syncId?.trim();
+    let eventCh: ReturnType<typeof realtime.channels.get> | null = null;
     const onSync = () => {
       scheduleNudgedSync();
     };
-
-    void channel
-      .subscribe("sync", onSync)
-      .catch((e: unknown) => {
-        console.error("[ably] subscribe failed", e);
+    if (syncId) {
+      const channelName = eventSyncChannelName(vendorId, syncId);
+      eventCh = realtime.channels.get(channelName);
+      void eventCh.subscribe("sync", onSync).catch((e: unknown) => {
+        console.error("[ably] event sync subscribe failed", e);
       });
+    }
 
     return () => {
       if (ablyDebounceTimerRef.current) {
         clearTimeout(ablyDebounceTimerRef.current);
         ablyDebounceTimerRef.current = null;
       }
-      channel.unsubscribe("sync", onSync);
+      announceCh.unsubscribe("announce", onAnnounce);
+      if (eventCh) {
+        eventCh.unsubscribe("sync", onSync);
+      }
       realtime.close();
     };
-  }, [status, online, session?.user?.vendorId, currentEvent?.syncId]);
+  }, [status, online, session?.user?.vendorId, currentEvent?.syncId, showToast]);
 
   /**
    * As soon as the signed-in user’s Dexie DB is ready, run one full sync cycle.

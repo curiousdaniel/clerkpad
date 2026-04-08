@@ -1,5 +1,17 @@
 import Ably from "ably";
-import { eventSyncChannelName } from "@/lib/ably/channels";
+import {
+  eventSyncChannelName,
+  GLOBAL_ANNOUNCE_CHANNEL,
+} from "@/lib/ably/channels";
+
+/** Payload published on `clerkbid:announce` / event `announce`. */
+export type GlobalAnnouncePayload = {
+  id: string;
+  title?: string;
+  body: string;
+  severity: "info" | "warning";
+  issuedAt: number;
+};
 
 let rest: Ably.Rest | null = null;
 
@@ -42,5 +54,16 @@ export function publishEventSyncNudge(
     .publish("sync", payload)
     .catch((err: unknown) => {
       console.error("[ably] publish failed", name, err);
+    });
+}
+
+export function publishGlobalAnnounce(payload: GlobalAnnouncePayload): void {
+  const r = getRest();
+  if (!r) return;
+  void r.channels
+    .get(GLOBAL_ANNOUNCE_CHANNEL)
+    .publish("announce", payload)
+    .catch((err: unknown) => {
+      console.error("[ably] global announce publish failed", err);
     });
 }

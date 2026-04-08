@@ -10,11 +10,13 @@ import {
 } from "react";
 import { X } from "lucide-react";
 
-type ToastKind = "success" | "error" | "info";
+type ToastKind = "success" | "error" | "info" | "warning";
 
 export type ToastInput = {
   message: string;
   kind?: ToastKind;
+  /** Default 3000 ms; Ably announcements use longer defaults in the caller. */
+  durationMs?: number;
 };
 
 type ToastItem = ToastInput & { id: number };
@@ -30,11 +32,17 @@ export function ToastProvider({ children }: { children: ReactNode }) {
 
   const showToast = useCallback((t: ToastInput) => {
     const id = Date.now() + Math.random();
-    const item: ToastItem = { id, kind: t.kind ?? "info", message: t.message };
+    const duration = t.durationMs ?? 3000;
+    const item: ToastItem = {
+      id,
+      kind: t.kind ?? "info",
+      message: t.message,
+      durationMs: duration,
+    };
     setToasts((prev) => [...prev, item]);
     window.setTimeout(() => {
       setToasts((prev) => prev.filter((x) => x.id !== id));
-    }, 3000);
+    }, duration);
   }, []);
 
   const dismiss = useCallback((id: number) => {
@@ -58,11 +66,13 @@ export function ToastProvider({ children }: { children: ReactNode }) {
                 ? "border-success/30 bg-white text-ink dark:border-emerald-800 dark:bg-slate-900 dark:text-slate-100"
                 : t.kind === "error"
                   ? "border-danger/40 bg-white text-ink dark:border-red-900 dark:bg-slate-900 dark:text-slate-100"
-                  : "border-navy/20 bg-white text-ink dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"
+                  : t.kind === "warning"
+                    ? "border-amber-400/50 bg-amber-50 text-ink dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-50"
+                    : "border-navy/20 bg-white text-ink dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"
             }`}
             role="status"
           >
-            <p className="flex-1 text-sm">{t.message}</p>
+            <p className="flex-1 whitespace-pre-line text-sm">{t.message}</p>
             <button
               type="button"
               onClick={() => dismiss(t.id)}
