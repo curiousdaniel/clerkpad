@@ -28,11 +28,6 @@ const CONTACT_SIGNUP_VALUE = "HUBSPOT_CONTACT_SIGNUP_SOURCE_VALUE";
 const COMPANY_SIGNUP_PROP = "HUBSPOT_COMPANY_SIGNUP_SOURCE_PROP";
 const COMPANY_SIGNUP_VALUE = "HUBSPOT_COMPANY_SIGNUP_SOURCE_VALUE";
 
-/** HubSpot internal name: Lead Source (How They Heard) — see hs-fields/contact.csv */
-const LEAD_SOURCE_HOW_THEY_HEARD = "lead_source__how_they_heard_";
-/** Must match the dropdown option’s internal value in HubSpot (Settings → Properties). */
-const DEFAULT_LEAD_SOURCE_VALUE = "Clerkbid";
-
 /** Marketing contact status: HubSpot enum “Marketing contact (true)” */
 const MARKETING_CONTACT_STATUS_PROP = "hs_marketable_status";
 const MARKETING_CONTACT_STATUS_VALUE = "true";
@@ -59,10 +54,6 @@ function companyAttributionProps(): Record<string, string> {
   if (!prop) return {};
   const val = envTrim(COMPANY_SIGNUP_VALUE) ?? "ClerkBid";
   return { [prop]: val };
-}
-
-function leadSourceValue(): string {
-  return envTrim("HUBSPOT_LEAD_SOURCE_VALUE") ?? DEFAULT_LEAD_SOURCE_VALUE;
 }
 
 /**
@@ -102,11 +93,11 @@ async function resolveHubSpotOwnerId(token: string): Promise<string | undefined>
   return undefined;
 }
 
+/** Extra HubSpot contact fields applied on create/patch (not lifecyclestage or lead source). */
 async function contactCrmFieldProps(
   token: string
 ): Promise<Record<string, string>> {
   const props: Record<string, string> = {
-    [LEAD_SOURCE_HOW_THEY_HEARD]: leadSourceValue(),
     [MARKETING_CONTACT_STATUS_PROP]: MARKETING_CONTACT_STATUS_VALUE,
   };
   const ownerId = await resolveHubSpotOwnerId(token);
