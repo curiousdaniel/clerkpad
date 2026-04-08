@@ -17,7 +17,18 @@ async function touchParentEvent(
   if (isCloudSyncApplying()) return;
   if (trans.mode === "versionchange") return;
   if (eventId == null || !Number.isFinite(eventId)) return;
-  await trans.table("events").update(eventId, { updatedAt: new Date() });
+
+  const db = trans.db as AuctionDB;
+  // Implicit tx from e.g. `db.bidders.add()` only includes `bidders`; touching `events`
+  // on `trans` throws. When `events` is in scope, update atomically; otherwise bump after commit.
+  if (trans.storeNames.includes("events")) {
+    await trans.table("events").update(eventId, { updatedAt: new Date() });
+    return;
+  }
+
+  trans.on("complete", () => {
+    void db.events.update(eventId, { updatedAt: new Date() });
+  });
 }
 
 function eventIdFromUpdate(
