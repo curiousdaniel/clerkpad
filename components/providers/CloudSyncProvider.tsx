@@ -52,7 +52,6 @@ export type CloudSyncContextValue = {
   restoreFromCloud: () => Promise<boolean>;
   lastPushAt: Date | null;
   lastPullAt: Date | null;
-  checking: boolean;
   online: boolean;
   syncPhase: SyncPhase;
   lastSyncError: string | null;
@@ -83,6 +82,9 @@ export function CloudSyncProvider({ children }: { children: ReactNode }) {
   const { currentEventId, currentEvent, refresh, switchEvent } =
     useEventContext();
   const { showToast } = useToast();
+  /** Re-run remote-newer check when Dexie reports a new last push time for the live event. */
+  const lastCloudPushMs =
+    dateGetTime(currentEvent?.lastCloudPushAt) ?? null;
 
   const [online, setOnline] = useState(
     typeof navigator !== "undefined" ? navigator.onLine : true
@@ -92,7 +94,6 @@ export function CloudSyncProvider({ children }: { children: ReactNode }) {
   } | null>(null);
   const [lastPushAt, setLastPushAt] = useState<Date | null>(null);
   const [lastPullAt, setLastPullAt] = useState<Date | null>(null);
-  const [checking, setChecking] = useState(false);
   const [syncPhase, setSyncPhase] = useState<SyncPhase>("idle");
   const [lastSyncError, setLastSyncError] = useState<string | null>(null);
   const [cloudSyncAvailable, setCloudSyncAvailable] = useState(true);
@@ -109,6 +110,11 @@ export function CloudSyncProvider({ children }: { children: ReactNode }) {
   const ablyDebounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
     null
   );
+  /** Latest selected event id (sync; avoids stale id after `await` in checks). */
+  const currentEventIdRef = useRef<number | null>(null);
+  currentEventIdRef.current = currentEventId;
+  /** Drop stale async completions when a newer check starts or deps invalidate. */
+  const checkRemoteBannerGenRef = useRef(0);
 
   useEffect(() => {
     if (!dbReady || !db) return;
@@ -121,52 +127,62 @@ export function CloudSyncProvider({ children }: { children: ReactNode }) {
   }, [db, dbReady]);
 
   const checkRemoteNewer = useCallback(async () => {
-    if (
-      status !== "authenticated" ||
-      !dbReady ||
-      !db ||
-      currentEventId == null ||
-      !currentEvent?.syncId ||
-      !online
-    ) {
+    if (status !== "authenticated" || !dbReady || !db || !online) {
+      checkRemoteBannerGenRef.current += 1;
       setRemoteBanner(null);
       return;
     }
-    setChecking(true);
+
+    const myGen = ++checkRemoteBannerGenRef.current;
+
     try {
       const list = await fetchSyncList();
+      if (myGen !== checkRemoteBannerGenRef.current) return;
+
       if (!list.ok) {
         setRemoteBanner(null);
         if (list.status === 503) setCloudSyncAvailable(false);
         return;
       }
       setCloudSyncAvailable(true);
-      const mine = list.events.find(
-        (e) => e.eventSyncId === currentEvent.syncId
-      );
+
+      const liveEventId = currentEventIdRef.current;
+      if (liveEventId == null) {
+        setRemoteBanner(null);
+        return;
+      }
+
+      const row = await db.events.get(liveEventId);
+      if (myGen !== checkRemoteBannerGenRef.current) return;
+
+      if (!row) {
+        setRemoteBanner(null);
+        return;
+      }
+
+      const syncId = row.syncId?.trim();
+      if (!syncId) {
+        setRemoteBanner(null);
+        return;
+      }
+
+      const mine = list.events.find((e) => e.eventSyncId === syncId);
       if (!mine) {
         setRemoteBanner(null);
         return;
       }
+
       const remoteT = new Date(mine.updatedAt).getTime();
-      const lastPush = dateGetTime(currentEvent.lastCloudPushAt);
+      const lastPush = dateGetTime(row.lastCloudPushAt);
       if (lastPush == null || remoteT > lastPush) {
         setRemoteBanner({ serverUpdatedAt: mine.updatedAt });
       } else {
         setRemoteBanner(null);
       }
-    } finally {
-      setChecking(false);
+    } catch {
+      if (myGen !== checkRemoteBannerGenRef.current) return;
     }
-  }, [
-    status,
-    dbReady,
-    db,
-    currentEventId,
-    currentEvent?.syncId,
-    currentEvent?.lastCloudPushAt,
-    online,
-  ]);
+  }, [status, dbReady, db, online]);
 
   const runPullAndMaybeSwitchEvent = useCallback(async () => {
     if (status !== "authenticated" || !db || !online) return;
@@ -506,7 +522,7 @@ export function CloudSyncProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     void checkRemoteNewer();
-  }, [checkRemoteNewer]);
+  }, [checkRemoteNewer, currentEventId, lastCloudPushMs]);
 
   useEffect(() => {
     const onVis = () => {
@@ -721,7 +737,6 @@ export function CloudSyncProvider({ children }: { children: ReactNode }) {
       restoreFromCloud,
       lastPushAt,
       lastPullAt,
-      checking,
       online,
       syncPhase,
       lastSyncError,
@@ -734,7 +749,6 @@ export function CloudSyncProvider({ children }: { children: ReactNode }) {
       restoreFromCloud,
       lastPushAt,
       lastPullAt,
-      checking,
       online,
       syncPhase,
       lastSyncError,

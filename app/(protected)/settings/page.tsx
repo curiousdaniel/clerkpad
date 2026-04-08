@@ -43,7 +43,7 @@ export default function SettingsPage() {
   const { currentEvent, currentEventId, switchEvent, refresh } =
     useCurrentEvent();
   const { showToast } = useToast();
-  const { pushNow, restoreFromCloud, lastPushAt, checking } = useCloudSync();
+  const { pushNow, restoreFromCloud, lastPushAt } = useCloudSync();
   const { isStandalone, canInstall, promptInstall } = usePwaInstall();
   const [clearOpen, setClearOpen] = useState(false);
   const [monthlyBackupEmail, setMonthlyBackupEmail] = useState(false);
@@ -264,13 +264,11 @@ export default function SettingsPage() {
             </p>
           ) : null}
           <p className="text-xs text-muted">
-            {checking
-              ? "Checking server…"
-              : currentEvent?.lastCloudPushAt
-                ? `Last cloud save: ${formatDateTime(currentEvent.lastCloudPushAt)}`
-                : lastPushAt
-                  ? `Last cloud save: ${formatDateTime(lastPushAt)}`
-                  : "No cloud save recorded for this event yet."}
+            {currentEvent?.lastCloudPushAt
+              ? `Last cloud save: ${formatDateTime(currentEvent.lastCloudPushAt)}`
+              : lastPushAt
+                ? `Last cloud save: ${formatDateTime(lastPushAt)}`
+                : "No cloud save recorded for this event yet."}
           </p>
           <div className="flex flex-wrap gap-2">
             <Button
