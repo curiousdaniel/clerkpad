@@ -59,7 +59,10 @@ export async function sendResendEmail(options: {
   to: string[];
   subject: string;
   html: string;
+  /** Sets Resend `reply_to` (submitter address for “Reply” in mail clients). */
   replyTo?: string;
+  /** Optional extra MIME headers (e.g. List-Unsubscribe). Do not set Reply-To here; use `replyTo`. */
+  headers?: Record<string, string>;
 }): Promise<ResendSendResult> {
   const cfg = getResendConfig();
   if (!cfg) {
@@ -78,6 +81,9 @@ export async function sendResendEmail(options: {
   };
   if (options.replyTo?.trim()) {
     body.reply_to = options.replyTo.trim();
+  }
+  if (options.headers && Object.keys(options.headers).length > 0) {
+    body.headers = options.headers;
   }
 
   const res = await fetch("https://api.resend.com/emails", {
