@@ -11,6 +11,8 @@ export type GlobalAnnouncePayload = {
   body: string;
   severity: "info" | "warning";
   issuedAt: number;
+  /** When true, clients should report toast delivery so login-time queue does not duplicate. */
+  persistedForLogin?: boolean;
 };
 
 let rest: Ably.Rest | null = null;

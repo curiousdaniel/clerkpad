@@ -5,6 +5,7 @@ import {
   publishGlobalAnnounce,
   type GlobalAnnouncePayload,
 } from "@/lib/ably/publishEventSync";
+import { sql } from "@/lib/db/postgres";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -12,12 +13,18 @@ export const dynamic = "force-dynamic";
 const MAX_TITLE = 120;
 const MAX_BODY = 2000;
 
-function validateAnnounceInput(body: unknown): {
-  ok: true;
-  title?: string;
-  message: string;
-  severity: "info" | "warning";
-} | { ok: false; error: string } {
+export type AnnounceDeliveryAudience = "online_now" | "persist_cross_session";
+
+function validateAnnounceInput(body: unknown):
+  | {
+      ok: true;
+      title?: string;
+      message: string;
+      severity: "info" | "warning";
+      deliveryAudience: AnnounceDeliveryAudience;
+      recordInMessageCenter: boolean;
+    }
+  | { ok: false; error: string } {
   if (body == null || typeof body !== "object") {
     return { ok: false, error: "JSON body is required." };
   }
@@ -54,19 +61,40 @@ function validateAnnounceInput(body: unknown): {
   if (severity == null) {
     return { ok: false, error: "severity must be info or warning." };
   }
-  return { ok: true, title, message, severity };
+
+  const da = o.deliveryAudience ?? o.delivery_audience;
+  let deliveryAudience: AnnounceDeliveryAudience;
+  if (da === "persist_cross_session" || da === "include_future_logins") {
+    deliveryAudience = "persist_cross_session";
+  } else if (da === "online_now" || da == null) {
+    deliveryAudience = "online_now";
+  } else {
+    return {
+      ok: false,
+      error:
+        "deliveryAudience must be online_now or persist_cross_session (include_future_logins).",
+    };
+  }
+
+  const rec = o.recordInMessageCenter ?? o.record_in_message_center;
+  const recordInMessageCenter =
+    rec === false || rec === "false" ? false : true;
+
+  return {
+    ok: true,
+    title,
+    message,
+    severity,
+    deliveryAudience,
+    recordInMessageCenter,
+  };
 }
 
 export async function POST(req: Request) {
   const session = await requireSuperAdminNotImpersonating();
   if (session instanceof NextResponse) return session;
 
-  if (!process.env.ABLY_API_KEY?.trim()) {
-    return NextResponse.json(
-      { error: "Ably is not configured (ABLY_API_KEY)." },
-      { status: 503 }
-    );
-  }
+  const ablyConfigured = Boolean(process.env.ABLY_API_KEY?.trim());
 
   let json: unknown;
   try {
@@ -80,14 +108,101 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: parsed.error }, { status: 400 });
   }
 
-  const payload: GlobalAnnouncePayload = {
-    id: randomUUID(),
-    body: parsed.message,
-    severity: parsed.severity,
-    issuedAt: Date.now(),
-  };
-  if (parsed.title) payload.title = parsed.title;
+  const {
+    message,
+    title,
+    severity,
+    deliveryAudience,
+    recordInMessageCenter,
+  } = parsed;
 
-  publishGlobalAnnounce(payload);
-  return NextResponse.json({ ok: true, id: payload.id });
+  const needsDbInsert =
+    deliveryAudience === "persist_cross_session" ||
+    (deliveryAudience === "online_now" && recordInMessageCenter);
+
+  const id = randomUUID();
+  const issuedAt = new Date();
+  const createdByUserId = parseInt(session.user.id ?? "", 10);
+  const actorId = Number.isFinite(createdByUserId) ? createdByUserId : null;
+
+  if (needsDbInsert) {
+    try {
+      await sql`
+        INSERT INTO global_announcements (
+          id,
+          title,
+          body,
+          severity,
+          issued_at,
+          delivery_audience,
+          visible_in_message_center,
+          created_by_user_id
+        )
+        VALUES (
+          ${id}::uuid,
+          ${title ?? null},
+          ${message},
+          ${severity},
+          ${issuedAt.toISOString()}::timestamptz,
+          ${deliveryAudience},
+          ${recordInMessageCenter},
+          ${actorId}
+        )
+      `;
+    } catch (e) {
+      console.error("[admin/ably-announce] insert", e);
+      const msg = e instanceof Error ? e.message : String(e);
+      if (
+        msg.includes("global_announcements") &&
+        msg.includes("does not exist")
+      ) {
+        return NextResponse.json(
+          {
+            error:
+              "Database migration missing. Run db/migrate_global_announcements.sql on your database.",
+          },
+          { status: 503 }
+        );
+      }
+      return NextResponse.json(
+        { error: "Could not save announcement." },
+        { status: 500 }
+      );
+    }
+  }
+
+  if (!ablyConfigured) {
+    if (deliveryAudience === "online_now" && !needsDbInsert) {
+      return NextResponse.json(
+        {
+          error:
+            "ABLY_API_KEY is required for online-only announcements that are not saved. Enable Ably or turn on “Save to message center”.",
+        },
+        { status: 503 }
+      );
+    }
+  }
+
+  const payload: GlobalAnnouncePayload = {
+    id,
+    body: message,
+    severity,
+    issuedAt: issuedAt.getTime(),
+  };
+  if (title) payload.title = title;
+  if (deliveryAudience === "persist_cross_session") {
+    payload.persistedForLogin = true;
+  }
+
+  if (ablyConfigured) {
+    publishGlobalAnnounce(payload);
+  }
+
+  return NextResponse.json({
+    ok: true,
+    id,
+    deliveryAudience,
+    recordInMessageCenter,
+    ablyPublished: ablyConfigured,
+  });
 }

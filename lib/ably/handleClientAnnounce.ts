@@ -1,3 +1,5 @@
+import { markGlobalAnnouncementToastsShown } from "@/lib/announcements/markToastShown";
+
 const SEEN_KEY_PREFIX = "clerkbid_announce_seen:";
 
 type AnnounceToast = {
@@ -11,6 +13,7 @@ function isAnnouncePayload(data: unknown): data is {
   body: string;
   severity?: string;
   title?: string;
+  persistedForLogin?: boolean;
 } {
   if (data == null || typeof data !== "object") return false;
   const o = data as Record<string, unknown>;
@@ -24,6 +27,8 @@ function isAnnouncePayload(data: unknown): data is {
 
 /**
  * Show one toast per announcement id; dedupe across tabs/reconnects via sessionStorage.
+ * Persisted announcements report to the server so the same user does not get a duplicate
+ * toast after signing in again.
  */
 export function handleAblyAnnounceMessage(
   data: unknown,
@@ -49,4 +54,7 @@ export function handleAblyAnnounceMessage(
     kind: severity,
     durationMs: severity === "warning" ? 14_000 : 10_000,
   });
+  if (data.persistedForLogin === true) {
+    void markGlobalAnnouncementToastsShown([id]);
+  }
 }

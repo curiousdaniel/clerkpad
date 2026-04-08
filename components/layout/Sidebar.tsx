@@ -12,6 +12,7 @@ import {
   FileText,
   BarChart3,
   CircleHelp,
+  Inbox,
   MessageSquare,
   Settings,
   Shield,
@@ -34,6 +35,7 @@ const nav = [
   { href: "/invoices/", label: "Invoices", icon: FileText },
   { href: "/reports/", label: "Reports", icon: BarChart3 },
   { href: "/help/", label: "Help", icon: CircleHelp },
+  { href: "/announcements/", label: "Message center", icon: Inbox },
   { href: "/feedback/", label: "Feedback", icon: MessageSquare },
   { href: "/settings/", label: "Settings", icon: Settings },
 ];

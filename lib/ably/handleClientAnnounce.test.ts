@@ -1,5 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { markGlobalAnnouncementToastsShown } from "@/lib/announcements/markToastShown";
 import { handleAblyAnnounceMessage } from "./handleClientAnnounce";
+
+vi.mock("@/lib/announcements/markToastShown", () => ({
+  markGlobalAnnouncementToastsShown: vi.fn().mockResolvedValue(undefined),
+}));
 
 const sessionMem: Record<string, string> = {};
 
@@ -77,5 +82,21 @@ describe("handleAblyAnnounceMessage", () => {
       showToast
     );
     expect(showToast.mock.calls[0][0].kind).toBe("warning");
+  });
+
+  it("marks persisted cross-session announcements after toast", () => {
+    const showToast = vi.fn();
+    handleAblyAnnounceMessage(
+      {
+        id: "persist-1",
+        body: "Hello",
+        persistedForLogin: true,
+      },
+      showToast
+    );
+    expect(showToast).toHaveBeenCalledTimes(1);
+    expect(markGlobalAnnouncementToastsShown).toHaveBeenCalledWith([
+      "persist-1",
+    ]);
   });
 });

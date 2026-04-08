@@ -32,6 +32,10 @@ export function AdminDashboard({
   const [announceSending, setAnnounceSending] = useState(false);
   const [announceError, setAnnounceError] = useState<string | null>(null);
   const [announceOk, setAnnounceOk] = useState<string | null>(null);
+  const [announceDelivery, setAnnounceDelivery] = useState<
+    "online_now" | "persist_cross_session"
+  >("online_now");
+  const [announceSaveToCenter, setAnnounceSaveToCenter] = useState(true);
 
   const showAdmin =
     status === "authenticated" &&
@@ -125,14 +129,22 @@ export function AdminDashboard({
           title: announceTitle.trim() || undefined,
           body,
           severity: announceSeverity,
+          deliveryAudience: announceDelivery,
+          recordInMessageCenter: announceSaveToCenter,
         }),
       });
-      const data = (await res.json()) as { error?: string; id?: string };
+      const data = (await res.json()) as {
+        error?: string;
+        id?: string;
+        ablyPublished?: boolean;
+      };
       if (!res.ok) {
         setAnnounceError(data.error ?? "Request failed.");
         return;
       }
-      setAnnounceOk(`Sent (id ${data.id ?? "?"})`);
+      const ablyNote =
+        data.ablyPublished === false ? " (saved; Ably not configured)" : "";
+      setAnnounceOk(`Sent (id ${data.id ?? "?"})${ablyNote}`);
       setAnnounceBody("");
       setAnnounceTitle("");
     } catch {
@@ -178,19 +190,24 @@ export function AdminDashboard({
           Global in-app announcement
         </h2>
         <p className="mt-1 text-xs text-muted">
-          Delivers a toast to signed-in ClerkBid users via Ably channel{" "}
+          Online users get a toast via Ably (
           <code className="rounded bg-surface-muted px-1 font-mono text-[11px]">
             clerkbid:announce
           </code>
-          . Clients need{" "}
+          ) when{" "}
+          <code className="rounded bg-surface-muted px-1 font-mono text-[11px]">
+            ABLY_API_KEY
+          </code>{" "}
+          and{" "}
           <code className="rounded bg-surface-muted px-1 font-mono text-[11px]">
             NEXT_PUBLIC_ABLY_SYNC=1
           </code>{" "}
-          and the server needs{" "}
+          are set. Cross-session delivery stores the message so users who sign in
+          later still get a toast. Run{" "}
           <code className="rounded bg-surface-muted px-1 font-mono text-[11px]">
-            ABLY_API_KEY
-          </code>
-          .
+            db/migrate_global_announcements.sql
+          </code>{" "}
+          on your database for storage and the Message center.
         </p>
         <form className="mt-4 space-y-3" onSubmit={(ev) => void sendAnnouncement(ev)}>
           <Input
@@ -220,6 +237,63 @@ export function AdminDashboard({
               className="w-full rounded-lg border border-navy/20 bg-white px-3 py-2 text-sm text-ink placeholder:text-muted focus:border-navy focus:outline-none focus:ring-1 focus:ring-navy dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:placeholder:text-slate-500"
             />
           </div>
+          <fieldset className="space-y-2">
+            <legend className="text-sm font-medium text-ink dark:text-slate-200">
+              Who receives it
+            </legend>
+            <label className="flex cursor-pointer items-start gap-2 text-sm text-ink dark:text-slate-200">
+              <input
+                type="radio"
+                name="announce-delivery"
+                className="mt-1"
+                checked={announceDelivery === "online_now"}
+                disabled={announceSending}
+                onChange={() => setAnnounceDelivery("online_now")}
+              />
+              <span>
+                <span className="font-medium">Online now</span>
+                <span className="mt-0.5 block text-xs text-muted">
+                  Toast for users signed in at send time (Ably). Optional log in
+                  Message center if checked below.
+                </span>
+              </span>
+            </label>
+            <label className="flex cursor-pointer items-start gap-2 text-sm text-ink dark:text-slate-200">
+              <input
+                type="radio"
+                name="announce-delivery"
+                className="mt-1"
+                checked={announceDelivery === "persist_cross_session"}
+                disabled={announceSending}
+                onChange={() => setAnnounceDelivery("persist_cross_session")}
+              />
+              <span>
+                <span className="font-medium">Everyone when they sign in</span>
+                <span className="mt-0.5 block text-xs text-muted">
+                  Stored on the server; each user gets a toast once after login,
+                  including people not online when you send. Also pushed on Ably
+                  for users already online.
+                </span>
+              </span>
+            </label>
+          </fieldset>
+          <label className="flex cursor-pointer items-start gap-2 text-sm text-ink dark:text-slate-200">
+            <input
+              type="checkbox"
+              className="mt-1"
+              checked={announceSaveToCenter}
+              disabled={announceSending}
+              onChange={(ev) => setAnnounceSaveToCenter(ev.target.checked)}
+            />
+            <span>
+              <span className="font-medium">Save to Message center</span>
+              <span className="mt-0.5 block text-xs text-muted">
+                Listed under Message center in the sidebar. Uncheck to skip the
+                log for this send (online-only toasts, or cross-session toasts
+                that should not appear in the archive).
+              </span>
+            </span>
+          </label>
           <div className="flex flex-wrap items-center gap-3">
             <label className="flex items-center gap-2 text-sm text-ink dark:text-slate-200">
               <span className="text-muted">Severity</span>
