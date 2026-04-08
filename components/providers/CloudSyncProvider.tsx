@@ -230,7 +230,6 @@ export function CloudSyncProvider({ children }: { children: ReactNode }) {
       if (summary.lastUpdatedAt) {
         setLastPushAt(new Date(summary.lastUpdatedAt));
         refresh();
-        setRemoteBanner(null);
         setLastSyncError(null);
       } else if (count > 0 && !summary.serverUnavailable) {
         if (summary.conflictCount > 0 && summary.okCount === 0) {
@@ -241,7 +240,9 @@ export function CloudSyncProvider({ children }: { children: ReactNode }) {
           setLastSyncError("Cloud backup failed. Try Settings → Sync now.");
         }
       }
-      if (summary.conflictCount > 0) {
+      // Do not clear the “newer cloud backup” banner just because some *other*
+      // event saved — re-check the *current* event against the list.
+      if (summary.lastUpdatedAt || summary.conflictCount > 0) {
         await checkRemoteNewer();
       }
     } catch {
@@ -312,7 +313,9 @@ export function CloudSyncProvider({ children }: { children: ReactNode }) {
       if (summary.lastUpdatedAt) {
         setLastPushAt(new Date(summary.lastUpdatedAt));
         refresh();
-        setRemoteBanner(null);
+      }
+      if (summary.lastUpdatedAt || summary.conflictCount > 0) {
+        await checkRemoteNewer();
       }
       if (fullySynced) {
         setLastSyncError(null);
@@ -346,7 +349,7 @@ export function CloudSyncProvider({ children }: { children: ReactNode }) {
     } finally {
       setSyncPhase("idle");
     }
-  }, [status, db, refresh, showToast]);
+  }, [status, db, refresh, showToast, checkRemoteNewer]);
 
   useEffect(() => {
     const flush = () => {
@@ -620,7 +623,9 @@ export function CloudSyncProvider({ children }: { children: ReactNode }) {
         if (summary.lastUpdatedAt) {
           setLastPushAt(new Date(summary.lastUpdatedAt));
           refresh();
-          setRemoteBanner(null);
+        }
+        if (summary.lastUpdatedAt || summary.conflictCount > 0) {
+          await checkRemoteNewer();
         }
         if (summary.serverUnavailable) {
           showToast({
@@ -664,7 +669,7 @@ export function CloudSyncProvider({ children }: { children: ReactNode }) {
         setSyncPhase("idle");
       }
     },
-    [status, db, online, refresh, showToast]
+    [status, db, online, refresh, showToast, checkRemoteNewer]
   );
 
   const restoreFromCloud = useCallback(async () => {
