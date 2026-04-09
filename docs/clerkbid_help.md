@@ -12,6 +12,7 @@ If you use **cloud backup/sync** (optional, from [Settings](/settings/)), event 
 
 Changes since the last major refresh of this Help page:
 
+- **Lots — CSV import** — [Lots](/lots/) has a catalog table for the current event plus **Import lots (CSV)** and a downloadable template. Use it to preload catalog lines before the sale; duplicate lot numbers in the file or already in the event are skipped.
 - **Invoices — detail view** — The invoice detail dialog is wider so line items, descriptions, and line totals are easier to read without horizontal scrolling.
 - **Invoices — mark as unpaid** — If you marked an invoice paid by mistake, open its detail from [Invoices](/invoices/) and use **Mark as unpaid** (with confirmation). That clears payment method and date and sets the invoice back to unpaid so you can record payment again. Totals and lines on the invoice are unchanged.
 - **Reports — buyer’s premium** — The event summary includes **Buyer’s premium (invoiced)**. The **bidder totals** table and its CSV export include a buyer’s premium column; figures follow invoice totals when invoices exist, and otherwise follow the same basis as invoice generation from your event rates.
@@ -34,6 +35,10 @@ Deleting an event removes its bidders, consignors, lots, sales, and invoices for
 [Consignors](/consignors/) holds a **registry** (consignor number, name, contact, optional **mailing address** for sending checks or mail, optional **commission override**). **Default commission** for the event is set under [Settings](/settings/) (current event). If a consignor has no override, the event default applies; if they do, that percentage is used for their lines on **statements** and **commission reports**.
 
 You can import consignors from CSV (optional `mailingAddress` column, or `address`), add them manually, open a **statement PDF** per consignor (mailing address prints under the name when present), and use [Reports](/reports/) for totals and CSV export. Sales can be **linked** to a registered consignor from the clerking screen; free-text labels still work for display and matching when no link is set.
+
+## Lots (catalog)
+
+[Lots](/lots/) lists catalog lines for the current event (lot number, description, quantity, status, consignor). You can **import lots from CSV** using the on-page template for column names (`baseLotNumber` and `description` are required; optional `lotSuffix`, `consignor`, `consignorNumber`, `quantity`, `notes`). If you use `consignorNumber`, it must match a consignor already registered for the event. Rows whose lot number already exists in the event are skipped. You can also build the catalog by **recording sales** on [Clerking](/clerking/), which creates lots as needed.
 
 ## Clerking
 

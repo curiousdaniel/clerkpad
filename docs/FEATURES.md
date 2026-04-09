@@ -74,6 +74,14 @@ This document summarizes product-facing capabilities of **ClerkBid** (auction cl
 
 ---
 
+## Lots (catalog)
+
+- **Catalog list** — Per-event table of lot number, description, quantity, status, and consignor display; search supported.
+- **CSV import** — Bulk import with documented columns (`baseLotNumber`, `description`, optional suffix, consignor fields, quantity, notes); skips duplicates and unknown consignor numbers.
+- **Creation via clerking** — Recording a sale still creates catalog lots when they do not already exist.
+
+---
+
 ## Clerking (live sales capture)
 
 - **Sale entry** — Lot number, hammer price, paddle, quantity, description, optional notes, consignor, clerk initials.
