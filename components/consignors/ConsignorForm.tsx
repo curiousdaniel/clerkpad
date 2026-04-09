@@ -84,7 +84,11 @@ export function ConsignorForm({
       .where("[eventId+consignorNumber]")
       .equals([eventId, num])
       .first();
-    if (taken && taken.id !== editing?.id) {
+    const editingId = editing?.id;
+    if (
+      taken != null &&
+      (typeof editingId !== "number" || taken.id !== editingId)
+    ) {
       setError(`Consignor #${num} is already registered for this event.`);
       return;
     }

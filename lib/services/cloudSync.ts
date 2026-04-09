@@ -34,18 +34,25 @@ export function isServerSnapshotNewerThanLocalBaseline(
 }
 
 /**
- * True when the local `events` row was modified after the last successful cloud
- * snapshot push. That includes event metadata saves and child-table writes
- * (bidders, lots, etc.) via Dexie hooks that bump `events.updatedAt`. In that
- * window, auto-pull must not replace the whole snapshot or local edits appear to
- * "revert" until our debounced push lands.
+ * True when local event data may not yet be reflected on the server snapshot,
+ * so a full replace would drop recent bidders/sales/etc.
+ * - After a successful snapshot push: `updatedAt` vs `lastCloudPushAt`.
+ * - If we have never snapshot-pushed: `updatedAt` vs `lastCloudPullAt` (requires
+ *   post-pull `events.updatedAt` to match server snapshot time — see refresh paths).
  */
 export function hasUnpushedLocalEventMetadataEdits(ev: {
   updatedAt: Date;
   lastCloudPushAt?: Date;
+  lastCloudPullAt?: Date;
 }): boolean {
-  if (ev.lastCloudPushAt == null) return false;
-  return ev.updatedAt.getTime() > ev.lastCloudPushAt.getTime();
+  const u = ev.updatedAt.getTime();
+  if (ev.lastCloudPushAt != null && u > ev.lastCloudPushAt.getTime()) {
+    return true;
+  }
+  if (ev.lastCloudPullAt != null && u > ev.lastCloudPullAt.getTime()) {
+    return true;
+  }
+  return false;
 }
 
 /** Op-sync outbox rows must not be dropped by a full snapshot replace. */
@@ -114,7 +121,7 @@ export async function refreshEventFromCloudIfServerNewer(
   const serverTime = new Date(snap.updatedAt);
   await db.events.update(eventId, {
     lastCloudPullAt: serverTime,
-    updatedAt: new Date(),
+    updatedAt: serverTime,
   });
   return { refreshed: true };
 }
@@ -177,7 +184,7 @@ export async function refreshStaleLocalEventsFromList(
     const serverTime = new Date(snap.updatedAt);
     await db.events.update(local.id, {
       lastCloudPullAt: serverTime,
-      updatedAt: new Date(),
+      updatedAt: serverTime,
     });
     refreshed += 1;
     if (
@@ -290,7 +297,7 @@ export async function restoreEventFromCloud(
   const serverTime = new Date(snap.updatedAt);
   await db.events.update(eventId, {
     lastCloudPullAt: serverTime,
-    updatedAt: new Date(),
+    updatedAt: serverTime,
   });
   return { ok: true, updatedAt: snap.updatedAt };
 }
@@ -346,7 +353,7 @@ export async function pullCloudEventsMissingLocally(
     const serverTime = new Date(snap.updatedAt);
     await db.events.update(summary.eventId, {
       lastCloudPullAt: serverTime,
-      updatedAt: new Date(),
+      updatedAt: serverTime,
     });
     latestPullAt = serverTime;
     imported += 1;

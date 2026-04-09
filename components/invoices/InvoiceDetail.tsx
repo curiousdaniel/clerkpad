@@ -47,6 +47,36 @@ function taxLineLabel(taxRate: number): string {
   return `Tax (${pct})`;
 }
 
+function ratesNearlyEqual(a: number | null, b: number | null): boolean {
+  if (a == null && b == null) return true;
+  if (a == null || b == null) return false;
+  return Math.abs(a - b) < 1e-9;
+}
+
+type RateDraftParse =
+  | { ok: true; value: number | null }
+  | { ok: false; message: string };
+
+function parseInvoiceRateDraft(
+  raw: string,
+  field: "bp" | "tax"
+): RateDraftParse {
+  const t = raw.trim();
+  if (t === "") return { ok: true, value: null };
+  const n = Number(t);
+  if (!Number.isFinite(n) || n < 0) {
+    return {
+      ok: false,
+      message:
+        field === "bp"
+          ? "Buyer’s premium rate must be a non-negative number (decimal, e.g. 0.10 for 10%)."
+          : "Tax rate must be a non-negative number (decimal, e.g. 0.0875 for 8.75%).",
+    };
+  }
+  const rate = n > 1 && n <= 100 ? n / 100 : n;
+  return { ok: true, value: rate };
+}
+
 function newManualLine(): InvoiceManualLine {
   return {
     id:
@@ -91,15 +121,33 @@ export function InvoiceDetailModal({
   const { scheduleCloudPush } = useCloudSync();
   const [saving, setSaving] = useState(false);
   const [correctionSale, setCorrectionSale] = useState<Sale | null>(null);
+  const [bpDraft, setBpDraft] = useState("");
+  const [taxDraft, setTaxDraft] = useState("");
 
   useEffect(() => {
     if (!open) setCorrectionSale(null);
   }, [open]);
 
+  useEffect(() => {
+    if (!open || !invoice || invoice.status !== "unpaid") return;
+    setBpDraft(
+      invoice.buyersPremiumRate != null
+        ? String(invoice.buyersPremiumRate)
+        : ""
+    );
+    setTaxDraft(invoice.taxRate != null ? String(invoice.taxRate) : "");
+  }, [
+    open,
+    invoice?.id,
+    invoice?.buyersPremiumRate,
+    invoice?.taxRate,
+    invoice?.status,
+  ]);
+
   const persistAndRecalc = useCallback(
-    async (patch: Partial<Invoice>) => {
-      if (invoice?.id == null || !db || invoice.status === "paid") return;
-      if (event.id == null) return;
+    async (patch: Partial<Invoice>): Promise<boolean> => {
+      if (invoice?.id == null || !db || invoice.status === "paid") return true;
+      if (event.id == null) return true;
       setSaving(true);
       try {
         await mutateWithEventTables(db, event.id, [db.invoices], async () => {
@@ -110,14 +158,67 @@ export function InvoiceDetailModal({
           await enqueueInvoicePut(db, event.syncId, invoice.id);
         }
         scheduleCloudPush();
+        return true;
       } catch (e) {
         onError(e instanceof Error ? e.message : "Could not save invoice.");
+        return false;
       } finally {
         setSaving(false);
       }
     },
     [db, event, event.id, invoice?.id, invoice?.status, onError, scheduleCloudPush]
   );
+
+  const flushRateDrafts = useCallback(async (): Promise<boolean> => {
+    if (!invoice || invoice.status === "paid" || !db || event.id == null) {
+      return true;
+    }
+    const bpRes = parseInvoiceRateDraft(bpDraft, "bp");
+    if (!bpRes.ok) {
+      onError(bpRes.message);
+      return false;
+    }
+    const taxRes = parseInvoiceRateDraft(taxDraft, "tax");
+    if (!taxRes.ok) {
+      onError(taxRes.message);
+      return false;
+    }
+    const patch: Partial<Invoice> = {};
+    if (!ratesNearlyEqual(bpRes.value, invoice.buyersPremiumRate ?? null)) {
+      patch.buyersPremiumRate = bpRes.value;
+    }
+    if (!ratesNearlyEqual(taxRes.value, invoice.taxRate ?? null)) {
+      patch.taxRate = taxRes.value;
+    }
+    if (Object.keys(patch).length === 0) return true;
+    return persistAndRecalc(patch);
+  }, [
+    invoice,
+    db,
+    event.id,
+    bpDraft,
+    taxDraft,
+    persistAndRecalc,
+    onError,
+  ]);
+
+  const handleClose = useCallback(async () => {
+    const ok = await flushRateDrafts();
+    if (!ok) return;
+    onClose();
+  }, [flushRateDrafts, onClose]);
+
+  const handlePrintWithFlush = useCallback(async () => {
+    const ok = await flushRateDrafts();
+    if (!ok) return;
+    onPrint();
+  }, [flushRateDrafts, onPrint]);
+
+  const handleMarkPaidWithFlush = useCallback(async () => {
+    const ok = await flushRateDrafts();
+    if (!ok) return;
+    onMarkPaid();
+  }, [flushRateDrafts, onMarkPaid]);
 
   if (!invoice) return null;
 
@@ -128,36 +229,6 @@ export function InvoiceDetailModal({
   const showBpLine =
     inv.buyersPremiumAmount !== 0 || bpEff > 0;
   const manualLines = inv.manualLines ?? [];
-
-  async function handleBpRateBlur(raw: string) {
-    const t = raw.trim();
-    if (t === "") {
-      await persistAndRecalc({ buyersPremiumRate: null });
-      return;
-    }
-    const n = Number(t);
-    if (!Number.isFinite(n) || n < 0) {
-      onError("Buyer’s premium rate must be a non-negative number (decimal, e.g. 0.10 for 10%).");
-      return;
-    }
-    const rate = n > 1 && n <= 100 ? n / 100 : n;
-    await persistAndRecalc({ buyersPremiumRate: rate });
-  }
-
-  async function handleTaxRateBlur(raw: string) {
-    const t = raw.trim();
-    if (t === "") {
-      await persistAndRecalc({ taxRate: null });
-      return;
-    }
-    const n = Number(t);
-    if (!Number.isFinite(n) || n < 0) {
-      onError("Tax rate must be a non-negative number (decimal, e.g. 0.0875 for 8.75%).");
-      return;
-    }
-    const rate = n > 1 && n <= 100 ? n / 100 : n;
-    await persistAndRecalc({ taxRate: rate });
-  }
 
   async function setManualLines(next: InvoiceManualLine[]) {
     await persistAndRecalc({ manualLines: next });
@@ -251,17 +322,28 @@ export function InvoiceDetailModal({
       open={open}
       title={`Invoice ${invoice.invoiceNumber}`}
       maxWidthClass="max-w-4xl"
-      onClose={onClose}
+      onClose={() => void handleClose()}
       footer={
         <>
-          <Button variant="secondary" type="button" onClick={onClose}>
+          <Button
+            variant="secondary"
+            type="button"
+            onClick={() => void handleClose()}
+          >
             Close
           </Button>
-          <Button variant="secondary" type="button" onClick={onPrint}>
+          <Button
+            variant="secondary"
+            type="button"
+            onClick={() => void handlePrintWithFlush()}
+          >
             Print PDF
           </Button>
           {invoice.status === "unpaid" ? (
-            <Button type="button" onClick={onMarkPaid}>
+            <Button
+              type="button"
+              onClick={() => void handleMarkPaidWithFlush()}
+            >
               Mark as paid
             </Button>
           ) : (
@@ -331,17 +413,13 @@ export function InvoiceDetailModal({
                 </label>
                 <input
                   id="inv-bp-rate"
-                  key={`bp-${invoice.buyersPremiumRate ?? "d"}`}
                   type="text"
                   inputMode="decimal"
                   className="w-full rounded-lg border border-navy/20 bg-white px-2 py-1.5 font-mono text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
                   placeholder={`Event: ${(event.buyersPremiumRate ?? 0).toString()}`}
-                  defaultValue={
-                    invoice.buyersPremiumRate != null
-                      ? String(invoice.buyersPremiumRate)
-                      : ""
-                  }
-                  onBlur={(e) => void handleBpRateBlur(e.target.value)}
+                  value={bpDraft}
+                  onChange={(e) => setBpDraft(e.target.value)}
+                  onBlur={() => void flushRateDrafts()}
                 />
               </div>
               <div>
@@ -353,15 +431,13 @@ export function InvoiceDetailModal({
                 </label>
                 <input
                   id="inv-tax-rate"
-                  key={`tx-${invoice.taxRate ?? "d"}`}
                   type="text"
                   inputMode="decimal"
                   className="w-full rounded-lg border border-navy/20 bg-white px-2 py-1.5 font-mono text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
                   placeholder={`Event: ${event.taxRate.toString()}`}
-                  defaultValue={
-                    invoice.taxRate != null ? String(invoice.taxRate) : ""
-                  }
-                  onBlur={(e) => void handleTaxRateBlur(e.target.value)}
+                  value={taxDraft}
+                  onChange={(e) => setTaxDraft(e.target.value)}
+                  onBlur={() => void flushRateDrafts()}
                 />
               </div>
             </div>

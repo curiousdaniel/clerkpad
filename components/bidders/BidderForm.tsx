@@ -75,34 +75,45 @@ export function BidderForm({
       .where("[eventId+paddleNumber]")
       .equals([eventId, paddle])
       .first();
-    if (taken && taken.id !== editing?.id) {
+    const editingId = editing?.id;
+    if (
+      taken != null &&
+      (typeof editingId !== "number" || taken.id !== editingId)
+    ) {
       setError(`Paddle #${paddle} is already registered for this event.`);
       return;
     }
     const now = new Date();
-    await mutateWithParentEventTouch(db, eventId, "bidders", async () => {
-      if (editing?.id != null) {
-        await db.bidders.update(editing.id, {
-          paddleNumber: paddle,
-          firstName: fn,
-          lastName: ln,
-          phone: phone.trim() || undefined,
-          email: email.trim() || undefined,
-          updatedAt: now,
-        });
-      } else {
-        await db.bidders.add({
-          eventId,
-          paddleNumber: paddle,
-          firstName: fn,
-          lastName: ln,
-          phone: phone.trim() || undefined,
-          email: email.trim() || undefined,
-          createdAt: now,
-          updatedAt: now,
-        });
-      }
-    });
+    try {
+      await mutateWithParentEventTouch(db, eventId, "bidders", async () => {
+        if (editing?.id != null) {
+          await db.bidders.update(editing.id, {
+            paddleNumber: paddle,
+            firstName: fn,
+            lastName: ln,
+            phone: phone.trim() || undefined,
+            email: email.trim() || undefined,
+            updatedAt: now,
+          });
+        } else {
+          await db.bidders.add({
+            eventId,
+            paddleNumber: paddle,
+            firstName: fn,
+            lastName: ln,
+            phone: phone.trim() || undefined,
+            email: email.trim() || undefined,
+            createdAt: now,
+            updatedAt: now,
+          });
+        }
+      });
+    } catch (e) {
+      setError(
+        e instanceof Error ? e.message : "Could not save bidder. Try again."
+      );
+      return;
+    }
     scheduleCloudPush();
     onSaved();
     onClose();

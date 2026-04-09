@@ -67,10 +67,29 @@ describe("isServerSnapshotNewerThanLocalBaseline", () => {
 });
 
 describe("hasUnpushedLocalEventMetadataEdits", () => {
-  it("is false when never snapshot-pushed (use server baseline only)", () => {
+  it("is false when there is no push or pull baseline to compare", () => {
     expect(
       hasUnpushedLocalEventMetadataEdits({
         updatedAt: new Date("2026-01-02T12:00:00.000Z"),
+      })
+    ).toBe(false);
+  });
+
+  it("is true when never snapshot-pushed but local row changed after last pull", () => {
+    expect(
+      hasUnpushedLocalEventMetadataEdits({
+        updatedAt: new Date("2026-01-02T12:00:00.000Z"),
+        lastCloudPullAt: new Date("2026-01-01T12:00:00.000Z"),
+      })
+    ).toBe(true);
+  });
+
+  it("is false when updatedAt matches last pull (aligned after server refresh)", () => {
+    const t = new Date("2026-01-01T12:00:00.000Z");
+    expect(
+      hasUnpushedLocalEventMetadataEdits({
+        updatedAt: t,
+        lastCloudPullAt: t,
       })
     ).toBe(false);
   });
