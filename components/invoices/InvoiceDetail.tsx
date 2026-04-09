@@ -8,6 +8,7 @@ import {
   effectiveInvoiceTaxRate,
   recalculateAndPersistInvoice,
 } from "@/lib/services/invoiceLogic";
+import { mutateWithEventTables } from "@/lib/db/mutateWithParentEventTouch";
 import { useUserDb } from "@/components/providers/UserDbProvider";
 import { useCloudSync } from "@/components/providers/CloudSyncProvider";
 import { Modal } from "@/components/ui/Modal";
@@ -98,9 +99,12 @@ export function InvoiceDetailModal({
   const persistAndRecalc = useCallback(
     async (patch: Partial<Invoice>) => {
       if (invoice?.id == null || !db || invoice.status === "paid") return;
+      if (event.id == null) return;
       setSaving(true);
       try {
-        await db.invoices.update(invoice.id, patch);
+        await mutateWithEventTables(db, event.id, [db.invoices], async () => {
+          await db.invoices.update(invoice.id, patch);
+        });
         await recalculateAndPersistInvoice(db, invoice.id, event);
         if (event.syncId) {
           await enqueueInvoicePut(db, event.syncId, invoice.id);
@@ -112,7 +116,7 @@ export function InvoiceDetailModal({
         setSaving(false);
       }
     },
-    [db, event, invoice?.id, invoice?.status, onError, scheduleCloudPush]
+    [db, event, event.id, invoice?.id, invoice?.status, onError, scheduleCloudPush]
   );
 
   if (!invoice) return null;
@@ -136,7 +140,8 @@ export function InvoiceDetailModal({
       onError("Buyer’s premium rate must be a non-negative number (decimal, e.g. 0.10 for 10%).");
       return;
     }
-    await persistAndRecalc({ buyersPremiumRate: n });
+    const rate = n > 1 && n <= 100 ? n / 100 : n;
+    await persistAndRecalc({ buyersPremiumRate: rate });
   }
 
   async function handleTaxRateBlur(raw: string) {
@@ -150,7 +155,8 @@ export function InvoiceDetailModal({
       onError("Tax rate must be a non-negative number (decimal, e.g. 0.0875 for 8.75%).");
       return;
     }
-    await persistAndRecalc({ taxRate: n });
+    const rate = n > 1 && n <= 100 ? n / 100 : n;
+    await persistAndRecalc({ taxRate: rate });
   }
 
   async function setManualLines(next: InvoiceManualLine[]) {
@@ -182,7 +188,7 @@ export function InvoiceDetailModal({
   }
 
   async function handleUnpay() {
-    if (inv.id == null || !db) return;
+    if (inv.id == null || !db || event.id == null) return;
     if (
       !window.confirm(
         "Mark this invoice unpaid and clear payment method and date? You can record payment again afterward."
@@ -193,10 +199,13 @@ export function InvoiceDetailModal({
     setSaving(true);
     await yieldToPaint();
     try {
-      await db.invoices.where("id").equals(inv.id).modify((row) => {
-        row.status = "unpaid";
-        delete row.paymentMethod;
-        delete row.paymentDate;
+      const row = await db.invoices.get(inv.id);
+      if (!row?.id) return;
+      const next: Invoice = { ...row, status: "unpaid" };
+      delete next.paymentMethod;
+      delete next.paymentDate;
+      await mutateWithEventTables(db, event.id, [db.invoices], async () => {
+        await db.invoices.put(next);
       });
       await yieldToPaint();
       if (event.syncId) {
@@ -309,8 +318,8 @@ export function InvoiceDetailModal({
               Rates (optional overrides)
             </h3>
             <p className="mb-3 text-xs text-muted">
-              Leave blank to use the event default. Use decimals (e.g. 0.10 =
-              10%).
+              Leave blank to use the event default. Use a decimal (0.10 = 10%)
+              or a whole percent (10 = 10%).
             </p>
             <div className="grid gap-3 sm:grid-cols-2">
               <div>

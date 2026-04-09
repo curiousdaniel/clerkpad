@@ -31,6 +31,7 @@ import { useToast } from "@/components/providers/ToastProvider";
 import { useCloudSync } from "@/components/providers/CloudSyncProvider";
 import { formatCurrency } from "@/lib/utils/formatCurrency";
 import { roundMoney } from "@/lib/services/invoiceLogic";
+import { mutateWithEventTables } from "@/lib/db/mutateWithParentEventTouch";
 import { newEntitySyncKey } from "@/lib/utils/clientSyncKey";
 import {
   enqueueSaleDelete,
@@ -290,7 +291,7 @@ export function SaleForm({
     if (!db || !undoState || Date.now() > undoState.until) return;
     const { saleId, lotId, mode, restoredLot, restoredSale } = undoState;
     try {
-      await db.transaction("rw", [db.sales, db.lots], async () => {
+      await mutateWithEventTables(db, eventId, [db.sales, db.lots], async () => {
         const sale = await db.sales.get(saleId);
         if (!sale || sale.eventId !== eventId || sale.lotId !== lotId) {
           throw new Error("Sale no longer available to undo.");
@@ -661,7 +662,7 @@ export function SaleForm({
       if (!existingLot) {
         let newLotId = 0;
         let newSaleId = 0;
-        await db.transaction("rw", [db.lots, db.sales], async () => {
+        await mutateWithEventTables(db, eventId, [db.lots, db.sales], async () => {
           const newLotRow: Omit<Lot, "id"> = {
             eventId,
             baseLotNumber: baseNum,
@@ -720,7 +721,7 @@ export function SaleForm({
 
         if (openCatalog) {
           let newSaleId = 0;
-          await db.transaction("rw", [db.lots, db.sales], async () => {
+          await mutateWithEventTables(db, eventId, [db.lots, db.sales], async () => {
             await patchLotWithConsignor(
               db,
               lotId,
@@ -753,7 +754,7 @@ export function SaleForm({
             createdAt: prevSale.createdAt,
             syncKey: prevSale.syncKey,
           };
-          await db.transaction("rw", [db.lots, db.sales], async () => {
+          await mutateWithEventTables(db, eventId, [db.lots, db.sales], async () => {
             await patchLotWithConsignor(
               db,
               lotId,
@@ -781,7 +782,7 @@ export function SaleForm({
           };
         } else {
           let newSaleId = 0;
-          await db.transaction("rw", [db.lots, db.sales], async () => {
+          await mutateWithEventTables(db, eventId, [db.lots, db.sales], async () => {
             await patchLotWithConsignor(
               db,
               lotId,

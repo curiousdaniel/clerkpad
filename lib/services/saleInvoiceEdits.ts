@@ -1,4 +1,5 @@
 import type { AuctionDB, AuctionEvent, Sale } from "@/lib/db";
+import { mutateWithEventTables } from "@/lib/db/mutateWithParentEventTouch";
 import {
   recalculateAndPersistInvoice,
   roundMoney,
@@ -16,14 +17,20 @@ export async function removeSaleFromInvoice(
   invoiceId: number
 ): Promise<void> {
   const inv = await db.invoices.get(invoiceId);
-  if (inv?.status === "paid") {
+  if (inv?.id == null) {
+    throw new Error("Invoice not found.");
+  }
+  if (inv.status === "paid") {
     throw new Error("Cannot remove lines from a paid invoice.");
   }
   const sale = await db.sales.get(saleId);
   if (sale?.id == null || sale.invoiceId !== invoiceId) {
     throw new Error("This line is not on the current invoice.");
   }
-  await db.sales.update(saleId, { invoiceId: null });
+  const evId = inv.eventId;
+  await mutateWithEventTables(db, evId, [db.sales], async () => {
+    await db.sales.update(saleId, { invoiceId: null });
+  });
   const saleAfter = await db.sales.get(saleId);
   if (saleAfter && event.syncId) {
     await enqueueSalePut(db, event.syncId, saleAfter);
@@ -96,6 +103,8 @@ export async function persistSaleCorrection(
   input: SaleCorrectionInput,
   options?: PersistSaleCorrectionOptions
 ): Promise<void> {
+  const eventId = event.id;
+  if (eventId == null) throw new Error("Event not loaded.");
   const sale = await db.sales.get(saleId);
   if (sale?.id == null) throw new Error("Sale not found.");
 
@@ -112,7 +121,9 @@ export async function persistSaleCorrection(
   const attachedId = sale.invoiceId;
 
   if (attachedId == null) {
-    await db.sales.put(next);
+    await mutateWithEventTables(db, eventId, [db.sales], async () => {
+      await db.sales.put(next);
+    });
     if (event.syncId) {
       const fresh = await db.sales.get(saleId);
       if (fresh) await enqueueSalePut(db, event.syncId, fresh);
@@ -126,7 +137,9 @@ export async function persistSaleCorrection(
   const inv = await db.invoices.get(attachedId);
   if (inv?.id == null) {
     next.invoiceId = null;
-    await db.sales.put(next);
+    await mutateWithEventTables(db, eventId, [db.sales], async () => {
+      await db.sales.put(next);
+    });
     if (event.syncId) {
       const fresh = await db.sales.get(saleId);
       if (fresh) await enqueueSalePut(db, event.syncId, fresh);
@@ -147,7 +160,9 @@ export async function persistSaleCorrection(
     next.invoiceId = null;
   }
 
-  await db.sales.put(next);
+  await mutateWithEventTables(db, eventId, [db.sales], async () => {
+    await db.sales.put(next);
+  });
 
   if (bidderChanged) {
     await recalculateAndPersistInvoice(db, attachedId, event);

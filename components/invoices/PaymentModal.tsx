@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import type { Invoice } from "@/lib/db";
+import { mutateWithEventTables } from "@/lib/db/mutateWithParentEventTouch";
 import { useUserDb } from "@/components/providers/UserDbProvider";
 import { useCloudSync } from "@/components/providers/CloudSyncProvider";
 import { enqueueInvoicePut } from "@/lib/sync/ops/enqueueOps";
@@ -30,10 +31,12 @@ export function PaymentModal({
 
   async function confirm() {
     if (invoice?.id == null || !db) return;
-    await db.invoices.update(invoice.id, {
-      status: "paid",
-      paymentMethod: method as "cash" | "check" | "credit_card" | "other",
-      paymentDate: new Date(),
+    await mutateWithEventTables(db, invoice.eventId, [db.invoices], async () => {
+      await db.invoices.update(invoice.id, {
+        status: "paid",
+        paymentMethod: method as "cash" | "check" | "credit_card" | "other",
+        paymentDate: new Date(),
+      });
     });
     const inv = await db.invoices.get(invoice.id);
     const ev = inv ? await db.events.get(inv.eventId) : null;

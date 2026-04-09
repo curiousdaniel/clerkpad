@@ -100,4 +100,13 @@ describe("effective invoice rates", () => {
     expect(effectiveInvoiceBuyersPremiumRate(inv, baseEvent)).toBe(0.15);
     expect(effectiveInvoiceTaxRate(inv, baseEvent)).toBe(0.08);
   });
+
+  it("coerces string overrides and whole percents in (1, 100]", () => {
+    const inv = {
+      buyersPremiumRate: "10" as unknown as number,
+      taxRate: "8.75" as unknown as number,
+    } as Invoice;
+    expect(effectiveInvoiceBuyersPremiumRate(inv, baseEvent)).toBe(0.1);
+    expect(effectiveInvoiceTaxRate(inv, baseEvent)).toBe(0.0875);
+  });
 });

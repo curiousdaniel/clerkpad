@@ -59,6 +59,20 @@ describe("effectiveCommissionRate", () => {
       )
     ).toBe(1);
   });
+
+  it("parses string override as whole percent when in (1, 100]", () => {
+    expect(
+      effectiveCommissionRate(
+        baseEvent,
+        consignor({
+          id: 1,
+          consignorNumber: 1,
+          name: "A",
+          commissionRate: "20" as unknown as number,
+        })
+      )
+    ).toBe(0.2);
+  });
 });
 
 describe("lineCommission", () => {

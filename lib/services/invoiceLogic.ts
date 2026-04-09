@@ -20,6 +20,28 @@ export function roundMoney(n: number): number {
   return Math.round(n * 100) / 100;
 }
 
+/**
+ * Invoice/sync may store rates as strings; clerks often enter whole percents (e.g. 8.75 for 8.75%).
+ * Values in (1, 100] are treated as percent and divided by 100.
+ */
+function normalizeInvoiceRateOverride(raw: unknown): number | undefined {
+  if (raw === null || raw === undefined) return undefined;
+  let n: number;
+  if (typeof raw === "number" && Number.isFinite(raw)) {
+    n = raw;
+  } else if (typeof raw === "string") {
+    const p = parseFloat(raw.trim());
+    if (!Number.isFinite(p)) return undefined;
+    n = p;
+  } else {
+    return undefined;
+  }
+  if (n > 1 && n <= 100) {
+    n = n / 100;
+  }
+  return Math.max(0, n);
+}
+
 export function computeInvoiceFromSubtotal(
   subtotal: number,
   taxRate: number
@@ -35,11 +57,15 @@ export function effectiveInvoiceBuyersPremiumRate(
   invoice: Pick<Invoice, "buyersPremiumRate">,
   event: AuctionEvent
 ): number {
-  const r = invoice.buyersPremiumRate;
-  if (typeof r === "number" && Number.isFinite(r)) {
-    return Math.max(0, r);
+  const o = normalizeInvoiceRateOverride(invoice.buyersPremiumRate);
+  if (o !== undefined) {
+    return o;
   }
-  return Math.max(0, event.buyersPremiumRate ?? 0);
+  let e = Math.max(0, event.buyersPremiumRate ?? 0);
+  if (e > 1 && e <= 100) {
+    e = e / 100;
+  }
+  return e;
 }
 
 /** Resolved tax rate (0–1) for invoice math and labels. */
@@ -47,11 +73,15 @@ export function effectiveInvoiceTaxRate(
   invoice: Pick<Invoice, "taxRate">,
   event: AuctionEvent
 ): number {
-  const r = invoice.taxRate;
-  if (typeof r === "number" && Number.isFinite(r)) {
-    return Math.max(0, r);
+  const o = normalizeInvoiceRateOverride(invoice.taxRate);
+  if (o !== undefined) {
+    return o;
   }
-  return Math.max(0, event.taxRate ?? 0);
+  let e = Math.max(0, event.taxRate ?? 0);
+  if (e > 1 && e <= 100) {
+    e = e / 100;
+  }
+  return e;
 }
 
 /**
@@ -144,12 +174,15 @@ export async function recalculateAndPersistInvoice(
     inv,
     event
   );
-  await db.invoices.update(invoiceId, {
-    subtotal: parts.subtotal,
-    buyersPremiumAmount: parts.buyersPremiumAmount,
-    taxAmount: parts.taxAmount,
-    total: parts.total,
-    ...(options?.touchGeneratedAt ? { generatedAt: new Date() } : {}),
+  await db.transaction("rw", [db.events, db.invoices], async () => {
+    await db.events.update(inv.eventId, { updatedAt: new Date() });
+    await db.invoices.update(invoiceId, {
+      subtotal: parts.subtotal,
+      buyersPremiumAmount: parts.buyersPremiumAmount,
+      taxAmount: parts.taxAmount,
+      total: parts.total,
+      ...(options?.touchGeneratedAt ? { generatedAt: new Date() } : {}),
+    });
   });
 }
 
@@ -187,10 +220,15 @@ export async function upsertInvoiceForBidder(
   const now = new Date();
 
   if (unpaid?.id != null) {
-    for (const s of unallocated) {
-      if (s.id != null) {
-        await db.sales.update(s.id, { invoiceId: unpaid.id });
-      }
+    if (unallocated.length > 0) {
+      await db.transaction("rw", [db.events, db.sales], async () => {
+        await db.events.update(eventId, { updatedAt: new Date() });
+        for (const s of unallocated) {
+          if (s.id != null) {
+            await db.sales.update(s.id, { invoiceId: unpaid.id });
+          }
+        }
+      });
     }
     await recalculateAndPersistInvoice(db, unpaid.id, event, {
       touchGeneratedAt: true,
@@ -204,23 +242,27 @@ export async function upsertInvoiceForBidder(
   if (unallocated.length > 0) {
     const seq = await nextInvoiceSequence(db, eventId);
     const invoiceNumber = formatInvoiceNumber(eventId, seq);
-    const id = (await db.invoices.add({
-      eventId,
-      bidderId,
-      invoiceNumber,
-      subtotal: 0,
-      buyersPremiumAmount: 0,
-      taxAmount: 0,
-      total: 0,
-      status: "unpaid",
-      generatedAt: now,
-      syncKey: newEntitySyncKey(),
-    })) as number;
-    for (const s of unallocated) {
-      if (s.id != null) {
-        await db.sales.update(s.id, { invoiceId: id });
+    let id = 0;
+    await db.transaction("rw", [db.events, db.invoices, db.sales], async () => {
+      await db.events.update(eventId, { updatedAt: new Date() });
+      id = (await db.invoices.add({
+        eventId,
+        bidderId,
+        invoiceNumber,
+        subtotal: 0,
+        buyersPremiumAmount: 0,
+        taxAmount: 0,
+        total: 0,
+        status: "unpaid",
+        generatedAt: now,
+        syncKey: newEntitySyncKey(),
+      })) as number;
+      for (const s of unallocated) {
+        if (s.id != null) {
+          await db.sales.update(s.id, { invoiceId: id });
+        }
       }
-    }
+    });
     await recalculateAndPersistInvoice(db, id, event, {
       touchGeneratedAt: true,
     });
