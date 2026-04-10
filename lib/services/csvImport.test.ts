@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { normalizeHeaderKey } from "./csvParse";
 import { parseBidderCsv } from "./csvImportBidders";
 import { parseConsignorCsv } from "./csvImportConsignors";
 import { parseLotCsv } from "./csvImportLots";
@@ -30,6 +31,13 @@ describe("parseBidderCsv", () => {
   });
 });
 
+describe("normalizeHeaderKey", () => {
+  it("strips punctuation so LOT # maps like lot", () => {
+    expect(normalizeHeaderKey("LOT #")).toBe("lot");
+    expect(normalizeHeaderKey("Lot #")).toBe("lot");
+  });
+});
+
 describe("parseLotCsv", () => {
   it("builds display lot from base and suffix", () => {
     const csv = `baseLotNumber,suffix,description,quantity
@@ -45,6 +53,39 @@ describe("parseLotCsv", () => {
     const { rows, issues } = parseLotCsv(csv);
     expect(issues).toHaveLength(0);
     expect(rows[0]?.consignorNumber).toBe(42);
+  });
+
+  it("accepts plain Lot, Description, Quantity headers", () => {
+    const csv = `Lot,Description,Quantity
+1,Fire Ring & 2 chairs,1
+1S,IU Champagne Bottle,1`;
+    const { rows, issues } = parseLotCsv(csv);
+    expect(issues).toHaveLength(0);
+    expect(rows).toHaveLength(2);
+    expect(rows[0]?.displayLotNumber).toBe("1");
+    expect(rows[1]?.displayLotNumber).toBe("1S");
+  });
+
+  it("accepts Lot number and LOT # style headers", () => {
+    const csv1 = `Lot number,Description
+10,Ten`;
+    expect(parseLotCsv(csv1).issues).toHaveLength(0);
+    expect(parseLotCsv(csv1).rows[0]?.displayLotNumber).toBe("10");
+
+    const csv2 = `LOT #,desc
+7,Seven`;
+    const { rows, issues } = parseLotCsv(csv2);
+    expect(issues).toHaveLength(0);
+    expect(rows[0]?.displayLotNumber).toBe("7");
+    expect(rows[0]?.description).toBe("Seven");
+  });
+
+  it("accepts qty alias for quantity", () => {
+    const csv = `lot,description,qty
+3,Thing,2`;
+    const { rows, issues } = parseLotCsv(csv);
+    expect(issues).toHaveLength(0);
+    expect(rows[0]?.quantity).toBe(2);
   });
 });
 

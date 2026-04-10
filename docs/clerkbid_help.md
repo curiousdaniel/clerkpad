@@ -12,7 +12,7 @@ If you use **cloud backup/sync** (optional, from [Settings](/settings/)), event 
 
 Changes since the last major refresh of this Help page:
 
-- **Lots — CSV import** — [Lots](/lots/) has a catalog table for the current event plus **Import lots (CSV)** and a downloadable template. Use it to preload catalog lines before the sale; duplicate lot numbers in the file or already in the event are skipped.
+- **Lots — CSV import** — [Lots](/lots/) has a catalog table for the current event plus **Import lots (CSV)** and a downloadable template with plain column names (`lot`, `description`, etc.). Common spreadsheet headers (for example **Lot**, **Lot number**, **LOT #**) are accepted; duplicate lot numbers in the file or already in the event are skipped.
 - **Invoices — detail view** — The invoice detail dialog is wider so line items, descriptions, and line totals are easier to read without horizontal scrolling.
 - **Invoices — mark as unpaid** — If you marked an invoice paid by mistake, open its detail from [Invoices](/invoices/) and use **Mark as unpaid** (with confirmation). That clears payment method and date and sets the invoice back to unpaid so you can record payment again. Totals and lines on the invoice are unchanged.
 - **Reports — buyer’s premium** — The event summary includes **Buyer’s premium (invoiced)**. The **bidder totals** table and its CSV export include a buyer’s premium column; figures follow invoice totals when invoices exist, and otherwise follow the same basis as invoice generation from your event rates.
@@ -38,7 +38,7 @@ You can import consignors from CSV (optional `mailingAddress` column, or `addres
 
 ## Lots (catalog)
 
-[Lots](/lots/) lists catalog lines for the current event (lot number, description, quantity, status, consignor). You can **import lots from CSV** using the on-page template for column names (`baseLotNumber` and `description` are required; optional `lotSuffix`, `consignor`, `consignorNumber`, `quantity`, `notes`). If you use `consignorNumber`, it must match a consignor already registered for the event. Rows whose lot number already exists in the event are skipped. You can also build the catalog by **recording sales** on [Clerking](/clerking/), which creates lots as needed.
+[Lots](/lots/) lists catalog lines for the current event (lot number, description, quantity, status, consignor). You can **import lots from CSV** using the on-page template (headers like **lot**, **description**, **suffix**, **consignor**, **consignor number**, **quantity**, **notes**). The importer also recognizes common alternatives—for example **Lot**, **Lot number**, **LOT #** for the lot column, and **desc** or **qty** for description or quantity. A **lot** column and **description** are required; **consignor number** must match a consignor already registered for the event when used. Rows whose lot number already exists in the event are skipped. You can also build the catalog by **recording sales** on [Clerking](/clerking/), which creates lots as needed.
 
 ## Clerking
 

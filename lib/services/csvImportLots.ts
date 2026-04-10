@@ -18,15 +18,28 @@ const ALIASES: Record<string, keyof LotCsvRow> = {
   baselotnumber: "baseLotNumber",
   base_lot_number: "baseLotNumber",
   base: "baseLotNumber",
+  lot: "baseLotNumber",
+  lot_number: "baseLotNumber",
+  lot_no: "baseLotNumber",
+  lotnum: "baseLotNumber",
+  lot_id: "baseLotNumber",
+  item_lot: "baseLotNumber",
+  catalog_lot: "baseLotNumber",
   lotsuffix: "lotSuffix",
   lot_suffix: "lotSuffix",
   suffix: "lotSuffix",
   description: "description",
+  desc: "description",
+  item: "description",
+  item_description: "description",
+  title: "description",
   consignor: "consignor",
   consignor_number: "consignorNumber",
   consignornumber: "consignorNumber",
   consignor_no: "consignorNumber",
   quantity: "quantity",
+  qty: "quantity",
+  count: "quantity",
   notes: "notes",
 };
 
@@ -62,7 +75,7 @@ export function parseLotCsv(text: string): {
     issues.push({
       rowIndex: 0,
       message:
-        "CSV must include baseLotNumber (or base) and description. Optional: suffix, consignor, consignorNumber, quantity, notes.",
+        "CSV must include a lot column (e.g. lot, lot number, base) and description (or desc). Optional: suffix, consignor, consignor number, quantity, notes.",
     });
     return { rows: [], issues };
   }
