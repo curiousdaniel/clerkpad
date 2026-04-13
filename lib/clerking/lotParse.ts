@@ -1,10 +1,14 @@
+function normalizeLotDisplayInput(input: string): string {
+  return input.trim().normalize("NFKC").toUpperCase().replace(/\s+/g, "");
+}
+
 /**
  * Parse lot display like "0001", "1", "0001A" → base number + uppercase suffix.
  */
 export function parseLotDisplay(
   input: string
 ): { base: number; suffix: string } | null {
-  const t = input.trim().toUpperCase().replace(/\s+/g, "");
+  const t = normalizeLotDisplayInput(input);
   if (!t) return null;
   const m = t.match(/^(\d{1,4})([A-Z]*)$/);
   if (!m) return null;
@@ -24,7 +28,7 @@ export function formatBaseLotDisplay(base: number): string {
 export function lotDisplayBaseDigits(input: string): string | null {
   const parsed = parseLotDisplay(input);
   if (!parsed) return null;
-  const t = input.trim().toUpperCase().replace(/\s+/g, "");
+  const t = normalizeLotDisplayInput(input);
   const m = t.match(/^(\d{1,4})/);
   return m ? m[1]! : null;
 }
@@ -33,7 +37,7 @@ export function lotDisplayBaseDigits(input: string): string | null {
 export function formatLotDisplayFromInput(input: string): string | null {
   const parsed = parseLotDisplay(input);
   if (!parsed) return null;
-  const t = input.trim().toUpperCase().replace(/\s+/g, "");
+  const t = normalizeLotDisplayInput(input);
   const m = t.match(/^(\d{1,4})([A-Z]*)$/);
   if (!m) return null;
   return m[1]! + (m[2] ?? "");

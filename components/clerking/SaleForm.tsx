@@ -109,6 +109,9 @@ export function SaleForm({
   const fieldRefs = useRef<Partial<Record<SaleFieldId, HTMLElement | null>>>(
     {}
   );
+  const lotAutofillDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null
+  );
 
   const saleFormPrefs = useSyncExternalStore(
     subscribeSaleFieldOrder,
@@ -185,6 +188,15 @@ export function SaleForm({
     };
   }, [eventId, refreshLotSuggestion]);
 
+  useEffect(() => {
+    return () => {
+      if (lotAutofillDebounceRef.current != null) {
+        clearTimeout(lotAutofillDebounceRef.current);
+        lotAutofillDebounceRef.current = null;
+      }
+    };
+  }, []);
+
   const priceRaw = sellPrice.trim().replace(/[^0-9.-]/g, "");
   const unitHammerPreview = parseFloat(priceRaw);
   const qtyPreview = Math.max(1, parseInt(quantity.trim(), 10) || 1);
@@ -199,9 +211,10 @@ export function SaleForm({
       ? roundMoney(lineHammerPreview * (1 + buyersPremiumRate))
       : null;
 
-  async function autofillFromLot() {
+  async function autofillFromLot(lotFieldRaw?: string) {
     if (!db) return;
-    const parsed = parseLotDisplay(lotNumber);
+    const raw = lotFieldRaw ?? lotNumber;
+    const parsed = parseLotDisplay(raw);
     if (!parsed) return;
     const lot = await findLotByEventBaseAndSuffix(
       db,
@@ -679,8 +692,24 @@ export function SaleForm({
             id="sale-lot"
             label={fieldLabel("lot", "Lot number")}
             value={lotNumber}
-            onChange={(e) => setLotNumber(e.target.value)}
-            onBlur={() => void autofillFromLot()}
+            onChange={(e) => {
+              const v = e.target.value;
+              setLotNumber(v);
+              if (lotAutofillDebounceRef.current != null) {
+                clearTimeout(lotAutofillDebounceRef.current);
+              }
+              lotAutofillDebounceRef.current = setTimeout(() => {
+                lotAutofillDebounceRef.current = null;
+                void autofillFromLot(v);
+              }, 200);
+            }}
+            onBlur={() => {
+              if (lotAutofillDebounceRef.current != null) {
+                clearTimeout(lotAutofillDebounceRef.current);
+                lotAutofillDebounceRef.current = null;
+              }
+              void autofillFromLot();
+            }}
             className="font-mono"
             autoComplete="off"
           />

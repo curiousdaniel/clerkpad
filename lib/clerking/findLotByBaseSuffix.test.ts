@@ -71,4 +71,34 @@ describe("findLotByEventBaseAndSuffix", () => {
     const lotS = await findLotByEventBaseAndSuffix(db, eventId, 4, "S");
     expect(lotS?.description).toBe("Legacy import");
   });
+
+  it("matches padded displayLotNumber when clerk types unpadded lot+suffix", async () => {
+    const uid = `lotfind3_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+    db = new AuctionDB(uid);
+    const eventId = (await db.events.add({
+      name: "E",
+      organizationName: "O",
+      taxRate: 0,
+      buyersPremiumRate: 0,
+      defaultConsignorCommissionRate: 0,
+      currencySymbol: "$",
+      syncId: "cccccccc-cccc-1ccc-9ddd-eeeeeeeeeeee",
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    })) as number;
+    await db.lots.add({
+      eventId,
+      baseLotNumber: 1,
+      lotSuffix: "",
+      displayLotNumber: "01S",
+      description: "Champagne",
+      quantity: 1,
+      status: "unsold",
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+
+    const lot = await findLotByEventBaseAndSuffix(db, eventId, 1, "S");
+    expect(lot?.description).toBe("Champagne");
+  });
 });

@@ -22,6 +22,10 @@ describe("parseLotDisplay", () => {
     expect(parseLotDisplay("ABC")).toBeNull();
     expect(parseLotDisplay("12345")).toBeNull();
   });
+  it("NFKC-normalizes fullwidth digits and letters", () => {
+    // U+FF11 FULLWIDTH DIGIT ONE, U+FF33 FULLWIDTH LATIN CAPITAL LETTER S
+    expect(parseLotDisplay("\uFF11\uFF33")).toEqual({ base: 1, suffix: "S" });
+  });
 });
 
 describe("formatBaseLotDisplay", () => {

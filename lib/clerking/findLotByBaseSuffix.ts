@@ -1,4 +1,5 @@
 import type { AuctionDB, Lot } from "@/lib/db";
+import { parseLotDisplay } from "@/lib/clerking/lotParse";
 
 /** Match lots regardless of displayLotNumber padding (e.g. "1" vs "0001"). */
 export async function findLotByEventBaseAndSuffix(
@@ -17,6 +18,13 @@ export async function findLotByEventBaseAndSuffix(
   );
   if (bySuffix) return bySuffix;
   if (suf.length > 0) {
+    const byParsedDisplay = rows.find((l) => {
+      const p = parseLotDisplay(l.displayLotNumber);
+      return (
+        p != null && p.base === baseLotNumber && p.suffix === suf
+      );
+    });
+    if (byParsedDisplay) return byParsedDisplay;
     const want = `${baseLotNumber}${suf}`.toUpperCase();
     return rows.find(
       (l) => l.displayLotNumber.toUpperCase() === want
