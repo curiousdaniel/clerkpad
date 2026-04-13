@@ -12,5 +12,15 @@ export async function findLotByEventBaseAndSuffix(
     .where("[eventId+baseLotNumber]")
     .equals([eventId, baseLotNumber])
     .toArray();
-  return rows.find((l) => (l.lotSuffix ?? "").toUpperCase() === suf);
+  const bySuffix = rows.find(
+    (l) => (l.lotSuffix ?? "").toUpperCase() === suf
+  );
+  if (bySuffix) return bySuffix;
+  if (suf.length > 0) {
+    const want = `${baseLotNumber}${suf}`.toUpperCase();
+    return rows.find(
+      (l) => l.displayLotNumber.toUpperCase() === want
+    );
+  }
+  return undefined;
 }

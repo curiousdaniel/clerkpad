@@ -88,7 +88,7 @@ This document summarizes product-facing capabilities of **ClerkBid** (auction cl
 - **Keyboard workflow** — **Enter** submits; **Esc** clears the form.
 - **Pass-out / split lots** — Optional **Shift+Enter** behavior to create suffix lines (e.g. `12A`, `12B`) when pass-out mode is enabled.
 - **Configurable tab order** — Field focus order can be adjusted for different floor workflows.
-- **Immediate undo** — Short **undo** window after recording a sale to reverse the last action.
+- **Corrections** — After a sale, use **Recent sales** (below the form), **Lots**, or **Invoices** to edit or void a line; there is no timed undo on the clerk form.
 - **Live data** — Tied to the current event’s lots and bidders in local storage.
 
 ---

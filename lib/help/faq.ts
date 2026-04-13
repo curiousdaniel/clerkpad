@@ -19,7 +19,7 @@ export const helpFaqs: HelpFaqItem[] = [
   {
     question: "Can I undo a sale?",
     answer:
-      "After you record a sale, a short undo window appears on the clerking screen. Use it immediately if you need to reverse the last action.",
+      "There is no undo on the clerking screen after you record a sale. If you need to correct or remove a line, open the Lots or Invoices area for that event and edit or delete the sale there.",
   },
   {
     question: "Do logos on invoices sync to the cloud?",

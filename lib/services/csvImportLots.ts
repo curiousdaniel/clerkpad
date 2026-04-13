@@ -1,3 +1,7 @@
+import {
+  formatLotDisplayFromInput,
+  parseLotDisplay,
+} from "@/lib/clerking/lotParse";
 import { normalizeHeaderKey, parseCsvTable } from "@/lib/services/csvParse";
 
 export type LotCsvRow = {
@@ -99,21 +103,51 @@ export function parseLotCsv(text: string): {
 
     if (!baseStr && !description) continue;
 
-    const baseLotNumber = parseInt(baseStr, 10);
-    if (!Number.isFinite(baseLotNumber) || baseLotNumber < 0) {
-      issues.push({
-        rowIndex: rowNum,
-        message: `Invalid base lot number: "${baseStr}".`,
-      });
-      continue;
-    }
     if (!description) {
       issues.push({ rowIndex: rowNum, message: "description is required." });
       continue;
     }
 
-    const lotSuffix = suffixRaw.replace(/[^A-Z]/g, "");
-    const displayLotNumber = baseStr.trim() + lotSuffix;
+    const explicitSuffix = suffixRaw.replace(/[^A-Z]/g, "");
+
+    let baseLotNumber: number;
+    let lotSuffix: string;
+    let displayLotNumber: string;
+
+    if (explicitSuffix.length > 0) {
+      const n = parseInt(baseStr, 10);
+      if (!Number.isFinite(n) || n < 0) {
+        issues.push({
+          rowIndex: rowNum,
+          message: `Invalid base lot number: "${baseStr}".`,
+        });
+        continue;
+      }
+      baseLotNumber = n;
+      lotSuffix = explicitSuffix;
+      displayLotNumber = baseStr.trim() + lotSuffix;
+    } else {
+      const parsed = parseLotDisplay(baseStr);
+      if (parsed) {
+        baseLotNumber = parsed.base;
+        lotSuffix = parsed.suffix;
+        displayLotNumber =
+          formatLotDisplayFromInput(baseStr) ??
+          `${parsed.base}${parsed.suffix}`;
+      } else {
+        const n = parseInt(baseStr, 10);
+        if (!Number.isFinite(n) || n < 0) {
+          issues.push({
+            rowIndex: rowNum,
+            message: `Invalid base lot number: "${baseStr}".`,
+          });
+          continue;
+        }
+        baseLotNumber = n;
+        lotSuffix = "";
+        displayLotNumber = baseStr.trim();
+      }
+    }
     if (displaysSeen.has(displayLotNumber)) {
       issues.push({
         rowIndex: rowNum,

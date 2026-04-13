@@ -63,7 +63,21 @@ describe("parseLotCsv", () => {
     expect(issues).toHaveLength(0);
     expect(rows).toHaveLength(2);
     expect(rows[0]?.displayLotNumber).toBe("1");
+    expect(rows[0]?.baseLotNumber).toBe(1);
+    expect(rows[0]?.lotSuffix).toBe("");
     expect(rows[1]?.displayLotNumber).toBe("1S");
+    expect(rows[1]?.baseLotNumber).toBe(1);
+    expect(rows[1]?.lotSuffix).toBe("S");
+  });
+
+  it("splits combined lot cell like 4S into base and suffix for clerking lookup", () => {
+    const csv = `Lot,Description
+4S,Corner Café Gift Certificate`;
+    const { rows, issues } = parseLotCsv(csv);
+    expect(issues).toHaveLength(0);
+    expect(rows[0]?.displayLotNumber).toBe("4S");
+    expect(rows[0]?.baseLotNumber).toBe(4);
+    expect(rows[0]?.lotSuffix).toBe("S");
   });
 
   it("accepts Lot number and LOT # style headers", () => {

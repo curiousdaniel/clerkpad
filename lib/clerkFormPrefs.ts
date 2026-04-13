@@ -3,7 +3,7 @@ const SUGGEST_NEXT_LOT_KEY = "clerkbid:suggestNextLot";
 /** Dispatched after writeSuggestNextLot (storage from other tabs also fires storage). */
 export const SUGGEST_NEXT_LOT_CHANGED = "clerkbid:suggestNextLotChanged";
 
-/** When true (default), clerking pre-fills the next sequential lot after reset/sale/undo. */
+/** When true (default), clerking pre-fills the next sequential lot after reset or sale. */
 export function readSuggestNextLot(): boolean {
   if (typeof window === "undefined") return true;
   try {

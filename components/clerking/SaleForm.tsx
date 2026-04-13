@@ -33,10 +33,7 @@ import { formatCurrency } from "@/lib/utils/formatCurrency";
 import { roundMoney } from "@/lib/services/invoiceLogic";
 import { mutateWithEventTables } from "@/lib/db/mutateWithParentEventTouch";
 import { newEntitySyncKey } from "@/lib/utils/clientSyncKey";
-import {
-  enqueueSaleDelete,
-  enqueueSalePut,
-} from "@/lib/sync/ops/enqueueOps";
+import { enqueueSalePut } from "@/lib/sync/ops/enqueueOps";
 import {
   readSuggestNextLot,
   subscribeSuggestNextLot,
@@ -52,37 +49,6 @@ import {
 } from "@/lib/saleFormOrder";
 
 const CLERK_KEY = "clerkbid:clerkInitials";
-
-type UndoMode = "createdLot" | "reusedUnsold" | "resold";
-
-type LotUndoSlice = Pick<
-  Lot,
-  "description" | "consignor" | "consignorId" | "notes" | "quantity" | "status"
->;
-
-type SaleUndoSlice = Pick<
-  Sale,
-  | "bidderId"
-  | "displayLotNumber"
-  | "paddleNumber"
-  | "description"
-  | "consignor"
-  | "consignorId"
-  | "quantity"
-  | "amount"
-  | "clerkInitials"
-  | "createdAt"
-  | "syncKey"
->;
-
-type UndoState = {
-  saleId: number;
-  lotId: number;
-  until: number;
-  mode: UndoMode;
-  restoredLot?: LotUndoSlice;
-  restoredSale?: SaleUndoSlice;
-};
 
 function subscribeSaleFieldOrder(onStoreChange: () => void) {
   const fn = () => onStoreChange();
@@ -139,7 +105,6 @@ export function SaleForm({
   const [clerkInitials, setClerkInitials] = useState("");
   const [passOutEnabled, setPassOutEnabled] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
-  const [undoState, setUndoState] = useState<UndoState | null>(null);
 
   const fieldRefs = useRef<Partial<Record<SaleFieldId, HTMLElement | null>>>(
     {}
@@ -214,20 +179,11 @@ export function SaleForm({
       setPaddleNumber("");
       setPassOutEnabled(false);
       setFormError(null);
-      setUndoState(null);
     })();
     return () => {
       cancelled = true;
     };
   }, [eventId, refreshLotSuggestion]);
-
-  useEffect(() => {
-    if (!undoState) return;
-    const id = window.setInterval(() => {
-      if (Date.now() > undoState.until) setUndoState(null);
-    }, 500);
-    return () => clearInterval(id);
-  }, [undoState]);
 
   const priceRaw = sellPrice.trim().replace(/[^0-9.-]/g, "");
   const unitHammerPreview = parseFloat(priceRaw);
@@ -287,104 +243,9 @@ export function SaleForm({
     focusField("lot");
   }
 
-  async function undoLastSale() {
-    if (!db || !undoState || Date.now() > undoState.until) return;
-    const { saleId, lotId, mode, restoredLot, restoredSale } = undoState;
-    try {
-      await mutateWithEventTables(db, eventId, [db.sales, db.lots], async () => {
-        const sale = await db.sales.get(saleId);
-        if (!sale || sale.eventId !== eventId || sale.lotId !== lotId) {
-          throw new Error("Sale no longer available to undo.");
-        }
-        const lot = await db.lots.get(lotId);
-        if (!lot || lot.eventId !== eventId) {
-          throw new Error("Lot no longer available to undo.");
-        }
-
-        if (mode === "createdLot") {
-          const salesOnLot = await db.sales
-            .where("lotId")
-            .equals(lotId)
-            .count();
-          if (salesOnLot !== 1) {
-            throw new Error("Cannot undo — lot has multiple sales.");
-          }
-          const toRemove = await db.sales.get(saleId);
-          const evUndo = await db.events.get(eventId);
-          await db.sales.delete(saleId);
-          if (toRemove?.syncKey && evUndo?.syncId) {
-            await enqueueSaleDelete(db, evUndo.syncId, toRemove.syncKey);
-          }
-          await db.lots.delete(lotId);
-          return;
-        }
-
-        if (mode === "reusedUnsold") {
-          if (!restoredLot) {
-            throw new Error("Cannot undo — missing restore snapshot.");
-          }
-          const toRemove = await db.sales.get(saleId);
-          const evUndo = await db.events.get(eventId);
-          await db.sales.delete(saleId);
-          if (toRemove?.syncKey && evUndo?.syncId) {
-            await enqueueSaleDelete(db, evUndo.syncId, toRemove.syncKey);
-          }
-          const curLot = await db.lots.get(lotId);
-          if (curLot) {
-            const next: Lot = {
-              ...curLot,
-              ...restoredLot,
-              updatedAt: new Date(),
-            };
-            if (restoredLot.consignorId == null) delete next.consignorId;
-            await db.lots.put(next);
-          }
-          return;
-        }
-
-        if (mode === "resold") {
-          if (!restoredLot || !restoredSale) {
-            throw new Error("Cannot undo — missing restore snapshot.");
-          }
-          const curS = await db.sales.get(saleId);
-          if (curS) {
-            const nextS: Sale = { ...curS, ...restoredSale };
-            if (restoredSale.consignorId == null) delete nextS.consignorId;
-            await db.sales.put(nextS);
-            const evUndo = await db.events.get(eventId);
-            if (evUndo?.syncId) {
-              const fresh = await db.sales.get(saleId);
-              if (fresh) await enqueueSalePut(db, evUndo.syncId, fresh);
-            }
-          }
-          const curLot = await db.lots.get(lotId);
-          if (curLot) {
-            const next: Lot = {
-              ...curLot,
-              ...restoredLot,
-              updatedAt: new Date(),
-            };
-            if (restoredLot.consignorId == null) delete next.consignorId;
-            await db.lots.put(next);
-          }
-        }
-      });
-      setUndoState(null);
-      showToast({ kind: "success", message: "Last sale undone." });
-      await refreshLotSuggestion();
-      focusField("lot");
-    } catch (e) {
-      showToast({
-        kind: "error",
-        message: e instanceof Error ? e.message : "Undo failed.",
-      });
-    }
-  }
-
   async function passLotNoSale() {
     if (!db) return;
     setFormError(null);
-    setUndoState(null);
 
     const parsed = parseLotDisplay(lotNumber);
     if (!parsed) {
@@ -482,7 +343,6 @@ export function SaleForm({
   async function submitSale(shiftEnter: boolean) {
     if (!db) return;
     setFormError(null);
-    setUndoState(null);
     const passOutActive = passOutEnabled || shiftEnter;
     if (shiftEnter) {
       setPassOutEnabled(true);
@@ -656,7 +516,7 @@ export function SaleForm({
       return row;
     }
 
-    let nextUndo: UndoState;
+    let recordedSaleId = 0;
 
     try {
       if (!existingLot) {
@@ -677,12 +537,7 @@ export function SaleForm({
             buildSaleRow(newLotId, pendingSaleSyncKey)
           )) as number;
         });
-        nextUndo = {
-          mode: "createdLot",
-          saleId: newSaleId,
-          lotId: newLotId,
-          until: Date.now() + 120_000,
-        };
+        recordedSaleId = newSaleId;
       } else {
         const lotId = existingLot.id!;
         const salesOnLot = await db.sales
@@ -710,15 +565,6 @@ export function SaleForm({
           }
         }
 
-        const restoredLot: LotUndoSlice = {
-          description: existingLot.description,
-          consignor: existingLot.consignor,
-          consignorId: existingLot.consignorId,
-          notes: existingLot.notes,
-          quantity: existingLot.quantity,
-          status: existingLot.status,
-        };
-
         if (openCatalog) {
           let newSaleId = 0;
           await mutateWithEventTables(db, eventId, [db.lots, db.sales], async () => {
@@ -732,28 +578,9 @@ export function SaleForm({
               buildSaleRow(lotId, pendingSaleSyncKey)
             )) as number;
           });
-          nextUndo = {
-            mode: "reusedUnsold",
-            saleId: newSaleId,
-            lotId,
-            until: Date.now() + 120_000,
-            restoredLot,
-          };
+          recordedSaleId = newSaleId;
         } else if (salesOnLot.length === 1) {
           const prevSale = salesOnLot[0]!;
-          const restoredSale: SaleUndoSlice = {
-            bidderId: prevSale.bidderId,
-            displayLotNumber: prevSale.displayLotNumber,
-            paddleNumber: prevSale.paddleNumber,
-            description: prevSale.description,
-            consignor: prevSale.consignor,
-            consignorId: prevSale.consignorId,
-            quantity: prevSale.quantity,
-            amount: prevSale.amount,
-            clerkInitials: prevSale.clerkInitials,
-            createdAt: prevSale.createdAt,
-            syncKey: prevSale.syncKey,
-          };
           await mutateWithEventTables(db, eventId, [db.lots, db.sales], async () => {
             await patchLotWithConsignor(
               db,
@@ -772,14 +599,7 @@ export function SaleForm({
               await db.sales.put(nextS);
             }
           });
-          nextUndo = {
-            mode: "resold",
-            saleId: prevSale.id!,
-            lotId,
-            until: Date.now() + 120_000,
-            restoredLot,
-            restoredSale,
-          };
+          recordedSaleId = prevSale.id!;
         } else {
           let newSaleId = 0;
           await mutateWithEventTables(db, eventId, [db.lots, db.sales], async () => {
@@ -793,13 +613,7 @@ export function SaleForm({
               buildSaleRow(lotId, pendingSaleSyncKey)
             )) as number;
           });
-          nextUndo = {
-            mode: "reusedUnsold",
-            saleId: newSaleId,
-            lotId,
-            until: Date.now() + 120_000,
-            restoredLot,
-          };
+          recordedSaleId = newSaleId;
         }
       }
     } catch (e) {
@@ -809,8 +623,6 @@ export function SaleForm({
       return;
     }
 
-    setUndoState(nextUndo);
-
     try {
       sessionStorage.setItem(CLERK_KEY, initials);
     } catch {
@@ -819,7 +631,7 @@ export function SaleForm({
 
     const evCloud = await db.events.get(eventId);
     if (evCloud?.syncId) {
-      const s = await db.sales.get(nextUndo.saleId);
+      const s = await db.sales.get(recordedSaleId);
       if (s) await enqueueSalePut(db, evCloud.syncId, s);
     }
 
@@ -845,10 +657,6 @@ export function SaleForm({
       focusField("lot");
     }
   }
-
-  const undoSecondsLeft = undoState
-    ? Math.max(0, Math.ceil((undoState.until - Date.now()) / 1000))
-    : 0;
 
   const setRef =
     (id: SaleFieldId) => (el: HTMLElement | null) => {
@@ -1146,8 +954,8 @@ export function SaleForm({
         />
         <span>Suggest next lot number after each sale</span>
         <span className="text-xs font-normal text-muted">
-          When off, the lot field stays empty after reset, sale, or undo (pass-out
-          line still advances automatically).
+          When off, the lot field stays empty after reset or sale (pass-out line
+          still advances automatically).
         </span>
       </label>
 
@@ -1185,17 +993,6 @@ export function SaleForm({
         </p>
       </div>
 
-      {undoState && undoSecondsLeft > 0 ? (
-        <div className="flex flex-wrap items-center gap-2 rounded-lg border border-navy/15 bg-surface px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-800/60">
-          <span className="text-muted">
-            Undo last sale ({undoSecondsLeft}s)
-          </span>
-          <Button type="button" variant="secondary" onClick={() => void undoLastSale()}>
-            Undo
-          </Button>
-        </div>
-      ) : null}
-
       <p className="text-xs text-muted">
         <span className="sm:hidden">
           Use <strong className="font-medium text-ink dark:text-slate-200">
@@ -1210,7 +1007,7 @@ export function SaleForm({
             {" "}
             Record sale
           </strong>
-          , pass lot (no sale), undo (when shown), then Enter to submit.
+          , pass lot (no sale), then Enter to submit.
         </span>
       </p>
     </form>
