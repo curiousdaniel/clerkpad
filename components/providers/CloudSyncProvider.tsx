@@ -19,7 +19,7 @@ import { useUserDb } from "@/components/providers/UserDbProvider";
 import {
   fetchSyncList,
   pushAllLocalEvents,
-  pushCurrentEvent,
+  pushEventWithAutoMerge,
   pullCloudEventsMissingLocally,
   recordSuccessfulPush,
   refreshEventFromCloudIfServerNewer,
@@ -43,8 +43,9 @@ import { ensureSettingsRow } from "@/lib/settings";
 
 /** Background pull uses this minimum gap between list fetches (see plan: ~30–60s). */
 const PULL_LIST_THROTTLE_MS = 45_000;
-/** Push all local events on this interval while online (plan: ~20–30s). */
-const PUSH_ALL_INTERVAL_MS = 25_000;
+/** Push all local events on this interval while online. Longer interval reduces
+ *  conflict frequency; auto-merge handles the rest. */
+const PUSH_ALL_INTERVAL_MS = 45_000;
 
 type SyncPhase = "idle" | "pushing" | "pulling";
 
@@ -239,11 +240,7 @@ export function CloudSyncProvider({ children }: { children: ReactNode }) {
         refresh();
         setLastSyncError(null);
       } else if (count > 0 && !summary.serverUnavailable) {
-        if (summary.conflictCount > 0 && summary.okCount === 0) {
-          setLastSyncError(
-            "Cloud backup blocked — another device or teammate saved a newer backup. Settings → Restore from cloud, or Overwrite cloud copy if this device should win."
-          );
-        } else if (summary.failCount > 0 && summary.okCount === 0) {
+        if (summary.failCount > 0 && summary.okCount === 0) {
           setLastSyncError("Cloud backup failed. Try Settings → Sync now.");
         }
       }
@@ -295,7 +292,7 @@ export function CloudSyncProvider({ children }: { children: ReactNode }) {
     debouncedPushTimerRef.current = setTimeout(() => {
       debouncedPushTimerRef.current = null;
       void runPushAllSilentRef.current();
-    }, 500);
+    }, 300);
   }, [status, online]);
 
   const ensureCloudBackupBeforeSignOut = useCallback(async (): Promise<boolean> => {
@@ -311,12 +308,9 @@ export function CloudSyncProvider({ children }: { children: ReactNode }) {
       return true;
     }
     if (typeof navigator !== "undefined" && !navigator.onLine) {
-      showToast({
-        kind: "error",
-        message:
-          "You’re offline. Connect to the internet so we can save your auction data to your account, then sign out again.",
-      });
-      return false;
+      return window.confirm(
+        "You’re offline. Local data may not be saved to the cloud yet. Sign out anyway?"
+      );
     }
     if (debouncedPushTimerRef.current) {
       clearTimeout(debouncedPushTimerRef.current);
@@ -330,12 +324,9 @@ export function CloudSyncProvider({ children }: { children: ReactNode }) {
       const summary = await pushAllLocalEvents(db);
       if (summary.serverUnavailable) {
         setCloudSyncAvailable(false);
-        showToast({
-          kind: "error",
-          message:
-            "Cloud backup isn’t available on this server. Export your events from Settings, or fix backup setup, before signing out.",
-        });
-        return false;
+        return window.confirm(
+          "Cloud backup isn’t available on this server. Sign out anyway?"
+        );
       }
       const fullySynced =
         summary.okCount === eventCount &&
@@ -354,27 +345,20 @@ export function CloudSyncProvider({ children }: { children: ReactNode }) {
         });
         return true;
       }
-      if (summary.conflictCount > 0) {
+      if (summary.okCount > 0) {
         showToast({
-          kind: "error",
-          message:
-            "Cloud conflict (someone else may have saved newer data). Open Settings → Restore from cloud or Overwrite cloud copy, then sign out again.",
+          kind: "success",
+          message: `${summary.okCount} of ${eventCount} event(s) saved. Signing you out…`,
         });
-      } else {
-        showToast({
-          kind: "error",
-          message:
-            "Could not save all events to the cloud. Check your connection and try signing out again.",
-        });
+        return true;
       }
-      return false;
+      return window.confirm(
+        "Some event data could not be saved to the cloud. Sign out anyway?"
+      );
     } catch {
-      showToast({
-        kind: "error",
-        message:
-          "Could not reach cloud backup. Try again with a stable connection.",
-      });
-      return false;
+      return window.confirm(
+        "Could not reach cloud backup. Sign out anyway?"
+      );
     } finally {
       setSyncPhase("idle");
     }
@@ -597,7 +581,7 @@ export function CloudSyncProvider({ children }: { children: ReactNode }) {
         return { ok: false, message: "You are offline or no event selected." };
       }
       try {
-        const result = await pushCurrentEvent(db, currentEventId, options);
+        const result = await pushEventWithAutoMerge(db, currentEventId, options);
         if (result.ok) {
           await recordSuccessfulPush(db, currentEventId, result.updatedAt);
           setLastPushAt(new Date(result.updatedAt));
@@ -615,7 +599,7 @@ export function CloudSyncProvider({ children }: { children: ReactNode }) {
           return {
             ok: false,
             message:
-              "A newer backup is on the server (another device or teammate). Restore from cloud or push to overwrite.",
+              "Auto-merge could not resolve the conflict. Try Restore from cloud or push with force to overwrite.",
           };
         }
         if (result.status === 503) setCloudSyncAvailable(false);
@@ -673,7 +657,7 @@ export function CloudSyncProvider({ children }: { children: ReactNode }) {
           if (summary.conflictCount > 0) {
             showToast({
               kind: "success",
-              message: `${summary.okCount} event(s) saved. ${summary.conflictCount} conflict(s): another copy on the server is newer — use the sync indicator (amber dot) or Settings (Restore / Overwrite).`,
+              message: `${summary.okCount} event(s) saved. ${summary.conflictCount} conflict(s) could not auto-merge — check the sync indicator or Settings.`,
             });
           } else {
             showToast({

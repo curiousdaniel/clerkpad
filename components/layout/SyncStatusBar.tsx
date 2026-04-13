@@ -59,7 +59,7 @@ export function SyncStatusIndicator() {
 
   if (newerRemote && cloudSyncAvailable && online) {
     label +=
-      ". Cloud rejected a snapshot save (server copy is newer) — open tooltip for actions.";
+      ". Auto-merge could not resolve a sync conflict — open tooltip for actions.";
   }
 
   const tooltipId = "cloud-sync-status-tooltip";
@@ -91,15 +91,15 @@ export function SyncStatusIndicator() {
         {newerRemote && cloudSyncAvailable ? (
           <div className="mb-3 border-b border-navy/10 pb-3 dark:border-slate-600">
             <p className="font-medium text-amber-900 dark:text-amber-200">
-              Snapshot save blocked
+              Sync conflict
             </p>
             <p className="mt-1 text-muted dark:text-slate-400">
-              The server already has a newer snapshot for this event
+              Auto-merge could not fully resolve a conflict with the server
               {conflictServerTimeLabel
-                ? ` (server ${conflictServerTimeLabel})`
+                ? ` (server copy from ${conflictServerTimeLabel})`
                 : ""}
-              . Restore to match the account, or push to replace it with this
-              device.
+              . Restore to use the cloud copy, or push to overwrite it with
+              this device.
             </p>
             <div className="mt-2 flex flex-wrap gap-2">
               <Button

@@ -7,6 +7,7 @@ import {
   replaceEventFromPayload,
   type EventExportPayload,
 } from "@/lib/services/dataPorter";
+import { mergeServerSnapshotIntoLocal } from "@/lib/services/snapshotMerge";
 import { isSyncOpsEnabled } from "@/lib/sync/syncOpsFlag";
 
 export type SyncListEntry = { eventSyncId: string; updatedAt: string };
@@ -89,7 +90,9 @@ export type RefreshEventFromCloudResult =
 
 /**
  * If the server snapshot is newer than our baseline (`lastCloudPullAt`, else
- * `lastCloudPushAt`), replace local event data from the cloud (bidders, lots, sales, etc.).
+ * `lastCloudPushAt`), incorporate server changes into local Dexie. When local
+ * data has unpushed edits, uses entity-level merge to preserve both sides'
+ * changes. When no local edits exist, does a full replace (faster).
  * Skips when op-sync is on and this event has pending outbox rows (would lose ops).
  */
 export async function refreshEventFromCloudIfServerNewer(
@@ -103,9 +106,6 @@ export async function refreshEventFromCloudIfServerNewer(
   if (!(await canAutoReplaceSnapshotForEvent(db, syncId))) {
     return { refreshed: false, reason: "outbox_pending" };
   }
-  if (hasUnpushedLocalEventMetadataEdits(ev)) {
-    return { refreshed: false, reason: "local_unpushed_edit" };
-  }
   const snap = await fetchEventSnapshot(syncId);
   if (!snap.ok) return { refreshed: false, reason: "fetch_failed" };
   if (
@@ -117,7 +117,11 @@ export async function refreshEventFromCloudIfServerNewer(
   ) {
     return { refreshed: false, reason: "not_newer" };
   }
-  await replaceEventFromPayload(db, eventId, snap.payload);
+  if (hasUnpushedLocalEventMetadataEdits(ev)) {
+    await mergeServerSnapshotIntoLocal(db, eventId, snap.payload);
+  } else {
+    await replaceEventFromPayload(db, eventId, snap.payload);
+  }
   const serverTime = new Date(snap.updatedAt);
   await db.events.update(eventId, {
     lastCloudPullAt: serverTime,
@@ -128,7 +132,8 @@ export async function refreshEventFromCloudIfServerNewer(
 
 /**
  * For each cloud list entry that matches a local event, pull the snapshot when the server
- * copy is newer than `lastCloudPullAt`. Used after sync list fetch (throttled interval).
+ * copy is newer than `lastCloudPullAt`. When local data has unpushed edits, uses
+ * entity-level merge instead of full replace to preserve both sides' changes.
  */
 export async function refreshStaleLocalEventsFromList(
   db: AuctionDB,
@@ -161,10 +166,6 @@ export async function refreshStaleLocalEventsFromList(
       skipped += 1;
       continue;
     }
-    if (hasUnpushedLocalEventMetadataEdits(local)) {
-      skipped += 1;
-      continue;
-    }
     const snap = await fetchEventSnapshot(entry.eventSyncId);
     if (!snap.ok) {
       skipped += 1;
@@ -180,7 +181,11 @@ export async function refreshStaleLocalEventsFromList(
       skipped += 1;
       continue;
     }
-    await replaceEventFromPayload(db, local.id, snap.payload);
+    if (hasUnpushedLocalEventMetadataEdits(local)) {
+      await mergeServerSnapshotIntoLocal(db, local.id, snap.payload);
+    } else {
+      await replaceEventFromPayload(db, local.id, snap.payload);
+    }
     const serverTime = new Date(snap.updatedAt);
     await db.events.update(local.id, {
       lastCloudPullAt: serverTime,
@@ -282,6 +287,42 @@ export async function pushCurrentEvent(
     return { ok: false, status: 400 };
   }
   return pushEventSnapshot(payload, options);
+}
+
+/**
+ * Push an event snapshot, automatically merging on conflict: if the server has
+ * a newer snapshot (409), pull it, merge entities into local Dexie, re-export,
+ * and force-push the merged result. Returns success when the merge-push succeeds.
+ */
+export async function pushEventWithAutoMerge(
+  db: AuctionDB,
+  eventId: number,
+  options?: { force?: boolean }
+): Promise<
+  | { ok: true; updatedAt: string; autoMerged: boolean }
+  | { ok: false; status: number; conflict?: boolean; serverUpdatedAt?: string }
+> {
+  const firstTry = await pushCurrentEvent(db, eventId, options);
+  if (firstTry.ok) return { ...firstTry, autoMerged: false };
+  if (!firstTry.conflict) return firstTry;
+
+  const ev = await db.events.get(eventId);
+  const syncId = ev?.syncId?.trim();
+  if (!syncId) return firstTry;
+
+  const snap = await fetchEventSnapshot(syncId);
+  if (!snap.ok) return firstTry;
+
+  try {
+    await mergeServerSnapshotIntoLocal(db, eventId, snap.payload);
+  } catch {
+    return firstTry;
+  }
+
+  const merged = await buildEventExport(db, eventId);
+  const retry = await pushEventSnapshot(merged, { force: true });
+  if (retry.ok) return { ...retry, autoMerged: true };
+  return retry;
 }
 
 export async function restoreEventFromCloud(
@@ -387,8 +428,9 @@ export type PushAllSummary = {
 };
 
 /**
- * Push a snapshot for every local event. Continues on per-event failure.
- * On 409 conflict, skips that event (caller may run restore for current event separately).
+ * Push a snapshot for every local event. On 409 conflict, automatically merges
+ * the server snapshot into local data and retries. Only reports a conflict when
+ * auto-merge itself fails.
  */
 export async function pushAllLocalEvents(
   db: AuctionDB,
@@ -407,7 +449,7 @@ export async function pushAllLocalEvents(
     const id = ev.id;
     if (id == null) continue;
 
-    const result = await pushCurrentEvent(db, id, options);
+    const result = await pushEventWithAutoMerge(db, id, options);
     if (result.ok) {
       okCount += 1;
       await recordSuccessfulPush(db, id, result.updatedAt);
