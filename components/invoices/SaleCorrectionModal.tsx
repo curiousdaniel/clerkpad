@@ -125,7 +125,10 @@ export function SaleCorrectionModal({
           consignorId: linkedConsignorId,
           clerkInitials,
         },
-        anchorInvoiceId != null ? { anchorInvoiceId } : undefined
+        {
+          ...(anchorInvoiceId != null ? { anchorInvoiceId } : {}),
+          ...(sale.syncKey ? { saleSyncKey: sale.syncKey } : {}),
+        }
       );
       scheduleCloudPush();
       onSaved();

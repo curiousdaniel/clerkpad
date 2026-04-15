@@ -59,6 +59,11 @@ export type PersistSaleCorrectionOptions = {
    * Omit when editing from clerking (recent sales) so unallocated lines work.
    */
   anchorInvoiceId?: number;
+  /**
+   * Stable sync identity for sale row. Used as a fallback when a local numeric id
+   * changes during cloud reconciliation while the correction modal is open.
+   */
+  saleSyncKey?: string;
 };
 
 function buildCorrectedSaleRow(
@@ -105,7 +110,19 @@ export async function persistSaleCorrection(
 ): Promise<void> {
   const eventId = event.id;
   if (eventId == null) throw new Error("Event not loaded.");
-  const sale = await db.sales.get(saleId);
+  let effectiveSaleId = saleId;
+  let sale = await db.sales.get(saleId);
+  if (sale?.id == null && options?.saleSyncKey) {
+    const bySyncKey = await db.sales
+      .where("eventId")
+      .equals(eventId)
+      .filter((row) => row.syncKey === options.saleSyncKey)
+      .first();
+    if (bySyncKey?.id != null) {
+      sale = bySyncKey;
+      effectiveSaleId = bySyncKey.id;
+    }
+  }
   if (sale?.id == null) throw new Error("Sale not found.");
 
   if (options?.anchorInvoiceId != null) {
@@ -125,7 +142,7 @@ export async function persistSaleCorrection(
       await db.sales.put(next);
     });
     if (event.syncId) {
-      const fresh = await db.sales.get(saleId);
+      const fresh = await db.sales.get(effectiveSaleId);
       if (fresh) await enqueueSalePut(db, event.syncId, fresh);
     }
     if (bidderChanged) {
@@ -141,7 +158,7 @@ export async function persistSaleCorrection(
       await db.sales.put(next);
     });
     if (event.syncId) {
-      const fresh = await db.sales.get(saleId);
+      const fresh = await db.sales.get(effectiveSaleId);
       if (fresh) await enqueueSalePut(db, event.syncId, fresh);
     }
     if (bidderChanged) {
@@ -171,7 +188,7 @@ export async function persistSaleCorrection(
     await recalculateAndPersistInvoice(db, attachedId, event);
   }
   if (event.syncId) {
-    const fresh = await db.sales.get(saleId);
+    const fresh = await db.sales.get(effectiveSaleId);
     if (fresh) await enqueueSalePut(db, event.syncId, fresh);
     await enqueueInvoicePut(db, event.syncId, attachedId);
   }
